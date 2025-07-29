@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Plus, Edit, Trash2, Shield, Users, Crown } from 'lucide-react';
-import { UserRole } from '../lib/supabase';
+import { UserRole, UserWithRole } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
-
-interface UserWithRole {
-  id: string;
-  email: string;
-  role: UserRole;
-  created_at: string;
-  last_sign_in_at?: string;
-}
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<UserWithRole[]>([]);
@@ -20,6 +12,9 @@ const UserManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    first_name: '',
+    last_name: '',
+    phone: '',
     role: 'bidder' as UserRole,
   });
 
@@ -29,47 +24,22 @@ const UserManagement: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      // Get user roles first
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*');
-      if (rolesError) throw rolesError;
+      console.log('Loading users from public.users table');
+      
+      // Use the helper function to get all users with roles
+      const { data, error } = await supabase
+        .rpc('get_all_users_with_roles');
 
-      // Try to get users from auth admin API
-      try {
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-        if (authError) throw authError;
-
-        // Combine auth users with their roles
-        const usersWithRoles: UserWithRole[] = authUsers.users.map(user => {
-          const roleRecord = userRoles?.find(ur => ur.user_id === user.id);
-          return {
-            id: user.id,
-            email: user.email || '',
-            role: roleRecord?.role || 'bidder',
-            created_at: user.created_at,
-            last_sign_in_at: user.last_sign_in_at,
-          };
-        });
-
-        setUsers(usersWithRoles);
-      } catch (adminError) {
-        console.warn('Admin API not available, using role data only:', adminError);
-        
-        // Fallback: use only role data
-        const usersWithRoles: UserWithRole[] = userRoles?.map(role => ({
-          id: role.user_id,
-          email: 'user@example.com', // Placeholder since we can't get email
-          role: role.role,
-          created_at: role.created_at,
-          last_sign_in_at: undefined,
-        })) || [];
-
-        setUsers(usersWithRoles);
+      if (error) {
+        console.error('Error loading users:', error);
+        throw error;
       }
+
+      console.log('Loaded users with roles:', data?.length || 0);
+      setUsers(data || []);
     } catch (error) {
       console.error('Error loading users:', error);
-      toast.error('Failed to load users');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -82,29 +52,49 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Create user in auth
+      // Create user in auth (this will trigger the sync to public.users)
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: formData.email,
         password: formData.password,
         email_confirm: true,
+        user_metadata: {
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+        },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        // If Admin API is not available, show manual instructions
+        if (authError.message.includes('not_admin')) {
+          toast.error('Admin API not available. Please create users manually in Supabase Dashboard.');
+          console.log('=== MANUAL USER CREATION INSTRUCTIONS ===');
+          console.log('1. Go to Supabase Dashboard → Authentication → Users');
+          console.log('2. Click "Add User"');
+          console.log('3. Enter email:', formData.email);
+          console.log('4. Enter password:', formData.password);
+          console.log('5. After creating user, run this SQL:');
+          console.log(`INSERT INTO user_roles (user_id, role) VALUES ('USER_ID_HERE', '${formData.role}');`);
+          console.log('6. Replace USER_ID_HERE with the actual user ID from the dashboard');
+          console.log('==========================================');
+        } else {
+          throw authError;
+        }
+      } else {
+        // Assign role to the new user
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert([{
+            user_id: authData.user.id,
+            role: formData.role,
+          }]);
 
-      // Assign role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert([{
-          user_id: authData.user.id,
-          role: formData.role,
-        }]);
+        if (roleError) throw roleError;
 
-      if (roleError) throw roleError;
-
-      toast.success('User created successfully');
-      setShowUserModal(false);
-      setFormData({ email: '', password: '', role: 'bidder' });
-      loadUsers();
+        toast.success('User created successfully');
+        setShowUserModal(false);
+        setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
+        loadUsers();
+      }
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast.error(error.message || 'Failed to create user');
@@ -118,13 +108,18 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Update user in auth
-      const { error: authError } = await supabase.auth.admin.updateUserById(
-        editingUser.id,
-        { email: formData.email }
-      );
+      // Update user in public.users table
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          email: formData.email,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          phone: formData.phone,
+        })
+        .eq('id', editingUser.id);
 
-      if (authError) throw authError;
+      if (updateError) throw updateError;
 
       // Update role
       const { error: roleError } = await supabase
@@ -137,7 +132,7 @@ const UserManagement: React.FC = () => {
       toast.success('User updated successfully');
       setShowUserModal(false);
       setEditingUser(null);
-      setFormData({ email: '', password: '', role: 'bidder' });
+      setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
       loadUsers();
     } catch (error: any) {
       console.error('Error updating user:', error);
@@ -151,12 +146,26 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Delete user from auth
+      // Delete user from auth (this will cascade to public.users and user_roles)
       const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-      if (authError) throw authError;
-
-      toast.success('User deleted successfully');
-      loadUsers();
+      
+      if (authError) {
+        // If Admin API is not available, show manual instructions
+        if (authError.message.includes('not_admin')) {
+          toast.error('Admin API not available. Please delete users manually in Supabase Dashboard.');
+          console.log('=== MANUAL USER DELETION INSTRUCTIONS ===');
+          console.log('1. Go to Supabase Dashboard → Authentication → Users');
+          console.log('2. Find the user with ID:', userId);
+          console.log('3. Click the delete button next to the user');
+          console.log('4. The user data will be automatically deleted due to CASCADE');
+          console.log('==========================================');
+        } else {
+          throw authError;
+        }
+      } else {
+        toast.success('User deleted successfully');
+        loadUsers();
+      }
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
@@ -168,7 +177,10 @@ const UserManagement: React.FC = () => {
     setFormData({
       email: user.email,
       password: '',
-      role: user.role,
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      phone: user.phone || '',
+      role: user.role || 'bidder',
     });
     setShowUserModal(true);
   };
@@ -178,6 +190,9 @@ const UserManagement: React.FC = () => {
     setFormData({
       email: '',
       password: '',
+      first_name: '',
+      last_name: '',
+      phone: '',
       role: 'bidder',
     });
     setShowUserModal(true);
@@ -186,10 +201,10 @@ const UserManagement: React.FC = () => {
   const closeModal = () => {
     setShowUserModal(false);
     setEditingUser(null);
-    setFormData({ email: '', password: '', role: 'bidder' });
+    setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
   };
 
-  const getRoleIcon = (role: UserRole) => {
+  const getRoleIcon = (role: UserRole | undefined) => {
     switch (role) {
       case 'admin':
         return <Crown className="w-4 h-4 text-red-600" />;
@@ -202,16 +217,18 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const getRoleBadge = (role: UserRole) => {
+  const getRoleBadge = (role: UserRole | undefined) => {
     const colors = {
       admin: 'bg-red-100 text-red-800',
       manager: 'bg-blue-100 text-blue-800',
       bidder: 'bg-green-100 text-green-800',
     };
 
+    const roleText = role || 'bidder';
+
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[role]}`}>
-        {role.charAt(0).toUpperCase() + role.slice(1)}
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[roleText]}`}>
+        {roleText.charAt(0).toUpperCase() + roleText.slice(1)}
       </span>
     );
   };
@@ -239,6 +256,11 @@ const UserManagement: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
           <p className="text-gray-600">Manage users and their roles</p>
+          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-sm text-yellow-800">
+              <strong>Note:</strong> Admin API is not available in free tier. User creation/deletion must be done manually in Supabase Dashboard.
+            </p>
+          </div>
         </div>
         <button
           onClick={openCreateModal}
@@ -264,60 +286,73 @@ const UserManagement: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Sign In
-                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                          <User className="w-5 h-5 text-primary-600" />
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.email}</div>
-                        <div className="text-sm text-gray-500">ID: {user.id.slice(0, 8)}...</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      {getRoleIcon(user.role)}
-                      {getRoleBadge(user.role)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(user.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.last_sign_in_at ? formatDate(user.last_sign_in_at) : 'Never'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="text-primary-600 hover:text-primary-900"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center">
+                    <Crown className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
+                    <p className="text-gray-600 mb-4">
+                      No users have been created yet. Create your first user to start managing the system.
+                    </p>
+                    <button
+                      onClick={openCreateModal}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create First User
+                    </button>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                users.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                            <User className="w-5 h-5 text-primary-600" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                          <div className="text-sm text-gray-500">ID: {user.id.slice(0, 8)}...</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {getRoleIcon(user.role)}
+                        {getRoleBadge(user.role)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(user.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="text-primary-600 hover:text-primary-900"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -354,6 +389,46 @@ const UserManagement: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     placeholder="user@example.com"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.first_name}
+                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.last_name}
+                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="+1 (555) 123-4567"
                   />
                 </div>
 

@@ -28,6 +28,7 @@ const ProfileAssignments: React.FC = () => {
 
   const loadData = async () => {
     try {
+      console.log('Loading profile assignments data for user:', user?.id, 'Role:', { isAdmin, isManager });
       await Promise.all([
         loadProfiles(),
         loadBidders(),
@@ -42,36 +43,54 @@ const ProfileAssignments: React.FC = () => {
 
   const loadProfiles = async () => {
     try {
+      console.log('Loading profiles for assignments');
       let query = supabase.from('profiles').select('*');
       
       if (isManager) {
+        console.log('Loading manager profiles for assignments');
         query = query.eq('user_id', user?.id);
+      } else if (isAdmin) {
+        console.log('Loading all profiles for admin assignments');
       }
       // Admins can see all profiles
 
       const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading profiles for assignments:', error);
+        throw error;
+      }
+      console.log('Loaded profiles for assignments:', data?.length || 0);
       setProfiles(data || []);
     } catch (error) {
-      console.error('Error loading profiles:', error);
+      console.error('Error loading profiles for assignments:', error);
+      setProfiles([]);
     }
   };
 
   const loadBidders = async () => {
     try {
+      console.log('Loading bidders for assignments');
       const { data, error } = await supabase
         .from('user_roles')
         .select('user_id, role')
         .eq('role', 'bidder');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading bidders:', error);
+        throw error;
+      }
 
       // Get user details for bidders
       const bidderIds = data?.map(r => r.user_id) || [];
+      console.log('Found bidder IDs:', bidderIds);
+      
       if (bidderIds.length > 0) {
         try {
           const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
-          if (usersError) throw usersError;
+          if (usersError) {
+            console.warn('Admin API error:', usersError);
+            throw usersError;
+          }
 
           const biddersWithDetails = users.users
             .filter(u => bidderIds.includes(u.id))
@@ -81,6 +100,7 @@ const ProfileAssignments: React.FC = () => {
               role: 'bidder',
             }));
           
+          console.log('Loaded bidders with details:', biddersWithDetails.length);
           setBidders(biddersWithDetails);
         } catch (adminError) {
           console.warn('Admin API not available, using role data only:', adminError);
@@ -92,41 +112,59 @@ const ProfileAssignments: React.FC = () => {
             role: 'bidder',
           }));
           
+          console.log('Using fallback bidder data:', biddersWithDetails.length);
           setBidders(biddersWithDetails);
         }
       } else {
+        console.log('No bidders found');
         setBidders([]);
       }
     } catch (error) {
       console.error('Error loading bidders:', error);
+      setBidders([]);
     }
   };
 
   const loadAssignments = async () => {
     try {
+      console.log('Loading profile assignments');
       let query = supabase.from('profile_assignments').select('*');
       
       if (isManager) {
         // Managers can only see assignments for their profiles
-        const { data: managerProfiles } = await supabase
+        console.log('Loading assignments for manager profiles');
+        const { data: managerProfiles, error: profileError } = await supabase
           .from('profiles')
           .select('id')
           .eq('user_id', user?.id);
         
+        if (profileError) {
+          console.error('Error loading manager profiles for assignments:', profileError);
+          throw profileError;
+        }
+        
         const profileIds = managerProfiles?.map(p => p.id) || [];
+        console.log('Manager profile IDs for assignments:', profileIds);
         if (profileIds.length > 0) {
           query = query.in('profile_id', profileIds);
         } else {
           query = query.eq('profile_id', 'no-profiles'); // This will return empty results
         }
+      } else if (isAdmin) {
+        console.log('Loading all assignments for admin');
       }
       // Admins can see all assignments
 
       const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading assignments:', error);
+        throw error;
+      }
+      console.log('Loaded assignments:', data?.length || 0);
       setAssignments(data || []);
     } catch (error) {
       console.error('Error loading assignments:', error);
+      setAssignments([]);
     }
   };
 
@@ -206,17 +244,22 @@ const ProfileAssignments: React.FC = () => {
       {assignments.length === 0 ? (
         <div className="text-center py-12">
           <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Assignments</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Profile Assignments</h3>
           <p className="text-gray-600 mb-4">
-            No profiles have been assigned to bidders yet.
+            {isAdmin 
+              ? "No profile assignments have been created yet. Create profiles and bidder users, then assign profiles to bidders."
+              : "No profile assignments match your current filters."
+            }
           </p>
-          <button
-            onClick={() => setShowAssignModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Assign Profile
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAssignModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create First Assignment
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

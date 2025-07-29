@@ -27,29 +27,48 @@ const ResumeGenerator: React.FC = () => {
 
   const loadProfiles = async () => {
     try {
+      console.log('Loading profiles for user:', user?.id, 'Role:', { isBidder, isManager, isAdmin });
+      
       let query = supabase.from('profiles').select('*');
       
       if (isBidder) {
         // Bidders can only see profiles assigned to them
-        const { data: assignments } = await supabase
+        console.log('Loading assigned profiles for bidder');
+        const { data: assignments, error: assignmentError } = await supabase
           .from('profile_assignments')
           .select('profile_id')
           .eq('bidder_id', user?.id);
         
+        if (assignmentError) {
+          console.error('Error loading profile assignments:', assignmentError);
+          throw assignmentError;
+        }
+        
         const profileIds = assignments?.map(a => a.profile_id) || [];
+        console.log('Assigned profile IDs:', profileIds);
         query = query.in('id', profileIds);
       } else if (isManager) {
         // Managers can see their own profiles
+        console.log('Loading profiles for manager');
         query = query.eq('user_id', user?.id);
+      } else if (isAdmin) {
+        // Admins can see all profiles
+        console.log('Loading all profiles for admin');
       }
-      // Admins can see all profiles (no additional filter needed)
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading profiles:', error);
+        throw error;
+      }
+      
+      console.log('Loaded profiles:', data?.length || 0);
       setProfiles(data || []);
     } catch (error) {
       console.error('Error loading profiles:', error);
+      // Set empty array to prevent infinite loading
+      setProfiles([]);
     } finally {
       setLoading(false);
     }
@@ -150,6 +169,8 @@ const ResumeGenerator: React.FC = () => {
         <p className="text-gray-600 mb-4">
           {isBidder 
             ? "You don't have any profiles assigned to you yet. Contact your manager to get access to profiles."
+            : isAdmin
+            ? "No profiles have been created yet. Create your first profile to start generating resumes."
             : "You need to create a profile first before generating a resume."
           }
         </p>
@@ -158,7 +179,7 @@ const ResumeGenerator: React.FC = () => {
             onClick={() => window.location.href = '/profiles'}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
           >
-            Create Profile
+            {isAdmin ? 'Create First Profile' : 'Create Profile'}
           </button>
         )}
       </div>

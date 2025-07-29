@@ -11,7 +11,6 @@ const JobApplications: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     profileId: '',
-    bidderId: '',
     dateFrom: '',
     dateTo: '',
   });
@@ -27,39 +26,47 @@ const JobApplications: React.FC = () => {
 
   const loadApplications = async () => {
     try {
+      console.log('Loading applications for user:', user?.id, 'Role:', { isBidder, isManager, isAdmin });
+      
       let query = supabase
         .from('job_applications')
         .select(`
           *,
-          profile:profiles(*),
-          bidder:user_roles!job_applications_bidder_id_fkey(user_id)
+          profile:profiles(*)
         `);
 
       // Apply role-based filtering
       if (isBidder) {
+        console.log('Loading applications for bidder');
         query = query.eq('bidder_id', user?.id);
       } else if (isManager) {
         // Managers can see applications for their profiles
-        const { data: managerProfiles } = await supabase
+        console.log('Loading applications for manager profiles');
+        const { data: managerProfiles, error: profileError } = await supabase
           .from('profiles')
           .select('id')
           .eq('user_id', user?.id);
         
+        if (profileError) {
+          console.error('Error loading manager profiles:', profileError);
+          throw profileError;
+        }
+        
         const profileIds = managerProfiles?.map(p => p.id) || [];
+        console.log('Manager profile IDs:', profileIds);
         if (profileIds.length > 0) {
           query = query.in('profile_id', profileIds);
         } else {
           query = query.eq('profile_id', 'no-profiles'); // This will return empty results
         }
+      } else if (isAdmin) {
+        console.log('Loading all applications for admin');
       }
       // Admins can see all applications (no additional filter)
 
       // Apply user filters
       if (filters.profileId) {
         query = query.eq('profile_id', filters.profileId);
-      }
-      if (filters.bidderId) {
-        query = query.eq('bidder_id', filters.bidderId);
       }
       if (filters.dateFrom) {
         query = query.gte('created_at', filters.dateFrom);
@@ -70,10 +77,17 @@ const JobApplications: React.FC = () => {
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading applications:', error);
+        throw error;
+      }
+      
+      console.log('Loaded applications:', data?.length || 0);
       setApplications(data || []);
     } catch (error) {
       console.error('Error loading applications:', error);
+      // Set empty array to prevent infinite loading
+      setApplications([]);
     } finally {
       setLoading(false);
     }
@@ -81,18 +95,27 @@ const JobApplications: React.FC = () => {
 
   const loadProfiles = async () => {
     try {
+      console.log('Loading profiles for applications page');
       let query = supabase.from('profiles').select('*');
       
       if (isManager) {
+        console.log('Loading manager profiles for applications');
         query = query.eq('user_id', user?.id);
+      } else if (isAdmin) {
+        console.log('Loading all profiles for admin applications');
       }
       // Admins can see all profiles
 
       const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading profiles for applications:', error);
+        throw error;
+      }
+      console.log('Loaded profiles for applications:', data?.length || 0);
       setProfiles(data || []);
     } catch (error) {
-      console.error('Error loading profiles:', error);
+      console.error('Error loading profiles for applications:', error);
+      setProfiles([]);
     }
   };
 
@@ -109,7 +132,6 @@ const JobApplications: React.FC = () => {
   const clearFilters = () => {
     setFilters({
       profileId: '',
-      bidderId: '',
       dateFrom: '',
       dateTo: '',
     });
@@ -209,6 +231,8 @@ const JobApplications: React.FC = () => {
           <p className="text-gray-600">
             {isBidder 
               ? "You haven't generated any resumes yet."
+              : isAdmin
+              ? "No job applications have been created yet. Create profiles and generate resumes to see application history."
               : "No job applications match your current filters."
             }
           </p>

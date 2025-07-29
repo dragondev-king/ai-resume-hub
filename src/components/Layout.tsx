@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Sparkles, User, LogOut, Calendar, Users, Crown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import DebugInfo from './DebugInfo';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -126,6 +127,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <DebugInfo />
         {children}
       </main>
     </div>

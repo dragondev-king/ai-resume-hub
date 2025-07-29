@@ -9,6 +9,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export type UserRole = 'bidder' | 'manager' | 'admin';
 
 // Database types
+export interface User {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Profile {
   id: string;
   user_id: string;
@@ -81,6 +92,10 @@ export interface Education {
 }
 
 // Extended types for UI
+export interface UserWithRole extends User {
+  role?: UserRole;
+}
+
 export interface ProfileWithAssignments extends Profile {
   assignments?: ProfileAssignment[];
   applications?: JobApplication[];
@@ -88,8 +103,4 @@ export interface ProfileWithAssignments extends Profile {
 
 export interface JobApplicationWithDetails extends JobApplication {
   profile?: Profile;
-  bidder?: {
-    id: string;
-    email: string;
-  };
 } 
