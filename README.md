@@ -4,8 +4,9 @@ A modern React application that generates professional resumes using AI, tailore
 
 ## Features
 
+- 🔐 **User Authentication**: Secure login/signup with Supabase Auth
+- 📝 **Profile Management**: Create and manage multiple professional profiles
 - 🤖 **AI-Powered Resume Enhancement**: Uses OpenAI to tailor your resume to specific job descriptions
-- 📝 **Comprehensive Form**: Collect personal information, experience, education, and skills
 - 👀 **Live Preview**: See your resume before generating the final document
 - 📄 **DOCX Export**: Download professional Word documents
 - 🎨 **Modern UI**: Beautiful, responsive design with TailwindCSS
@@ -16,6 +17,7 @@ A modern React application that generates professional resumes using AI, tailore
 - **Frontend**: React 19 + TypeScript
 - **Styling**: TailwindCSS
 - **Form Handling**: React Hook Form
+- **Authentication & Database**: Supabase
 - **AI Integration**: OpenAI API
 - **Document Generation**: docx.js
 - **Icons**: Lucide React
@@ -25,78 +27,119 @@ A modern React application that generates professional resumes using AI, tailore
 
 - Node.js (v16 or higher)
 - npm or yarn
+- Supabase account
 - OpenAI API key
 
-## Installation
+## Setup Instructions
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ai-resume-generator
-   ```
+### 1. Supabase Setup
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+1. **Create a Supabase project**
+   - Go to [supabase.com](https://supabase.com)
+   - Create a new project
+   - Note down your project URL and anon key
 
-3. **Set up environment variables**
-   Create a `.env` file in the root directory:
-   ```env
-   REACT_APP_OPENAI_API_KEY=your_openai_api_key_here
-   ```
+2. **Set up the database schema**
+   - Go to your Supabase project dashboard
+   - Navigate to SQL Editor
+   - Run the SQL commands from `supabase-schema.sql`
 
-   **Important**: Get your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+3. **Configure authentication**
+   - In your Supabase dashboard, go to Authentication > Settings
+   - Enable email authentication
+   - Configure any additional auth providers if needed
 
-4. **Start the development server**
-   ```bash
-   npm start
-   ```
+### 2. Environment Variables
 
-   The app will open at [http://localhost:3000](http://localhost:3000)
+Create a `.env` file in the root directory:
+
+```env
+REACT_APP_SUPABASE_URL=your_supabase_project_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+REACT_APP_OPENAI_API_KEY=your_openai_api_key
+```
+
+### 3. Installation
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm start
+```
+
+The app will open at [http://localhost:3000](http://localhost:3000)
 
 ## Usage
 
-### 1. Fill in Personal Information
-- Enter your basic contact details
-- Add optional LinkedIn and portfolio links
+### 1. Authentication
+- Sign up with your email and password
+- Sign in to access your dashboard
 
-### 2. Add Job Description
-- Paste the job description you're applying for
-- The AI will use this to tailor your resume
+### 2. Profile Management
+- **Create Profiles**: Add your professional information, experience, education, and skills
+- **Edit Profiles**: Update your information anytime
+- **Multiple Profiles**: Create different profiles for different career paths
 
-### 3. Complete Your Profile
-- **Professional Summary**: Add your current summary (optional - AI will enhance it)
-- **Work Experience**: Add your job history with descriptions
-- **Education**: Include your academic background
-- **Skills**: List your technical and soft skills
-
-### 4. Generate AI-Enhanced Resume
-- Click "Generate AI Resume"
-- The AI will analyze the job description and enhance your resume
-- Review the generated content in the preview
-
-### 5. Download Your Resume
-- Click "Download .docx" to get your professional resume
-- The file will be named: `FirstName_LastName_Resume.docx`
+### 3. Resume Generation
+- **Select Profile**: Choose which profile to use for resume generation
+- **Add Job Description**: Paste the job description you're applying for
+- **Generate Resume**: The AI will analyze the job description and enhance your resume
+- **Download**: Get your professional .docx resume
 
 ## Project Structure
 
 ```
 src/
 ├── components/
-│   ├── ResumeForm.tsx      # Main form component
-│   └── ResumePreview.tsx   # Resume preview component
+│   ├── Auth.tsx              # Authentication component
+│   ├── ProfileForm.tsx       # Profile management form
+│   ├── ResumeGenerator.tsx   # Resume generation component
+│   └── ResumePreview.tsx     # Resume preview component
+├── contexts/
+│   └── AuthContext.tsx       # Authentication context
+├── lib/
+│   └── supabase.ts          # Supabase client and types
 ├── types/
-│   └── resume.ts          # TypeScript interfaces
+│   └── resume.ts            # Resume data types
 ├── utils/
-│   ├── resumeGenerator.ts # AI integration
-│   └── docxGenerator.ts   # Document generation
-├── App.tsx                # Main app component
-└── index.tsx             # App entry point
+│   ├── resumeGenerator.ts   # AI integration
+│   └── docxGenerator.ts     # Document generation
+└── App.tsx                  # Main app component
+```
+
+## Database Schema
+
+The app uses a single `profiles` table with the following structure:
+
+```sql
+profiles (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  phone TEXT,
+  location TEXT,
+  linkedin TEXT,
+  portfolio TEXT,
+  summary TEXT,
+  experience JSONB,
+  education JSONB,
+  skills TEXT[],
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+)
 ```
 
 ## Configuration
+
+### Supabase Configuration
+
+1. **Authentication**: Configure email/password auth in Supabase dashboard
+2. **Row Level Security**: Already configured in the schema
+3. **Policies**: Users can only access their own profiles
 
 ### OpenAI API Setup
 
@@ -112,12 +155,16 @@ You can customize the app by modifying:
 - **Styling**: Edit `tailwind.config.js` for theme changes
 - **AI Prompts**: Modify the prompt in `src/utils/resumeGenerator.ts`
 - **Document Format**: Adjust the DOCX generation in `src/utils/docxGenerator.ts`
+- **Database Schema**: Modify `supabase-schema.sql` for additional fields
 
 ## API Usage
 
-The app uses the OpenAI API for resume enhancement. Each generation typically costs:
-- **GPT-3.5-turbo**: ~$0.002 per 1K tokens
-- **Typical resume generation**: ~$0.01-0.05 per resume
+The app uses two APIs:
+
+- **Supabase**: Authentication and data storage
+- **OpenAI**: Resume enhancement (GPT-3.5-turbo)
+  - Cost: ~$0.002 per 1K tokens
+  - Typical cost: ~$0.01-0.05 per resume
 
 ## Development
 
@@ -130,18 +177,39 @@ The app uses the OpenAI API for resume enhancement. Each generation typically co
 
 ### Adding New Features
 
-1. **New Form Fields**: Add to `ResumeForm.tsx` and update types in `resume.ts`
+1. **New Profile Fields**: Add to `ProfileForm.tsx` and update database schema
 2. **AI Enhancements**: Modify prompts in `resumeGenerator.ts`
 3. **Document Format**: Update `docxGenerator.ts` for new sections
 
 ## Security Notes
 
-⚠️ **Important**: This app currently uses the OpenAI API directly from the browser. For production use, consider:
+✅ **Secure Implementation**:
+- Row Level Security enabled
+- User authentication required
+- API keys stored in environment variables
+- Users can only access their own data
 
-- Moving API calls to a backend server
-- Implementing rate limiting
-- Adding user authentication
-- Using environment variables properly
+⚠️ **Production Considerations**:
+- Consider moving OpenAI API calls to a backend server
+- Implement rate limiting
+- Add additional security measures as needed
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add environment variables in Vercel dashboard
+4. Deploy
+
+### Other Platforms
+
+The app can be deployed to any platform that supports React apps:
+- Netlify
+- AWS Amplify
+- Firebase Hosting
+- Heroku
 
 ## Contributing
 
@@ -160,9 +228,10 @@ This project is licensed under the MIT License.
 If you encounter any issues:
 
 1. Check the browser console for errors
-2. Verify your OpenAI API key is correct
-3. Ensure all required fields are filled
-4. Check your internet connection
+2. Verify your environment variables are correct
+3. Ensure Supabase is properly configured
+4. Check your OpenAI API key and usage
+5. Verify your internet connection
 
 ## Roadmap
 
@@ -173,3 +242,5 @@ If you encounter any issues:
 - [ ] Template customization
 - [ ] Bulk resume generation
 - [ ] Integration with job boards
+- [ ] Resume history and versioning
+- [ ] Team collaboration features
