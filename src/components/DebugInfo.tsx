@@ -2,20 +2,21 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 const DebugInfo: React.FC = () => {
-  const { user, session, loading, userRole, isAdmin, isManager, isBidder } = useAuth();
+  const { user, loading, userRole, isAdmin, isManager, isBidder } = useAuth();
 
   return (
-    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-      <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Information</h3>
-      <div className="text-xs text-yellow-700 space-y-1">
+    <div className="mb-4 p-4 bg-gray-100 rounded-lg text-xs">
+      <h3 className="font-bold mb-2">Debug Info:</h3>
+      <div className="space-y-1">
         <div><strong>Loading:</strong> {loading ? 'true' : 'false'}</div>
-        <div><strong>User:</strong> {user ? user.email : 'null'}</div>
-        <div><strong>User ID:</strong> {user?.id || 'null'}</div>
-        <div><strong>Session:</strong> {session ? 'exists' : 'null'}</div>
-        <div><strong>User Role:</strong> {userRole || 'null'}</div>
-        <div><strong>Is Admin:</strong> {isAdmin ? 'true' : 'false'}</div>
-        <div><strong>Is Manager:</strong> {isManager ? 'true' : 'false'}</div>
-        <div><strong>Is Bidder:</strong> {isBidder ? 'true' : 'false'}</div>
+        <div><strong>User:</strong> {user ? `${user.email} (${user.id.slice(0, 8)}...)` : 'null'}</div>
+        <div><strong>Role:</strong> {userRole || 'null'}</div>
+        <div><strong>isAdmin:</strong> {isAdmin ? 'true' : 'false'}</div>
+        <div><strong>isManager:</strong> {isManager ? 'true' : 'false'}</div>
+        <div><strong>isBidder:</strong> {isBidder ? 'true' : 'false'}</div>
+        <div><strong>URL:</strong> {window.location.href}</div>
+        <div><strong>Pathname:</strong> {window.location.pathname}</div>
+        <div><strong>Hash:</strong> {window.location.hash}</div>
       </div>
     </div>
   );
