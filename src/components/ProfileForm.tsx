@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Plus, Trash2, Save, User } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Profile, Experience, Education } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +26,7 @@ interface ProfileFormProps {
 }
 
 const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
+  const { isBidder } = useAuth();
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [skillFields, setSkillFields] = useState(
@@ -93,6 +95,11 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
 
   const onSubmit = async (data: ProfileFormData) => {
     if (!user) return;
+    
+    if (isBidder) {
+      toast.error('Bidders cannot create or edit profiles');
+      return;
+    }
     
     setIsSaving(true);
     try {

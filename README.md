@@ -1,55 +1,77 @@
 # AI Resume Generator
 
-A modern React application that generates professional resumes using AI, tailored to specific job descriptions. The app creates beautiful, formatted .docx files that can be downloaded and used for job applications.
+A React-based web application that generates professional resumes using AI, with role-based access control and comprehensive job application tracking.
 
 ## Features
 
-- 🔐 **User Authentication**: Secure login/signup with Supabase Auth
-- 📝 **Profile Management**: Create and manage multiple professional profiles
-- 🤖 **AI-Powered Resume Enhancement**: Uses OpenAI to tailor your resume to specific job descriptions
-- 👀 **Live Preview**: See your resume before generating the final document
-- 📄 **DOCX Export**: Download professional Word documents
-- 🎨 **Modern UI**: Beautiful, responsive design with TailwindCSS
-- 📱 **Mobile Friendly**: Works seamlessly on all devices
+### 🤖 AI-Powered Resume Generation
+- Generate tailored resumes based on job descriptions
+- AI-enhanced content optimization for summaries, experience descriptions, and skills
+- Download resumes as `.docx` files
+- Real-time preview of generated content
+
+### 👥 Role-Based Access Control
+- **Bidders**: Can only generate resumes using assigned profiles
+- **Managers**: Can create/manage profiles and assign them to bidders
+- **Admins**: Full system access, can manage all users and data
+
+### 📊 Job Application History
+- Track all resume generations with job details
+- Store job description links for future reference
+- Filter applications by profile, date range, and other criteria
+- View generated content and application metadata
+
+### 🔐 User Management
+- Secure authentication with Supabase (admin-controlled user creation)
+- Profile assignment system for managers
+- Admin user management (create, edit, delete users with roles)
+- Comprehensive audit trail of all activities
+
+### 🌐 URL Routing
+- Each page has its own URL for easy navigation
+- Role-based route protection
+- Deep linking support
 
 ## Tech Stack
 
-- **Frontend**: React 19 + TypeScript
+- **Frontend**: React 18 + TypeScript
 - **Styling**: TailwindCSS
-- **Form Handling**: React Hook Form
-- **Authentication & Database**: Supabase
-- **AI Integration**: OpenAI API
-- **Document Generation**: docx.js
+- **Routing**: React Router DOM
+- **Authentication & Database**: Supabase (PostgreSQL)
+- **Form Management**: React Hook Form
+- **AI Integration**: OpenAI API (GPT-3.5-turbo)
+- **Document Generation**: `docx` library
 - **Icons**: Lucide React
 - **Notifications**: React Hot Toast
 
 ## Prerequisites
 
 - Node.js (v16 or higher)
-- npm or yarn
+- npm or pnpm
 - Supabase account
 - OpenAI API key
 
 ## Setup Instructions
 
-### 1. Supabase Setup
+### 1. Clone and Install Dependencies
 
-1. **Create a Supabase project**
-   - Go to [supabase.com](https://supabase.com)
-   - Create a new project
-   - Note down your project URL and anon key
+```bash
+git clone <repository-url>
+cd ai-resume-generator
+npm install --legacy-peer-deps
+```
 
-2. **Set up the database schema**
-   - Go to your Supabase project dashboard
-   - Navigate to SQL Editor
-   - Run the SQL commands from `supabase-schema.sql`
+### 2. Supabase Setup
 
-3. **Configure authentication**
-   - In your Supabase dashboard, go to Authentication > Settings
-   - Enable email authentication
-   - Configure any additional auth providers if needed
+1. Create a new Supabase project at [supabase.com](https://supabase.com)
+2. Go to Settings > API to get your project URL and anon key
+3. Run the database schema in the SQL editor:
 
-### 2. Environment Variables
+```sql
+-- Copy and paste the contents of supabase-schema.sql
+```
+
+### 3. Environment Variables
 
 Create a `.env` file in the root directory:
 
@@ -59,157 +81,209 @@ REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
 REACT_APP_OPENAI_API_KEY=your_openai_api_key
 ```
 
-### 3. Installation
+### 4. Start Development Server
 
 ```bash
-# Install dependencies
-npm install
-
-# Start development server
 npm start
 ```
 
-The app will open at [http://localhost:3000](http://localhost:3000)
+The application will be available at `http://localhost:3000`
 
 ## Usage
 
-### 1. Authentication
-- Sign up with your email and password
-- Sign in to access your dashboard
+### Initial Setup (Admin Only)
+1. **Create First Admin User**: Use Supabase Auth Admin API or dashboard to create the first admin user
+2. **Set Admin Role**: Update the user's role to 'admin' in the `user_roles` table
+3. **Create Additional Users**: Use the admin interface to create and manage other users
 
-### 2. Profile Management
-- **Create Profiles**: Add your professional information, experience, education, and skills
-- **Edit Profiles**: Update your information anytime
-- **Multiple Profiles**: Create different profiles for different career paths
+### For Bidders
+1. **Login**: Sign in with credentials provided by your administrator
+2. **Generate Resumes**: Select from assigned profiles and input job details
+3. **View History**: Check your application history and generated resumes
 
-### 3. Resume Generation
-- **Select Profile**: Choose which profile to use for resume generation
-- **Add Job Description**: Paste the job description you're applying for
-- **Generate Resume**: The AI will analyze the job description and enhance your resume
-- **Download**: Get your professional .docx resume
+### For Managers
+1. **Create Profiles**: Add professional profiles with experience, education, and skills
+2. **Assign Profiles**: Assign profiles to specific bidders
+3. **Monitor Applications**: View job applications from assigned profiles
+4. **Filter & Analyze**: Use filters to analyze application patterns
+
+### For Admins
+1. **User Management**: Create, edit, and delete users with appropriate roles
+2. **System Overview**: View all profiles, assignments, and applications
+3. **Analytics**: Access comprehensive system analytics and reports
+4. **Role Assignment**: Assign and manage user roles (bidder, manager, admin)
 
 ## Project Structure
 
 ```
 src/
-├── components/
-│   ├── Auth.tsx              # Authentication component
-│   ├── ProfileForm.tsx       # Profile management form
-│   ├── ResumeGenerator.tsx   # Resume generation component
-│   └── ResumePreview.tsx     # Resume preview component
-├── contexts/
-│   └── AuthContext.tsx       # Authentication context
-├── lib/
-│   └── supabase.ts          # Supabase client and types
-├── types/
-│   └── resume.ts            # Resume data types
-├── utils/
-│   ├── resumeGenerator.ts   # AI integration
-│   └── docxGenerator.ts     # Document generation
-└── App.tsx                  # Main app component
+├── components/          # React components
+│   ├── Auth.tsx        # Authentication UI (sign-in only)
+│   ├── Layout.tsx      # Main layout with navigation
+│   ├── ProtectedRoute.tsx # Route protection
+│   ├── ProfileForm.tsx # Profile creation/editing
+│   ├── ResumeGenerator.tsx # Resume generation
+│   ├── JobApplications.tsx # Application history
+│   ├── ProfileAssignments.tsx # Profile assignment management
+│   ├── UserManagement.tsx # User management (admin)
+│   └── ResumePreview.tsx # Resume preview
+├── pages/              # Page components
+│   ├── ProfilesPage.tsx # Profiles management page
+│   ├── GeneratorPage.tsx # Resume generation page
+│   ├── ApplicationsPage.tsx # Applications history page
+│   ├── AssignmentsPage.tsx # Profile assignments page
+│   └── UsersPage.tsx   # User management page
+├── contexts/           # React contexts
+│   └── AuthContext.tsx # Authentication state management
+├── lib/               # Library configurations
+│   └── supabase.ts    # Supabase client and types
+├── types/             # TypeScript type definitions
+│   └── resume.ts      # Resume-related types
+├── utils/             # Utility functions
+│   ├── resumeGenerator.ts # AI integration
+│   └── docxGenerator.ts   # Document generation
+└── App.tsx            # Main application component
 ```
 
 ## Database Schema
 
-The app uses a single `profiles` table with the following structure:
+### Core Tables
+- **profiles**: User professional profiles
+- **user_roles**: User role assignments (bidder/manager/admin)
+- **profile_assignments**: Profile-to-bidder assignments
+- **job_applications**: Job application history and metadata
 
-```sql
-profiles (
-  id UUID PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id),
-  first_name TEXT,
-  last_name TEXT,
-  email TEXT,
-  phone TEXT,
-  location TEXT,
-  linkedin TEXT,
-  portfolio TEXT,
-  summary TEXT,
-  experience JSONB,
-  education JSONB,
-  skills TEXT[],
-  created_at TIMESTAMP,
-  updated_at TIMESTAMP
-)
-```
+### Security Features
+- Row Level Security (RLS) policies
+- Role-based access control
+- Secure API endpoints
+- Data isolation between users
+
+## Authentication Flow
+
+### User Creation (Admin Only)
+- Only administrators can create new users through the admin interface
+- Users are created with email confirmation disabled for immediate access
+- Roles are automatically assigned during user creation
+
+### User Login
+- Users sign in with credentials provided by administrators
+- No self-registration available
+- Automatic role-based access control after authentication
+
+## Troubleshooting
+
+### User Roles Infinite Recursion Error
+
+If you encounter a "infinite recursion detected in policy for relation 'user_roles'" error, follow these steps:
+
+1. **Run the Fix Script**: Execute the `fix-user-roles-policies.sql` script in your Supabase SQL editor
+2. **Alternative Manual Fix**:
+   - Go to your Supabase dashboard → SQL Editor
+   - Drop the problematic policies:
+     ```sql
+     DROP POLICY IF EXISTS "Users can view their own role" ON user_roles;
+     DROP POLICY IF EXISTS "Admins can view all roles" ON user_roles;
+     ```
+   - Create the new policies from the updated `supabase-schema.sql`
+3. **Ensure All Users Have Roles**:
+   ```sql
+   INSERT INTO user_roles (user_id, role)
+   SELECT id, 'bidder'
+   FROM auth.users
+   WHERE id NOT IN (SELECT user_id FROM user_roles)
+   ON CONFLICT (user_id) DO NOTHING;
+   ```
+
+### Admin API Access
+
+If the admin API is not available (common in free tier), the application will fall back to using role data only. User management features may be limited but will still work.
+
+### Creating the First Admin User
+
+If you need to create the first admin user manually:
+
+1. **Create User in Supabase Auth**:
+   - Go to Supabase Dashboard → Authentication → Users
+   - Click "Add User" and create a user with email and password
+
+2. **Assign Admin Role**:
+   ```sql
+   INSERT INTO user_roles (user_id, role) 
+   VALUES ('user-uuid-here', 'admin');
+   ```
+
+3. **Login and Create Other Users**: Use the admin interface to create additional users
 
 ## Configuration
 
-### Supabase Configuration
+### TailwindCSS
+The project uses TailwindCSS for styling. Configuration is in `tailwind.config.js`.
 
-1. **Authentication**: Configure email/password auth in Supabase dashboard
-2. **Row Level Security**: Already configured in the schema
-3. **Policies**: Users can only access their own profiles
+### OpenAI API
+- Model: `gpt-3.5-turbo`
+- Temperature: 0.7 (balanced creativity and consistency)
+- Max tokens: 2000
 
-### OpenAI API Setup
-
-1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Create an account or sign in
-3. Generate a new API key
-4. Add the key to your `.env` file
-
-### Customization
-
-You can customize the app by modifying:
-
-- **Styling**: Edit `tailwind.config.js` for theme changes
-- **AI Prompts**: Modify the prompt in `src/utils/resumeGenerator.ts`
-- **Document Format**: Adjust the DOCX generation in `src/utils/docxGenerator.ts`
-- **Database Schema**: Modify `supabase-schema.sql` for additional fields
+### Supabase
+- PostgreSQL database
+- Real-time subscriptions (if needed)
+- Storage for file uploads (future feature)
 
 ## API Usage
 
-The app uses two APIs:
+### OpenAI API
+The application uses OpenAI's GPT-3.5-turbo model to:
+- Generate professional summaries
+- Optimize experience descriptions
+- Suggest relevant skills
+- Tailor content to job requirements
 
-- **Supabase**: Authentication and data storage
-- **OpenAI**: Resume enhancement (GPT-3.5-turbo)
-  - Cost: ~$0.002 per 1K tokens
-  - Typical cost: ~$0.01-0.05 per resume
+### Supabase API
+- Authentication and user management
+- Real-time data synchronization
+- File storage and retrieval
+- Database operations with RLS
 
 ## Development
 
-### Available Scripts
+### Code Style
+- TypeScript for type safety
+- ESLint for code quality
+- Prettier for formatting
+- Component-based architecture
 
-- `npm start` - Start development server
-- `npm build` - Build for production
-- `npm test` - Run tests
-- `npm eject` - Eject from Create React App
+### Testing
+```bash
+npm test
+```
 
-### Adding New Features
-
-1. **New Profile Fields**: Add to `ProfileForm.tsx` and update database schema
-2. **AI Enhancements**: Modify prompts in `resumeGenerator.ts`
-3. **Document Format**: Update `docxGenerator.ts` for new sections
+### Building for Production
+```bash
+npm run build
+```
 
 ## Security Notes
 
-✅ **Secure Implementation**:
-- Row Level Security enabled
-- User authentication required
-- API keys stored in environment variables
-- Users can only access their own data
-
-⚠️ **Production Considerations**:
-- Consider moving OpenAI API calls to a backend server
-- Implement rate limiting
-- Add additional security measures as needed
+- All database operations use Row Level Security
+- API keys are stored in environment variables
+- User authentication is handled by Supabase
+- No sensitive data is stored in client-side code
 
 ## Deployment
 
 ### Vercel (Recommended)
+1. Connect your GitHub repository
+2. Set environment variables
+3. Deploy automatically on push
 
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy
+### Netlify
+1. Build command: `npm run build`
+2. Publish directory: `build`
+3. Set environment variables
 
 ### Other Platforms
-
-The app can be deployed to any platform that supports React apps:
-- Netlify
-- AWS Amplify
-- Firebase Hosting
-- Heroku
+The app can be deployed to any static hosting service that supports React applications.
 
 ## Contributing
 
@@ -225,22 +299,26 @@ This project is licensed under the MIT License.
 
 ## Support
 
-If you encounter any issues:
-
-1. Check the browser console for errors
-2. Verify your environment variables are correct
-3. Ensure Supabase is properly configured
-4. Check your OpenAI API key and usage
-5. Verify your internet connection
+For support and questions:
+- Create an issue in the repository
+- Check the documentation
+- Review the code comments
 
 ## Roadmap
 
-- [ ] PDF export option
-- [ ] Multiple resume templates
-- [ ] Cover letter generation
-- [ ] Resume scoring and feedback
-- [ ] Template customization
-- [ ] Bulk resume generation
+### Planned Features
+- [ ] Resume template customization
+- [ ] Bulk profile import/export
+- [ ] Advanced analytics dashboard
+- [ ] Email notifications
+- [ ] Resume version control
 - [ ] Integration with job boards
-- [ ] Resume history and versioning
-- [ ] Team collaboration features
+- [ ] Mobile application
+- [ ] Multi-language support
+
+### Technical Improvements
+- [ ] Unit and integration tests
+- [ ] Performance optimization
+- [ ] Accessibility improvements
+- [ ] PWA capabilities
+- [ ] Offline support

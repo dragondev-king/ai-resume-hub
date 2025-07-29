@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Lock, User, LogIn, UserPlus } from 'lucide-react';
+import { Mail, Lock, LogIn } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 const Auth: React.FC = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,13 +20,12 @@ const Auth: React.FC = () => {
     setError('');
 
     try {
-      if (isSignUp) {
-        await signUp(email, password);
-      } else {
-        await signIn(email, password);
-      }
+      await signIn(email, password);
+      const from = location.state?.from?.pathname || '/profiles';
+      navigate(from, { replace: true });
     } catch (error: any) {
       setError(error.message);
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }
@@ -35,10 +37,10 @@ const Auth: React.FC = () => {
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {isSignUp ? 'Create Account' : 'Welcome Back'}
+              Welcome Back
             </h1>
             <p className="text-gray-600">
-              {isSignUp ? 'Sign up to start creating your resume' : 'Sign in to your account'}
+              Sign in to your account to access the resume generator
             </p>
           </div>
 
@@ -92,29 +94,17 @@ const Auth: React.FC = () => {
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               ) : (
                 <>
-                  {isSignUp ? (
-                    <>
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Create Account
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="w-4 h-4 mr-2" />
-                      Sign In
-                    </>
-                  )}
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Sign In
                 </>
               )}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-sm text-primary-600 hover:text-primary-700"
-            >
-              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-            </button>
+            <p className="text-sm text-gray-600">
+              Contact your administrator to get login credentials
+            </p>
           </div>
         </div>
       </div>
