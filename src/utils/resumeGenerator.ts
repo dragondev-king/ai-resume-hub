@@ -1,5 +1,24 @@
 import OpenAI from 'openai';
-import { ResumeData } from '../types/resume';
+
+interface Profile {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  portfolio?: string;
+  summary?: string;
+  experience: any[];
+  education: any[];
+  skills: string[];
+}
+
+interface GeneratedResume {
+  summary: string;
+  experience: any[];
+  skills: string[];
+}
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -7,10 +26,10 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true, // Note: In production, this should be handled server-side
 });
 
-export const generateResume = async (data: ResumeData): Promise<ResumeData> => {
+export const generateResume = async (profile: Profile, jobDescription: string): Promise<GeneratedResume> => {
   try {
     // Create a comprehensive prompt for the AI
-    const prompt = createAIPrompt(data);
+    const prompt = createAIPrompt(profile, jobDescription);
     
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -35,19 +54,21 @@ export const generateResume = async (data: ResumeData): Promise<ResumeData> => {
     }
 
     // Parse the AI response and enhance the resume data
-    const enhancedData = parseAIResponse(data, aiResponse);
+    const enhancedData = parseAIResponse(profile, aiResponse);
     
     return enhancedData;
   } catch (error) {
     console.error('Error generating resume with AI:', error);
     // Return the original data if AI generation fails
-    return data;
+    return {
+      summary: profile.summary || '',
+      experience: profile.experience,
+      skills: profile.skills,
+    };
   }
 };
 
-const createAIPrompt = (data: ResumeData): string => {
-  const { personalInfo, experience, education, skills, jobDescription, summary } = data;
-  
+const createAIPrompt = (profile: Profile, jobDescription: string): string => {
   return `
 Please enhance this resume for the following job description:
 
@@ -55,22 +76,22 @@ JOB DESCRIPTION:
 ${jobDescription}
 
 CANDIDATE INFORMATION:
-Name: ${personalInfo.firstName} ${personalInfo.lastName}
-Current Summary: ${summary || 'Not provided'}
+Name: ${profile.first_name} ${profile.last_name}
+Current Summary: ${profile.summary || 'Not provided'}
 
 EXPERIENCE:
-${experience.map(exp => `
-- ${exp.position} at ${exp.company} (${exp.startDate} - ${exp.current ? 'Present' : exp.endDate})
+${profile.experience.map(exp => `
+- ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
   Description: ${exp.description}
 `).join('\n')}
 
 EDUCATION:
-${education.map(edu => `
-- ${edu.degree} in ${edu.field} from ${edu.institution} (${edu.startDate} - ${edu.current ? 'Present' : edu.endDate})
+${profile.education.map(edu => `
+- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
 `).join('\n')}
 
 CURRENT SKILLS:
-${skills.filter(skill => skill.trim()).join(', ')}
+${profile.skills.filter(skill => skill.trim()).join(', ')}
 
 Please provide the following enhancements in JSON format:
 
@@ -85,11 +106,9 @@ Return your response in this exact JSON format:
     {
       "company": "Company Name",
       "position": "Job Title",
-      "startDate": "YYYY-MM",
-      "endDate": "YYYY-MM",
-      "current": false,
-      "description": "Enhanced description with achievements...",
-      "achievements": ["Achievement 1", "Achievement 2"]
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "description": "Enhanced description with achievements..."
     }
   ],
   "skills": ["Skill 1", "Skill 2", "Skill 3"]
@@ -97,7 +116,7 @@ Return your response in this exact JSON format:
 `;
 };
 
-const parseAIResponse = (originalData: ResumeData, aiResponse: string): ResumeData => {
+const parseAIResponse = (originalProfile: Profile, aiResponse: string): GeneratedResume => {
   try {
     // Try to extract JSON from the response
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
@@ -108,19 +127,20 @@ const parseAIResponse = (originalData: ResumeData, aiResponse: string): ResumeDa
     const parsed = JSON.parse(jsonMatch[0]);
     
     // Create enhanced resume data
-    const enhancedData: ResumeData = {
-      ...originalData,
-      generatedContent: {
-        summary: parsed.summary || originalData.summary,
-        experience: parsed.experience || originalData.experience,
-        skills: parsed.skills || originalData.skills,
-      }
+    const enhancedData: GeneratedResume = {
+      summary: parsed.summary || originalProfile.summary || '',
+      experience: parsed.experience || originalProfile.experience,
+      skills: parsed.skills || originalProfile.skills,
     };
 
     return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
     // Return original data if parsing fails
-    return originalData;
+    return {
+      summary: originalProfile.summary || '',
+      experience: originalProfile.experience,
+      skills: originalProfile.skills,
+    };
   }
 };

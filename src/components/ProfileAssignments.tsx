@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { User, Users, Plus, X, Settings } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { User, Users, Plus, X } from 'lucide-react';
 import { Profile, ProfileAssignment } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '../contexts/UserContext';
 
 interface UserWithRole {
   id: string;
@@ -11,7 +11,7 @@ interface UserWithRole {
 }
 
 const ProfileAssignments: React.FC = () => {
-  const { user, isAdmin, isManager } = useAuth();
+  const { user, role } = useUser();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [bidders, setBidders] = useState<UserWithRole[]>([]);
   const [assignments, setAssignments] = useState<ProfileAssignment[]>([]);
@@ -20,36 +20,15 @@ const ProfileAssignments: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [selectedBidder, setSelectedBidder] = useState<string>('');
 
-  useEffect(() => {
-    if (user) {
-      loadData();
-    }
-  }, [user]);
-
-  const loadData = async () => {
-    try {
-      console.log('Loading profile assignments data for user:', user?.id, 'Role:', { isAdmin, isManager });
-      await Promise.all([
-        loadProfiles(),
-        loadBidders(),
-        loadAssignments(),
-      ]);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
       console.log('Loading profiles for assignments');
       let query = supabase.from('profiles').select('*');
       
-      if (isManager) {
+      if (role === 'manager') {
         console.log('Loading manager profiles for assignments');
         query = query.eq('user_id', user?.id);
-      } else if (isAdmin) {
+      } else if (role === 'admin') {
         console.log('Loading all profiles for admin assignments');
       }
       // Admins can see all profiles
@@ -65,9 +44,9 @@ const ProfileAssignments: React.FC = () => {
       console.error('Error loading profiles for assignments:', error);
       setProfiles([]);
     }
-  };
+  }, [user, role]);
 
-  const loadBidders = async () => {
+  const loadBidders = useCallback(async () => {
     try {
       console.log('Loading bidders for assignments');
       const { data, error } = await supabase
@@ -123,14 +102,14 @@ const ProfileAssignments: React.FC = () => {
       console.error('Error loading bidders:', error);
       setBidders([]);
     }
-  };
+  }, []);
 
-  const loadAssignments = async () => {
+  const loadAssignments = useCallback(async () => {
     try {
       console.log('Loading profile assignments');
       let query = supabase.from('profile_assignments').select('*');
       
-      if (isManager) {
+      if (role === 'manager') {
         // Managers can only see assignments for their profiles
         console.log('Loading assignments for manager profiles');
         const { data: managerProfiles, error: profileError } = await supabase
@@ -150,7 +129,7 @@ const ProfileAssignments: React.FC = () => {
         } else {
           query = query.eq('profile_id', 'no-profiles'); // This will return empty results
         }
-      } else if (isAdmin) {
+      } else if (role === 'admin') {
         console.log('Loading all assignments for admin');
       }
       // Admins can see all assignments
@@ -166,7 +145,28 @@ const ProfileAssignments: React.FC = () => {
       console.error('Error loading assignments:', error);
       setAssignments([]);
     }
-  };
+  }, [user, role]);
+
+  const loadData = useCallback(async () => {
+    try {
+      console.log('Loading profile assignments data for user:', user?.id, 'Role:', { role });
+      await Promise.all([
+        loadProfiles(),
+        loadBidders(),
+        loadAssignments(),
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, loadProfiles, loadBidders, loadAssignments, role]);
+
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+  }, [user, loadData]);
 
   const handleAssignProfile = async () => {
     if (!selectedProfile || !selectedBidder) return;
@@ -246,12 +246,12 @@ const ProfileAssignments: React.FC = () => {
           <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Profile Assignments</h3>
           <p className="text-gray-600 mb-4">
-            {isAdmin 
+            {role === 'admin' 
               ? "No profile assignments have been created yet. Create profiles and bidder users, then assign profiles to bidders."
               : "No profile assignments match your current filters."
             }
           </p>
-          {isAdmin && (
+          {role === 'admin' && (
             <button
               onClick={() => setShowAssignModal(true)}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"

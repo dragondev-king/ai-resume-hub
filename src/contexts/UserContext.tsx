@@ -1,0 +1,55 @@
+'use client';
+
+import { createContext, useContext, useCallback, useState, useEffect } from 'react';
+import { supabase, UserRole } from '../lib/supabase';
+import IUser from '../types/user';
+
+
+interface UserContextType {
+  user: IUser | null;
+  role: UserRole;
+}
+
+const UserContext = createContext<UserContextType | undefined>({
+  role: 'bidder',
+  user: null
+});
+
+interface UserContextProps {
+  children: React.ReactNode
+}
+
+const UserProvider: React.FC<UserContextProps> = ({ children }) => {
+  const [user, setUser] = useState<IUser | null>(null);
+
+  const getUser = useCallback(async () => {
+    const { data, error } = await supabase.from('users').select('*').single()
+    setUser(data)
+
+    if (error) {
+      console.error('Error fetching user:', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    getUser()
+  }, [getUser])
+
+  return (
+    <UserContext.Provider value={{ user, role: user?.role || 'bidder' }}>
+      {children}
+    </UserContext.Provider>
+  );
+};
+
+export const useUser = () => {
+  const context = useContext(UserContext);
+
+  if (context === undefined) {
+    throw new Error('useUser must be used inside UserProvider');
+  }
+
+  return context;
+};
+
+export default UserProvider;

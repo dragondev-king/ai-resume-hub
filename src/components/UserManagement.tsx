@@ -1,14 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { User, Plus, Edit, Trash2, Shield, Users, Crown } from 'lucide-react';
-import { UserRole, User as UserType } from '../lib/supabase';
+import { UserRole } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
+interface UserData {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<UserType[]>([]);
+  const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -167,7 +179,7 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const openEditModal = (user: UserType) => {
+  const openEditModal = (user: UserData) => {
     setEditingUser(user);
     setFormData({
       email: user.email,
@@ -175,7 +187,7 @@ const UserManagement: React.FC = () => {
       first_name: user.first_name || '',
       last_name: user.last_name || '',
       phone: user.phone || '',
-      role: user.role || 'bidder',
+      role: user.role,
     });
     setShowUserModal(true);
   };
@@ -199,7 +211,7 @@ const UserManagement: React.FC = () => {
     setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
   };
 
-  const getRoleIcon = (role: UserRole | undefined) => {
+  const getRoleIcon = (role: UserRole) => {
     switch (role) {
       case 'admin':
         return <Crown className="w-4 h-4 text-red-600" />;
@@ -212,18 +224,16 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const getRoleBadge = (role: UserRole | undefined) => {
+  const getRoleBadge = (role: UserRole) => {
     const colors = {
       admin: 'bg-red-100 text-red-800',
       manager: 'bg-blue-100 text-blue-800',
       bidder: 'bg-green-100 text-green-800',
     };
 
-    const roleText = role || 'bidder';
-
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[roleText]}`}>
-        {roleText.charAt(0).toUpperCase() + roleText.slice(1)}
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[role]}`}>
+        {role.charAt(0).toUpperCase() + role.slice(1)}
       </span>
     );
   };

@@ -1,29 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, Plus, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import ProfileForm from '../components/ProfileForm';
 import { toast } from 'react-hot-toast';
+import { useUser } from '../contexts/UserContext';
 
 const ProfilesPage: React.FC = () => {
-  const { user, isBidder, isManager, isAdmin } = useAuth();
+  const { user, role } = useUser()
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      loadProfiles();
-    }
-  }, [user]);
-
-  const loadProfiles = async () => {
+  
+  const loadProfiles = useCallback(async () => {
     try {
       let query = supabase.from('profiles').select('*');
       
-      if (isBidder) {
+      if (role === 'bidder') {
         // Bidders can only see profiles assigned to them
         const { data: assignments } = await supabase
           .from('profile_assignments')
@@ -32,7 +26,7 @@ const ProfilesPage: React.FC = () => {
         
         const profileIds = assignments?.map(a => a.profile_id) || [];
         query = query.in('id', profileIds);
-      } else if (isManager) {
+      } else if (role === 'manager') {
         // Managers can see their own profiles
         query = query.eq('user_id', user?.id);
       }
@@ -45,7 +39,14 @@ const ProfilesPage: React.FC = () => {
     } catch (error) {
       console.error('Error loading profiles:', error);
     }
-  };
+  }, [user, role]);
+
+  useEffect(() => {
+    if (user) {
+      loadProfiles();
+    }
+  }, [user, loadProfiles]);
+
 
   const handleProfileSave = () => {
     setShowProfileForm(false);
@@ -85,7 +86,7 @@ const ProfilesPage: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Your Profiles</h2>
           <p className="text-gray-600">Manage your professional profiles</p>
         </div>
-        {!isBidder && (
+        {role !== 'bidder' && (
           <button
             onClick={() => setShowProfileForm(true)}
             className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
@@ -133,12 +134,12 @@ const ProfilesPage: React.FC = () => {
           <User className="w-16 h-16 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Profiles Yet</h3>
           <p className="text-gray-600 mb-4">
-            {isBidder 
+            {role === 'bidder' 
               ? "You don't have any profiles assigned to you yet. Contact your manager to get access to profiles."
               : "Create your first profile to start generating AI-powered resumes."
             }
           </p>
-          {!isBidder && (
+          {role !== 'bidder' && (
             <button
               onClick={() => setShowProfileForm(true)}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
@@ -160,7 +161,7 @@ const ProfilesPage: React.FC = () => {
                   <p className="text-sm text-gray-600">{profile.email}</p>
                   <p className="text-sm text-gray-500">{profile.location}</p>
                 </div>
-                {!isBidder && (
+                {role !== 'bidder' && (
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleEditProfile(profile)}
@@ -192,7 +193,7 @@ const ProfilesPage: React.FC = () => {
                 >
                   Generate Resume
                 </Link>
-                {!isBidder && (
+                {role !== 'bidder' && (
                   <button
                     onClick={() => handleDeleteProfile(profile.id)}
                     className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700"

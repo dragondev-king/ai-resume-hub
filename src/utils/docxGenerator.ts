@@ -1,8 +1,13 @@
 import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { saveAs } from 'file-saver';
-import { ResumeData } from '../types/resume';
 
-export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
+interface GeneratedResume {
+  summary: string;
+  experience: any[];
+  skills: string[];
+}
+
+export const generateDocx = async (generatedResume: GeneratedResume, fileName: string): Promise<void> => {
   const doc = new Document({
     sections: [
       {
@@ -17,26 +22,8 @@ export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
           },
         },
         children: [
-          // Header with name and contact info
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `${resumeData.personalInfo.firstName} ${resumeData.personalInfo.lastName}`,
-                size: 32,
-                bold: true,
-                color: '2E5BBA',
-              }),
-            ],
-            spacing: {
-              after: 200,
-            },
-          }),
-          
-          // Contact information
-          ...createContactInfo(resumeData.personalInfo),
-          
           // Summary
-          ...(resumeData.generatedContent?.summary || resumeData.summary ? [
+          ...(generatedResume.summary ? [
             new Paragraph({
               children: [
                 new TextRun({
@@ -55,7 +42,7 @@ export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: resumeData.generatedContent?.summary || resumeData.summary,
+                  text: generatedResume.summary,
                   size: 22,
                 }),
               ],
@@ -66,7 +53,7 @@ export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
           ] : []),
           
           // Experience
-          ...(resumeData.experience.length > 0 ? [
+          ...(generatedResume.experience.length > 0 ? [
             new Paragraph({
               children: [
                 new TextRun({
@@ -82,31 +69,11 @@ export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
                 after: 200,
               },
             }),
-            ...createExperienceSection(resumeData.experience),
-          ] : []),
-          
-          // Education
-          ...(resumeData.education.length > 0 ? [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: 'EDUCATION',
-                  size: 24,
-                  bold: true,
-                  color: '2E5BBA',
-                  allCaps: true,
-                }),
-              ],
-              spacing: {
-                before: 400,
-                after: 200,
-              },
-            }),
-            ...createEducationSection(resumeData.education),
+            ...createExperienceSection(generatedResume.experience),
           ] : []),
           
           // Skills
-          ...(resumeData.generatedContent?.skills || resumeData.skills ? [
+          ...(generatedResume.skills.length > 0 ? [
             new Paragraph({
               children: [
                 new TextRun({
@@ -125,7 +92,7 @@ export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: (resumeData.generatedContent?.skills || resumeData.skills).join(', '),
+                  text: generatedResume.skills.join(', '),
                   size: 22,
                 }),
               ],
@@ -141,87 +108,10 @@ export const generateDocx = async (resumeData: ResumeData): Promise<void> => {
 
   // Generate and download the document
   const blob = await Packer.toBlob(doc);
-  const fileName = `${resumeData.personalInfo.firstName}_${resumeData.personalInfo.lastName}_Resume.docx`;
   saveAs(blob, fileName);
 };
 
-const createContactInfo = (personalInfo: ResumeData['personalInfo']): Paragraph[] => {
-  const contactInfo: Paragraph[] = [];
-  
-  // Email and Phone
-  const contactLine = [];
-  if (personalInfo.email) {
-    contactLine.push(personalInfo.email);
-  }
-  if (personalInfo.phone) {
-    contactLine.push(personalInfo.phone);
-  }
-  
-  if (contactLine.length > 0) {
-    contactInfo.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: contactLine.join(' | '),
-            size: 22,
-            color: '666666',
-          }),
-        ],
-        spacing: {
-          after: 200,
-        },
-      })
-    );
-  }
-  
-  // Location
-  if (personalInfo.location) {
-    contactInfo.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: personalInfo.location,
-            size: 22,
-            color: '666666',
-          }),
-        ],
-        spacing: {
-          after: 200,
-        },
-      })
-    );
-  }
-  
-  // LinkedIn and Portfolio
-  const links = [];
-  if (personalInfo.linkedin) {
-    links.push(`LinkedIn: ${personalInfo.linkedin}`);
-  }
-  if (personalInfo.portfolio) {
-    links.push(`Portfolio: ${personalInfo.portfolio}`);
-  }
-  
-  if (links.length > 0) {
-    contactInfo.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: links.join(' | '),
-            size: 22,
-            color: '666666',
-          }),
-        ],
-        spacing: {
-          after: 300,
-        },
-      })
-    );
-  }
-  
-  return contactInfo;
-};
-
-const createExperienceSection = (experience: ResumeData['experience']): Paragraph[] => {
+const createExperienceSection = (experience: any[]): Paragraph[] => {
   const paragraphs: Paragraph[] = [];
   
   experience.forEach((exp, index) => {
@@ -249,7 +139,7 @@ const createExperienceSection = (experience: ResumeData['experience']): Paragrap
     );
     
     // Date range
-    const dateRange = formatDateRange(exp.startDate, exp.endDate, exp.current);
+    const dateRange = formatDateRange(exp.start_date, exp.end_date);
     paragraphs.push(
       new Paragraph({
         children: [
@@ -282,91 +172,12 @@ const createExperienceSection = (experience: ResumeData['experience']): Paragrap
         })
       );
     }
-    
-    // Achievements
-    if (exp.achievements && exp.achievements.length > 0) {
-      exp.achievements.forEach(achievement => {
-        if (achievement.trim()) {
-          paragraphs.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: '• ',
-                  size: 22,
-                }),
-                new TextRun({
-                  text: achievement,
-                  size: 22,
-                }),
-              ],
-              spacing: {
-                after: 100,
-              },
-              indent: {
-                left: 720, // 0.5 inch
-              },
-            })
-          );
-        }
-      });
-    }
   });
   
   return paragraphs;
 };
 
-const createEducationSection = (education: ResumeData['education']): Paragraph[] => {
-  const paragraphs: Paragraph[] = [];
-  
-  education.forEach((edu, index) => {
-    // Degree and institution
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `${edu.degree} in ${edu.field}`,
-            size: 24,
-            bold: true,
-          }),
-          new TextRun({
-            text: `, ${edu.institution}`,
-            size: 24,
-            bold: true,
-            color: '2E5BBA',
-          }),
-        ],
-        spacing: {
-          before: index > 0 ? 300 : 0,
-          after: 100,
-        },
-      })
-    );
-    
-    // Date range and GPA
-    const dateRange = formatDateRange(edu.startDate, edu.endDate, edu.current);
-    const gpaText = edu.gpa ? ` | GPA: ${edu.gpa}` : '';
-    
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: dateRange + gpaText,
-            size: 20,
-            color: '666666',
-            italics: true,
-          }),
-        ],
-        spacing: {
-          after: 200,
-        },
-      })
-    );
-  });
-  
-  return paragraphs;
-};
-
-const formatDateRange = (startDate: string, endDate: string, current: boolean): string => {
+const formatDateRange = (startDate: string, endDate: string): string => {
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -374,6 +185,6 @@ const formatDateRange = (startDate: string, endDate: string, current: boolean): 
   };
   
   const start = formatDate(startDate);
-  const end = current ? 'Present' : formatDate(endDate);
+  const end = formatDate(endDate);
   return `${start} - ${end}`;
 }; 

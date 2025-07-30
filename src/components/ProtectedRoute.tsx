@@ -1,6 +1,7 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '../contexts/UserContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,28 +9,27 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
-  const { user, loading, isAdmin, isManager, isBidder } = useAuth();
-  const location = useLocation();
+  const { isAuthenticated } = useAuth();
+  const { role } = useUser();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+  // Check if user is authenticated
+  if (!isAuthenticated) {
+    return <Navigate to="/auth" replace />;
   }
 
-  if (!user) {
-    return <Navigate to="/auth" state={{ from: location }} replace />;
-  }
-
+  // Check role-based access if required
   if (requiredRole) {
-    const hasRequiredRole = 
-      (requiredRole === 'admin' && isAdmin) ||
-      (requiredRole === 'manager' && (isManager || isAdmin)) ||
-      (requiredRole === 'bidder' && (isBidder || isManager || isAdmin));
+    const roleHierarchy = {
+      bidder: 1,
+      manager: 2,
+      admin: 3,
+    };
 
-    if (!hasRequiredRole) {
+    const userRoleLevel = roleHierarchy[role as keyof typeof roleHierarchy] || 0;
+    const requiredRoleLevel = roleHierarchy[requiredRole];
+
+    if (userRoleLevel < requiredRoleLevel) {
+      // Redirect to profiles page if user doesn't have required role
       return <Navigate to="/profiles" replace />;
     }
   }

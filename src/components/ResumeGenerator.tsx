@@ -1,307 +1,312 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, Loader2, FileText, Link } from 'lucide-react';
-import { Profile, JobApplication } from '../lib/supabase';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Download, Loader2, Sparkles } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { generateResume } from '../utils/resumeGenerator';
-import { ResumeData } from '../types/resume';
-import ResumePreview from './ResumePreview';
+import { generateDocx } from '../utils/docxGenerator';
+import { useUser } from '../contexts/UserContext';
+
+interface Profile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  portfolio?: string;
+  summary?: string;
+  experience: any[];
+  education: any[];
+  skills: string[];
+}
 
 const ResumeGenerator: React.FC = () => {
-  const { user, isBidder, isManager, isAdmin } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<string>('');
-  const [jobTitle, setJobTitle] = useState('');
-  const [companyName, setCompanyName] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [jobTitle, setJobTitle] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [generatedResume, setGeneratedResume] = useState<any>(null);
+  const { user, role } = useUser();
 
-  useEffect(() => {
-    if (user) {
-      loadProfiles();
-    }
-  }, [user]);
-
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
-      console.log('Loading profiles for user:', user?.id, 'Role:', { isBidder, isManager, isAdmin });
-      
       let query = supabase.from('profiles').select('*');
-      
-      if (isBidder) {
-        // Bidders can only see profiles assigned to them
-        console.log('Loading assigned profiles for bidder');
-        const { data: assignments, error: assignmentError } = await supabase
-          .from('profile_assignments')
-          .select('profile_id')
-          .eq('bidder_id', user?.id);
-        
-        if (assignmentError) {
-          console.error('Error loading profile assignments:', assignmentError);
-          throw assignmentError;
-        }
-        
-        const profileIds = assignments?.map(a => a.profile_id) || [];
-        console.log('Assigned profile IDs:', profileIds);
-        query = query.in('id', profileIds);
-      } else if (isManager) {
-        // Managers can see their own profiles
-        console.log('Loading profiles for manager');
-        query = query.eq('user_id', user?.id);
-      } else if (isAdmin) {
-        // Admins can see all profiles
-        console.log('Loading all profiles for admin');
+
+      // If user is a bidder, only show assigned profiles
+      if (role === 'bidder') {
+        query = supabase
+          .from('profiles')
+          .select(`
+            *,
+            profile_assignments!inner(bidder_id)
+          `)
+          .eq('profile_assignments.bidder_id', user?.id);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error loading profiles:', error);
-        throw error;
+        toast.error('Failed to load profiles');
+        return;
       }
-      
-      console.log('Loaded profiles:', data?.length || 0);
+
       setProfiles(data || []);
     } catch (error) {
       console.error('Error loading profiles:', error);
-      // Set empty array to prevent infinite loading
-      setProfiles([]);
+      toast.error('Failed to load profiles');
+    }
+  }, [user, role]);
+
+  useEffect(() => {
+    loadProfiles();
+  }, [loadProfiles]);
+
+  const handleGenerate = async () => {
+    if (!selectedProfile || !jobDescription) {
+      toast.error('Please select a profile and enter a job description');
+      return;
+    }
+
+    const profile = profiles.find(p => p.id === selectedProfile);
+    if (!profile) {
+      toast.error('Selected profile not found');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Generate AI resume
+      const generated = await generateResume(profile, jobDescription);
+      setGeneratedResume(generated);
+
+      // Save job application record
+      if (user) {
+        const { error: saveError } = await supabase.from('job_applications').insert([{
+          profile_id: selectedProfile,
+          bidder_id: user.id,
+          job_title: jobTitle,
+          company_name: companyName,
+          job_description: jobDescription,
+          job_description_link: jobDescriptionLink,
+          resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle}_resume.docx`,
+          generated_summary: generated.summary,
+          generated_experience: generated.experience,
+          generated_skills: generated.skills,
+        }]);
+
+        if (saveError) {
+          console.error('Error saving job application:', saveError);
+          // Don't throw error, resume was generated successfully
+        }
+      }
+
+      toast.success('Resume generated successfully!');
+    } catch (error: any) {
+      console.error('Error generating resume:', error);
+      toast.error(error.message || 'Failed to generate resume');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGenerateResume = async () => {
-    if (!selectedProfile || !jobDescription.trim() || !jobTitle.trim()) {
+  const handleDownload = async () => {
+    if (!generatedResume) {
+      toast.error('No resume to download');
       return;
     }
 
     const profile = profiles.find(p => p.id === selectedProfile);
-    if (!profile) return;
+    if (!profile) {
+      toast.error('Profile not found');
+      return;
+    }
 
-    setIsGenerating(true);
     try {
-      // Convert profile data to ResumeData format
-      const resumeData: ResumeData = {
-        personalInfo: {
-          firstName: profile.first_name,
-          lastName: profile.last_name,
-          email: profile.email,
-          phone: profile.phone,
-          location: profile.location,
-          linkedin: profile.linkedin,
-          portfolio: profile.portfolio,
-        },
-        summary: profile.summary || '',
-        experience: profile.experience.map(exp => ({
-          company: exp.company,
-          position: exp.position,
-          startDate: exp.start_date,
-          endDate: exp.end_date,
-          current: exp.current,
-          description: exp.description,
-          achievements: exp.achievements,
-        })),
-        education: profile.education.map(edu => ({
-          institution: edu.institution,
-          degree: edu.degree,
-          field: edu.field,
-          startDate: edu.start_date,
-          endDate: edu.end_date,
-          current: edu.current,
-          gpa: edu.gpa,
-        })),
-        skills: profile.skills,
-        jobDescription,
-      };
-
-      const generatedResume = await generateResume(resumeData);
-      setResumeData(generatedResume);
-
-      // Save job application to database
-      const jobApplication: Partial<JobApplication> = {
-        profile_id: selectedProfile,
-        bidder_id: user?.id!,
-        job_title: jobTitle,
-        company_name: companyName || undefined,
-        job_description: jobDescription,
-        job_description_link: jobDescriptionLink || undefined,
-        resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle}_Resume.docx`,
-        generated_summary: generatedResume.generatedContent?.summary,
-        generated_experience: generatedResume.generatedContent?.experience?.map(exp => ({
-          ...exp,
-          start_date: exp.startDate,
-          end_date: exp.endDate,
-        })),
-        generated_skills: generatedResume.generatedContent?.skills,
-      };
-
-      const { error: saveError } = await supabase
-        .from('job_applications')
-        .insert([jobApplication]);
-
-      if (saveError) {
-        console.error('Error saving job application:', saveError);
-      }
-    } catch (error) {
-      console.error('Error generating resume:', error);
-    } finally {
-      setIsGenerating(false);
+      const fileName = `${profile.first_name}_${profile.last_name}_${jobTitle}_resume.docx`;
+      await generateDocx(generatedResume, fileName);
+      toast.success('Resume downloaded successfully!');
+    } catch (error: any) {
+      console.error('Error downloading resume:', error);
+      toast.error(error.message || 'Failed to download resume');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-      </div>
-    );
-  }
-
-  if (profiles.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No Profiles Available</h3>
-        <p className="text-gray-600 mb-4">
-          {isBidder 
-            ? "You don't have any profiles assigned to you yet. Contact your manager to get access to profiles."
-            : isAdmin
-            ? "No profiles have been created yet. Create your first profile to start generating resumes."
-            : "You need to create a profile first before generating a resume."
-          }
-        </p>
-        {!isBidder && (
-          <button
-            onClick={() => window.location.href = '/profiles'}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-          >
-            {isAdmin ? 'Create First Profile' : 'Create Profile'}
-          </button>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Profile Selection */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-900">Select Profile</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Choose a profile to generate resume from
-          </label>
-          <select
-            value={selectedProfile}
-            onChange={(e) => setSelectedProfile(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="">Select a profile...</option>
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.first_name} {profile.last_name} - {profile.email}
-              </option>
-            ))}
-          </select>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <Sparkles className="w-8 h-8 text-primary-600" />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">AI Resume Generator</h2>
+            <p className="text-gray-600">Generate tailored resumes using AI based on job descriptions</p>
+          </div>
         </div>
       </div>
 
-      {/* Job Information */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-900">Job Information</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Form */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="space-y-6">
+          {/* Profile Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Job Title *
+              Select Profile *
             </label>
-            <input
-              type="text"
-              value={jobTitle}
-              onChange={(e) => setJobTitle(e.target.value)}
+            <select
+              value={selectedProfile}
+              onChange={(e) => setSelectedProfile(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="e.g., Senior Software Engineer"
-              required
-            />
+            >
+              <option value="">Choose a profile...</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.first_name} {profile.last_name} - {profile.email}
+                </option>
+              ))}
+            </select>
+            {profiles.length === 0 && (
+              <p className="text-sm text-gray-500 mt-2">
+                {role === 'bidder' 
+                  ? 'No profiles have been assigned to you yet. Contact your manager.'
+                  : 'No profiles available. Create a profile first.'
+                }
+              </p>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Company Name
-            </label>
-            <input
-              type="text"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="e.g., Google Inc."
-            />
-          </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Job Description Link
-          </label>
-          <div className="relative">
-            <Link className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {/* Job Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Job Title
+              </label>
+              <input
+                type="text"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Software Engineer"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Company Name
+              </label>
+              <input
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Tech Corp"
+              />
+            </div>
+          </div>
+
+          {/* Job Description Link */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Job Description Link (Optional)
+            </label>
             <input
               type="url"
               value={jobDescriptionLink}
               onChange={(e) => setJobDescriptionLink(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="https://example.com/job-posting"
             />
+          </div>
+
+          {/* Job Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Job Description *
+            </label>
+            <textarea
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Paste the job description here. The AI will use this to tailor the resume..."
+            />
+          </div>
+
+          {/* Generate Button */}
+          <div className="flex justify-center">
+            <button
+              onClick={handleGenerate}
+              disabled={loading || !selectedProfile || !jobDescription}
+              className="flex items-center space-x-2 px-8 py-3 text-lg font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  <span>Generate AI Resume</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Job Description */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-900">Job Description</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Paste the job description here *
-          </label>
-          <textarea
-            value={jobDescription}
-            onChange={(e) => setJobDescription(e.target.value)}
-            rows={8}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            placeholder="Paste the job description here. The AI will use this to tailor your resume..."
-            required
-          />
-        </div>
-      </div>
+      {/* Generated Resume */}
+      {generatedResume && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
+            <button
+              onClick={handleDownload}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download DOCX</span>
+            </button>
+          </div>
 
-      {/* Generate Button */}
-      <div className="pt-4">
-        <button
-          onClick={handleGenerateResume}
-          disabled={!selectedProfile || !jobDescription.trim() || !jobTitle.trim() || isGenerating}
-          className="w-full flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Generating Resume...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5 mr-2" />
-              Generate AI Resume
-            </>
-          )}
-        </button>
-      </div>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">Generated Summary</h4>
+              <p className="text-gray-700 bg-gray-50 p-3 rounded-md">
+                {generatedResume.summary}
+              </p>
+            </div>
 
-      {/* Resume Preview */}
-      {resumeData && (
-        <div className="mt-8">
-          <ResumePreview resumeData={resumeData} />
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">Generated Skills</h4>
+              <div className="flex flex-wrap gap-2">
+                {generatedResume.skills.map((skill: string, index: number) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1 bg-primary-100 text-primary-800 text-sm font-medium rounded-full"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">Generated Experience</h4>
+              <div className="space-y-3">
+                {generatedResume.experience.map((exp: any, index: number) => (
+                  <div key={index} className="bg-gray-50 p-3 rounded-md">
+                    <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
+                    <div className="text-sm text-gray-600">{exp.start_date} - {exp.end_date}</div>
+                    <p className="text-gray-700 mt-2">{exp.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

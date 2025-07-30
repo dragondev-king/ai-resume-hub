@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Building, User, Filter, Download, Eye } from 'lucide-react';
 import { JobApplicationWithDetails, Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '../contexts/UserContext';
 
 const JobApplications: React.FC = () => {
-  const { user, isAdmin, isManager, isBidder } = useAuth();
+  const { user, role } = useUser();
   const [applications, setApplications] = useState<JobApplicationWithDetails[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,18 +15,11 @@ const JobApplications: React.FC = () => {
     dateTo: '',
   });
 
-  useEffect(() => {
-    if (user) {
-      loadApplications();
-      if (isAdmin || isManager) {
-        loadProfiles();
-      }
-    }
-  }, [user, filters]);
 
-  const loadApplications = async () => {
+
+  const loadApplications =  useCallback(async () => {
     try {
-      console.log('Loading applications for user:', user?.id, 'Role:', { isBidder, isManager, isAdmin });
+      console.log('Loading applications for user:', user?.id, 'Role:', { role });
       
       let query = supabase
         .from('job_applications')
@@ -36,10 +29,10 @@ const JobApplications: React.FC = () => {
         `);
 
       // Apply role-based filtering
-      if (isBidder) {
+      if (role === 'bidder') {
         console.log('Loading applications for bidder');
         query = query.eq('bidder_id', user?.id);
-      } else if (isManager) {
+      } else if (role === 'manager') {
         // Managers can see applications for their profiles
         console.log('Loading applications for manager profiles');
         const { data: managerProfiles, error: profileError } = await supabase
@@ -59,7 +52,7 @@ const JobApplications: React.FC = () => {
         } else {
           query = query.eq('profile_id', 'no-profiles'); // This will return empty results
         }
-      } else if (isAdmin) {
+      } else if (role === 'admin') {
         console.log('Loading all applications for admin');
       }
       // Admins can see all applications (no additional filter)
@@ -91,17 +84,17 @@ const JobApplications: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, filters, role]);
 
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
       console.log('Loading profiles for applications page');
       let query = supabase.from('profiles').select('*');
       
-      if (isManager) {
+      if (role === 'manager') {
         console.log('Loading manager profiles for applications');
         query = query.eq('user_id', user?.id);
-      } else if (isAdmin) {
+      } else if (role === 'admin') {
         console.log('Loading all profiles for admin applications');
       }
       // Admins can see all profiles
@@ -117,7 +110,16 @@ const JobApplications: React.FC = () => {
       console.error('Error loading profiles for applications:', error);
       setProfiles([]);
     }
-  };
+  }, [user, role]);
+
+  useEffect(() => {
+    if (user) {
+      loadApplications();
+      if (role === 'admin' || role === 'manager') {
+        loadProfiles();
+      }
+    }
+  }, [user, filters, loadApplications, role, loadProfiles]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -159,7 +161,7 @@ const JobApplications: React.FC = () => {
       </div>
 
       {/* Filters */}
-      {(isAdmin || isManager) && (
+      {(role === 'admin' || role === 'manager') && (
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center space-x-2 mb-4">
             <Filter className="w-4 h-4 text-gray-500" />
@@ -167,7 +169,7 @@ const JobApplications: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {isAdmin && (
+            {role === 'admin' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Profile
@@ -229,9 +231,9 @@ const JobApplications: React.FC = () => {
           <Calendar className="w-16 h-16 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Applications Found</h3>
           <p className="text-gray-600">
-            {isBidder 
+            {role === 'bidder' 
               ? "You haven't generated any resumes yet."
-              : isAdmin
+              : role === 'admin'
               ? "No job applications have been created yet. Create profiles and generate resumes to see application history."
               : "No job applications match your current filters."
             }
