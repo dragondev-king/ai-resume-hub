@@ -1,6 +1,6 @@
-# AI Resume Generator
+# AI Resume Hub
 
-A React-based web application that generates professional resumes using AI, with role-based access control and comprehensive job application tracking.
+A comprehensive React-based web application for professional resume management with AI-powered generation, team collaboration, and role-based access control.
 
 ## Features
 
@@ -10,18 +10,19 @@ A React-based web application that generates professional resumes using AI, with
 - Download resumes as `.docx` files
 - Real-time preview of generated content
 
-### 👥 Role-Based Access Control
+### 👥 Team Collaboration & Role-Based Access Control
 - **Bidders**: Can only generate resumes using assigned profiles
 - **Managers**: Can create/manage profiles and assign them to bidders
 - **Admins**: Full system access, can manage all users and data
+- Profile assignment system for team collaboration
 
-### 📊 Job Application History
+### 📊 Job Application History & Tracking
 - Track all resume generations with job details
 - Store job description links for future reference
 - Filter applications by profile, date range, and other criteria
 - View generated content and application metadata
 
-### 🔐 User Management
+### 🔐 User Management & Security
 - Secure authentication with Supabase (admin-controlled user creation)
 - Profile assignment system for managers
 - Admin user management (create, edit, delete users with roles)
@@ -57,7 +58,7 @@ A React-based web application that generates professional resumes using AI, with
 
 ```bash
 git clone <repository-url>
-cd ai-resume-generator
+cd ai-resume-hub
 npm install --legacy-peer-deps
 ```
 
@@ -93,7 +94,7 @@ The application will be available at `http://localhost:3000`
 
 ### Initial Setup (Admin Only)
 1. **Create First Admin User**: Use Supabase Auth Admin API or dashboard to create the first admin user
-2. **Set Admin Role**: Update the user's role to 'admin' in the `user_roles` table
+2. **Set Admin Role**: Update the user's role to 'admin' in the `users` table
 3. **Create Additional Users**: Use the admin interface to create and manage other users
 
 ### For Bidders
@@ -134,11 +135,13 @@ src/
 │   ├── AssignmentsPage.tsx # Profile assignments page
 │   └── UsersPage.tsx   # User management page
 ├── contexts/           # React contexts
-│   └── AuthContext.tsx # Authentication state management
+│   ├── AuthContext.tsx # Authentication state management
+│   └── UserContext.tsx # User data and role management
 ├── lib/               # Library configurations
 │   └── supabase.ts    # Supabase client and types
 ├── types/             # TypeScript type definitions
-│   └── resume.ts      # Resume-related types
+│   ├── resume.ts      # Resume-related types
+│   └── user.ts        # User-related types
 ├── utils/             # Utility functions
 │   ├── resumeGenerator.ts # AI integration
 │   └── docxGenerator.ts   # Document generation
@@ -149,7 +152,7 @@ src/
 
 ### Core Tables
 - **profiles**: User professional profiles
-- **user_roles**: User role assignments (bidder/manager/admin)
+- **users**: User accounts with roles (bidder/manager/admin)
 - **profile_assignments**: Profile-to-bidder assignments
 - **job_applications**: Job application history and metadata
 
@@ -173,27 +176,13 @@ src/
 
 ## Troubleshooting
 
-### User Roles Infinite Recursion Error
+### User Roles Issues
 
-If you encounter a "infinite recursion detected in policy for relation 'user_roles'" error, follow these steps:
+If you encounter issues with user roles, ensure:
 
-1. **Run the Fix Script**: Execute the `fix-user-roles-policies.sql` script in your Supabase SQL editor
-2. **Alternative Manual Fix**:
-   - Go to your Supabase dashboard → SQL Editor
-   - Drop the problematic policies:
-     ```sql
-     DROP POLICY IF EXISTS "Users can view their own role" ON user_roles;
-     DROP POLICY IF EXISTS "Admins can view all roles" ON user_roles;
-     ```
-   - Create the new policies from the updated `supabase-schema.sql`
-3. **Ensure All Users Have Roles**:
-   ```sql
-   INSERT INTO user_roles (user_id, role)
-   SELECT id, 'bidder'
-   FROM auth.users
-   WHERE id NOT IN (SELECT user_id FROM user_roles)
-   ON CONFLICT (user_id) DO NOTHING;
-   ```
+1. **All Users Have Roles**: Check that all users in the `auth.users` table have corresponding entries in the `public.users` table
+2. **Role Field Exists**: Verify the `role` field exists in the `public.users` table
+3. **Database Triggers**: Ensure the user sync trigger is properly set up
 
 ### Admin API Access
 
@@ -209,8 +198,7 @@ If you need to create the first admin user manually:
 
 2. **Assign Admin Role**:
    ```sql
-   INSERT INTO user_roles (user_id, role) 
-   VALUES ('user-uuid-here', 'admin');
+   UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
    ```
 
 3. **Login and Create Other Users**: Use the admin interface to create additional users

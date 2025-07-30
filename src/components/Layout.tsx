@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../contexts/UserContext';
@@ -13,6 +13,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { signOut, setIsAuthenticated } = useAuth();
   const { user, role } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSignOut = async () => {
     try {
@@ -53,6 +54,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     );
   };
 
+  const isActiveRoute = (path: string) => {
+    return location.pathname === path;
+  };
+
+  const getNavLinkClass = (path: string) => {
+    const baseClass = "px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200";
+    const activeClass = "text-primary-600 bg-primary-50 border border-primary-200";
+    const inactiveClass = "text-gray-700 hover:text-primary-600 hover:bg-gray-50";
+    
+    return `${baseClass} ${isActiveRoute(path) ? activeClass : inactiveClass}`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -62,7 +75,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Logo and Title */}
             <div className="flex items-center">
               <Link to="/profiles" className="text-xl font-bold text-primary-600">
-                AI Resume Generator
+                AI Resume Hub
               </Link>
             </div>
 
@@ -70,26 +83,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <nav className="hidden md:flex space-x-8">
               <Link
                 to="/profiles"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                className={getNavLinkClass('/profiles')}
               >
                 Profiles
               </Link>
               <Link
                 to="/generator"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                className={getNavLinkClass('/generator')}
               >
                 Generator
               </Link>
               <Link
                 to="/applications"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                className={getNavLinkClass('/applications')}
               >
                 Applications
               </Link>
               {(role === 'manager' || role === 'admin') && (
                 <Link
                   to="/assignments"
-                  className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className={getNavLinkClass('/assignments')}
                 >
                   Assignments
                 </Link>
@@ -97,7 +110,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {role === 'admin' && (
                 <Link
                   to="/users"
-                  className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className={getNavLinkClass('/users')}
                 >
                   Users
                 </Link>
