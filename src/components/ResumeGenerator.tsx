@@ -62,7 +62,13 @@ const ResumeGenerator: React.FC = () => {
         return;
       }
 
-      setProfiles(data || []);
+      const profilesData = data || [];
+      setProfiles(profilesData);
+
+      // Auto-select profile if there's only one
+      if (profilesData.length === 1) {
+        setSelectedProfile(profilesData[0].id);
+      }
     } catch (error) {
       console.error('Error loading profiles:', error);
       toast.error('Failed to load profiles');
@@ -98,11 +104,11 @@ const ResumeGenerator: React.FC = () => {
         const { error: saveError } = await supabase.from('job_applications').insert([{
           profile_id: selectedProfile,
           bidder_id: user.id,
-          job_title: jobTitle,
-          company_name: companyName,
+          job_title: jobTitle || 'Not specified',
+          company_name: companyName || 'Not specified',
           job_description: jobDescription,
           job_description_link: jobDescriptionLink,
-          resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle}_resume.docx`,
+          resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`,
           generated_summary: generated.summary,
           generated_experience: generated.experience,
           generated_skills: generated.skills,
@@ -136,7 +142,7 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      const fileName = `${profile.first_name}_${profile.last_name}_${jobTitle}_resume.docx`;
+      const fileName = `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`;
       await generateDocx(generatedResume, fileName);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
@@ -186,6 +192,11 @@ const ResumeGenerator: React.FC = () => {
                 }
               </p>
             )}
+            {profiles.length === 1 && selectedProfile && (
+              <p className="text-sm text-green-600 mt-2">
+                ✓ Profile automatically selected
+              </p>
+            )}
           </div>
 
           {/* Job Information */}
@@ -199,7 +210,7 @@ const ResumeGenerator: React.FC = () => {
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Software Engineer"
+                placeholder="Software Engineer (optional)"
               />
             </div>
             <div>
@@ -211,7 +222,7 @@ const ResumeGenerator: React.FC = () => {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Tech Corp"
+                placeholder="Tech Corp (optional)"
               />
             </div>
           </div>
