@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, UserRole, UserRoleRecord } from '../lib/supabase';
+import { supabase, UserRole } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -83,12 +83,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('AuthContext: Loading user role for userId:', userId);
       
-      // TEMPORARY: Skip database queries and set default admin role
-      console.log('AuthContext: TEMPORARY - Skipping database queries, setting admin role');
-      setUserRole('admin');
-      console.log('AuthContext: Set temporary admin role');
-      return;
+      // Query the users table directly for role
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      console.log('AuthContext: Query completed. Data:', data, 'Error:', error);
+
+      if (error) {
+        console.log('AuthContext: Error loading user role:', error);
+        if (error.code === 'PGRST116') {
+          // No user found in public.users, create one with default role
+          console.log('AuthContext: No user found in public.users, creating with default role');
+          
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert([{
+              id: userId,
+              email: 'user@example.com', // This will be updated by the trigger
+              role: 'bidder',
+              is_active: true,
+            }]);
+
+          console.log('AuthContext: Insert completed. Error:', insertError);
+
+          if (insertError) {
+            console.error('AuthContext: Error creating user record:', insertError);
+            setUserRole('bidder');
+          } else {
+            setUserRole('bidder');
+          }
+          console.log('AuthContext: Set default role to bidder');
+        } else {
+          console.error('AuthContext: Error loading user role:', error);
+          setUserRole('bidder');
+          console.log('AuthContext: Set fallback role to bidder');
+        }
+      } else {
+        console.log('AuthContext: User role loaded successfully:', data?.role);
+        setUserRole(data?.role || 'bidder');
+      }
       
+      console.log('AuthContext: loadUserRole function completed successfully');
     } catch (error) {
       console.error('AuthContext: Error in loadUserRole:', error);
       setUserRole('bidder');

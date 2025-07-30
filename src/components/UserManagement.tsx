@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { User, Plus, Edit, Trash2, Shield, Users, Crown } from 'lucide-react';
-import { UserRole, UserWithRole } from '../lib/supabase';
+import { UserRole, User as UserType } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -26,16 +26,18 @@ const UserManagement: React.FC = () => {
     try {
       console.log('Loading users from public.users table');
       
-      // Use the helper function to get all users with roles
+      // Query users table directly
       const { data, error } = await supabase
-        .rpc('get_all_users_with_roles');
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error loading users:', error);
         throw error;
       }
 
-      console.log('Loaded users with roles:', data?.length || 0);
+      console.log('Loaded users:', data?.length || 0);
       setUsers(data || []);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -73,22 +75,22 @@ const UserManagement: React.FC = () => {
           console.log('3. Enter email:', formData.email);
           console.log('4. Enter password:', formData.password);
           console.log('5. After creating user, run this SQL:');
-          console.log(`INSERT INTO user_roles (user_id, role) VALUES ('USER_ID_HERE', '${formData.role}');`);
-          console.log('6. Replace USER_ID_HERE with the actual user ID from the dashboard');
+          console.log(`UPDATE users SET role = '${formData.role}' WHERE email = '${formData.email}';`);
           console.log('==========================================');
         } else {
           throw authError;
         }
       } else {
-        // Assign role to the new user
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert([{
-            user_id: authData.user.id,
-            role: formData.role,
-          }]);
+        // Update the user's role in public.users table
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ role: formData.role })
+          .eq('id', authData.user.id);
 
-        if (roleError) throw roleError;
+        if (updateError) {
+          console.error('Error updating user role:', updateError);
+          // Don't throw error, user was created successfully
+        }
 
         toast.success('User created successfully');
         setShowUserModal(false);
@@ -116,18 +118,11 @@ const UserManagement: React.FC = () => {
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
+          role: formData.role,
         })
         .eq('id', editingUser.id);
 
       if (updateError) throw updateError;
-
-      // Update role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .update({ role: formData.role })
-        .eq('user_id', editingUser.id);
-
-      if (roleError) throw roleError;
 
       toast.success('User updated successfully');
       setShowUserModal(false);
@@ -172,7 +167,7 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const openEditModal = (user: UserWithRole) => {
+  const openEditModal = (user: UserType) => {
     setEditingUser(user);
     setFormData({
       email: user.email,

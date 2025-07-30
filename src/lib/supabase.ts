@@ -15,6 +15,7 @@ export interface User {
   first_name?: string;
   last_name?: string;
   phone?: string;
+  role: UserRole;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -34,14 +35,6 @@ export interface Profile {
   experience: Experience[];
   education: Education[];
   skills: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserRoleRecord {
-  id: string;
-  user_id: string;
-  role: UserRole;
   created_at: string;
   updated_at: string;
 }
@@ -92,10 +85,6 @@ export interface Education {
 }
 
 // Extended types for UI
-export interface UserWithRole extends User {
-  role?: UserRole;
-}
-
 export interface ProfileWithAssignments extends Profile {
   assignments?: ProfileAssignment[];
   applications?: JobApplication[];
