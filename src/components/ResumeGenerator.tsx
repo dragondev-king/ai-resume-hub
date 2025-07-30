@@ -32,7 +32,7 @@ const ResumeGenerator: React.FC = () => {
   const [generatedResume, setGeneratedResume] = useState<any>(null);
   const { user, role } = useUser();
 
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (userId: string) => {
     try {
       let query = supabase.from('profiles').select('*');
 
@@ -44,7 +44,14 @@ const ResumeGenerator: React.FC = () => {
             *,
             profile_assignments!inner(bidder_id)
           `)
-          .eq('profile_assignments.bidder_id', user?.id);
+          .eq('profile_assignments.bidder_id', userId);
+      }
+
+      if (role === "manager") {
+        query = supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId);
       }
 
       const { data, error } = await query;
@@ -60,11 +67,13 @@ const ResumeGenerator: React.FC = () => {
       console.error('Error loading profiles:', error);
       toast.error('Failed to load profiles');
     }
-  }, [user, role]);
+  }, [role]);
 
   useEffect(() => {
-    loadProfiles();
-  }, [loadProfiles]);
+    if (user) {
+      loadProfiles(user?.id);
+    }
+  }, [loadProfiles, user]);
 
   const handleGenerate = async () => {
     if (!selectedProfile || !jobDescription) {

@@ -10,11 +10,13 @@ import { useUser } from '../contexts/UserContext';
 const ProfilesPage: React.FC = () => {
   const { user, role } = useUser()
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
   
   const loadProfiles = useCallback(async () => {
     try {
+      setIsLoadingProfiles(true)
       let query = supabase.from('profiles').select('*');
       
       if (role === 'bidder') {
@@ -38,6 +40,8 @@ const ProfilesPage: React.FC = () => {
       setProfiles(data || []);
     } catch (error) {
       console.error('Error loading profiles:', error);
+    } finally {
+      setIsLoadingProfiles(false)
     }
   }, [user, role]);
 
@@ -77,6 +81,14 @@ const ProfilesPage: React.FC = () => {
       }
     }
   };
+
+  if (isLoadingProfiles) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
