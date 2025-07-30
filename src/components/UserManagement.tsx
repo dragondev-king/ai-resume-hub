@@ -325,8 +325,15 @@ const UserManagement: React.FC = () => {
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.email}</div>
-                          <div className="text-sm text-gray-500">ID: {user.id.slice(0, 8)}...</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {user.first_name && user.last_name 
+                              ? `${user.first_name} ${user.last_name}`
+                              : user.email
+                            }
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {user.first_name && user.last_name ? user.email : `ID: ${user.id.slice(0, 8)}...`}
+                          </div>
                         </div>
                       </div>
                     </td>
