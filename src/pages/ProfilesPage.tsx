@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, Plus, Settings } from 'lucide-react';
+import { User, Plus, Settings, Crown, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
@@ -7,9 +7,25 @@ import ProfileForm from '../components/ProfileForm';
 import { toast } from 'react-hot-toast';
 import { useUser } from '../contexts/UserContext';
 
+interface ProfileWithDetails extends Profile {
+  owner?: {
+    id: string;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+    role: string;
+  };
+  assigned_bidders?: {
+    id: string;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  }[];
+}
+
 const ProfilesPage: React.FC = () => {
   const { user, role } = useUser()
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<ProfileWithDetails[]>([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
@@ -34,10 +50,47 @@ const ProfilesPage: React.FC = () => {
       }
       // Admins can see all profiles
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data: profilesData, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
-      setProfiles(data || []);
+
+      // Load additional details for each profile
+      const profilesWithDetails: ProfileWithDetails[] = await Promise.all(
+        (profilesData || []).map(async (profile) => {
+          // Load profile owner details
+          const { data: ownerData } = await supabase
+            .from('users')
+            .select('id, email, first_name, last_name, role')
+            .eq('id', profile.user_id)
+            .single();
+
+          // Load assigned bidders
+          const { data: assignments } = await supabase
+            .from('profile_assignments')
+            .select('bidder_id')
+            .eq('profile_id', profile.id);
+
+          const bidderIds = assignments?.map(a => a.bidder_id) || [];
+          let assignedBidders: any[] = [];
+          
+          if (bidderIds.length > 0) {
+            const { data: biddersData } = await supabase
+              .from('users')
+              .select('id, email, first_name, last_name')
+              .in('id', bidderIds);
+            
+            assignedBidders = biddersData || [];
+          }
+
+          return {
+            ...profile,
+            owner: ownerData,
+            assigned_bidders: assignedBidders,
+          };
+        })
+      );
+
+      setProfiles(profilesWithDetails);
     } catch (error) {
       console.error('Error loading profiles:', error);
     } finally {
@@ -184,6 +237,53 @@ const ProfilesPage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Profile Owner */}
+              {profile.owner && (
+                <div className="mb-3 p-3 bg-gray-50 rounded-md">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <Crown className="w-4 h-4 text-yellow-600" />
+                    <span className="text-xs font-medium text-gray-700">Profile Owner</span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {profile.owner.first_name && profile.owner.last_name 
+                      ? `${profile.owner.first_name} ${profile.owner.last_name}`
+                      : profile.owner.email
+                    }
+                    <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                      {profile.owner.role}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Assigned Bidders */}
+              {profile.assigned_bidders && profile.assigned_bidders.length > 0 && (
+                <div className="mb-3 p-3 bg-green-50 rounded-md">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Users className="w-4 h-4 text-green-600" />
+                    <span className="text-xs font-medium text-gray-700">
+                      Assigned Bidders ({profile.assigned_bidders.length})
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {profile.assigned_bidders.slice(0, 2).map((bidder) => (
+                      <div key={bidder.id} className="text-sm text-gray-600">
+                        {bidder.first_name && bidder.last_name 
+                          ? `${bidder.first_name} ${bidder.last_name}`
+                          : bidder.email
+                        }
+                      </div>
+                    ))}
+                    {profile.assigned_bidders.length > 2 && (
+                      <div className="text-xs text-gray-500">
+                        +{profile.assigned_bidders.length - 2} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Experience:</span>
