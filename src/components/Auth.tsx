@@ -10,7 +10,7 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { signIn } = useAuth();
+  const { signIn, setIsAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -21,6 +21,7 @@ const Auth: React.FC = () => {
 
     try {
       await signIn(email, password);
+      setIsAuthenticated(true)
       const from = location.state?.from?.pathname || '/profiles';
       navigate(from, { replace: true });
       toast.success('Signed in successfully!');

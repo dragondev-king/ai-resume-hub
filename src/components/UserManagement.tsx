@@ -153,7 +153,7 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Delete user from auth (this will cascade to public.users and user_roles)
+      // Delete user from auth (this will cascade to public.users)
       const { error: authError } = await supabase.auth.admin.deleteUser(userId);
       
       if (authError) {

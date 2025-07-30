@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { Profile, Experience, Education } from '../lib/supabase';
+import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 
@@ -15,8 +15,20 @@ interface ProfileFormData {
   linkedin?: string;
   portfolio?: string;
   summary?: string;
-  experience: Experience[];
-  education: Education[];
+  experience: {
+    company: string;
+    position: string;
+    start_date: string;
+    end_date: string;
+    description: string;
+  }[];
+  education: {
+    school: string;
+    degree: string;
+    field: string;
+    start_date: string;
+    end_date: string;
+  }[];
   skills: string[];
 }
 
@@ -26,6 +38,7 @@ interface ProfileFormProps {
 }
 
 const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
+  const { role } = useUser();
   const { user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [skillFields, setSkillFields] = useState(
@@ -36,7 +49,6 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
     register,
     handleSubmit,
     control,
-    watch,
     formState: { errors },
   } = useForm<ProfileFormData>({
     defaultValues: {
@@ -54,20 +66,16 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
           position: '',
           start_date: '',
           end_date: '',
-          current: false,
           description: '',
-          achievements: [''],
         },
       ],
       education: profile?.education?.length ? profile.education : [
         {
-          institution: '',
+          school: '',
           degree: '',
           field: '',
           start_date: '',
           end_date: '',
-          current: false,
-          gpa: '',
         },
       ],
       skills: profile?.skills || [''],
@@ -95,7 +103,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
   const onSubmit = async (data: ProfileFormData) => {
     if (!user) return;
     
-    if (user.role === "bidder") {
+    if (role === 'bidder') {
       toast.error('Bidders cannot create or edit profiles');
       return;
     }
@@ -118,6 +126,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
           .eq('id', profile.id);
         
         if (error) throw error;
+        toast.success('Profile updated successfully!');
       } else {
         // Create new profile
         const { error } = await supabase
@@ -125,11 +134,13 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
           .insert([profileData]);
         
         if (error) throw error;
+        toast.success('Profile created successfully!');
       }
 
       onSave?.();
     } catch (error: any) {
       console.error('Error saving profile:', error);
+      toast.error(error.message || 'Failed to save profile');
     } finally {
       setIsSaving(false);
     }
@@ -285,9 +296,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               position: '',
               start_date: '',
               end_date: '',
-              current: false,
               description: '',
-              achievements: [''],
             })}
             className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
           >
@@ -329,11 +338,11 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                 <input
-                  type="month"
+                  type="date"
                   {...register(`experience.${index}.start_date`)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
@@ -341,19 +350,10 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                 <input
-                  type="month"
+                  type="date"
                   {...register(`experience.${index}.end_date`)}
-                  disabled={watch(`experience.${index}.current`)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  {...register(`experience.${index}.current`)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">Current Position</label>
               </div>
             </div>
             <div>
@@ -376,13 +376,11 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
           <button
             type="button"
             onClick={() => appendEducation({
-              institution: '',
+              school: '',
               degree: '',
               field: '',
               start_date: '',
               end_date: '',
-              current: false,
-              gpa: '',
             })}
             className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
           >
@@ -406,10 +404,10 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">School</label>
                 <input
                   type="text"
-                  {...register(`education.${index}.institution`)}
+                  {...register(`education.${index}.school`)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="University Name"
                 />
@@ -424,7 +422,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Field of Study</label>
                 <input
@@ -437,39 +435,19 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                 <input
-                  type="month"
+                  type="date"
                   {...register(`education.${index}.start_date`)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                <input
-                  type="month"
-                  {...register(`education.${index}.end_date`)}
-                  disabled={watch(`education.${index}.current`)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
-                />
-              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  {...register(`education.${index}.current`)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">Currently Studying</label>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">GPA (optional)</label>
-                <input
-                  type="text"
-                  {...register(`education.${index}.gpa`)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="3.8/4.0"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+              <input
+                type="date"
+                {...register(`education.${index}.end_date`)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
             </div>
           </div>
         ))}

@@ -10,18 +10,19 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { signOut } = useAuth();
+  const { signOut, setIsAuthenticated } = useAuth();
   const { user, role } = useUser();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     try {
       await signOut();
+      setIsAuthenticated(false)
       navigate('/auth');
       toast.success('Signed out successfully');
     } catch (error) {
-      console.error('Error signing out:', error);
-      toast.error('Error signing out');
+      navigate('/auth');
+      setIsAuthenticated(false)
     }
   };
 

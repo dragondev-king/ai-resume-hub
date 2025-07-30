@@ -3,6 +3,8 @@
 import { createContext, useContext, useCallback, useState, useEffect } from 'react';
 import { supabase, UserRole } from '../lib/supabase';
 import IUser from '../types/user';
+import { useAuth } from './AuthContext';
+import { Session } from '@supabase/supabase-js';
 
 
 interface UserContextType {
@@ -21,9 +23,11 @@ interface UserContextProps {
 
 const UserProvider: React.FC<UserContextProps> = ({ children }) => {
   const [user, setUser] = useState<IUser | null>(null);
+  const { session } = useAuth();
 
-  const getUser = useCallback(async () => {
-    const { data, error } = await supabase.from('users').select('*').single()
+  const getUser = useCallback(async (session: Session) => {
+    if (!session?.user.id) return
+    const { data, error } = await supabase.from('users').select('*').eq('id', session?.user.id).single()
     setUser(data)
 
     if (error) {
@@ -32,8 +36,10 @@ const UserProvider: React.FC<UserContextProps> = ({ children }) => {
   }, [])
 
   useEffect(() => {
-    getUser()
-  }, [getUser])
+    if (session) {
+      getUser(session)
+    }
+  }, [getUser, session])
 
   return (
     <UserContext.Provider value={{ user, role: user?.role || 'bidder' }}>

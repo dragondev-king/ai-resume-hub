@@ -49,55 +49,20 @@ const ProfileAssignments: React.FC = () => {
   const loadBidders = useCallback(async () => {
     try {
       console.log('Loading bidders for assignments');
+      // Query users table directly for bidders
       const { data, error } = await supabase
-        .from('user_roles')
-        .select('user_id, role')
-        .eq('role', 'bidder');
+        .from('users')
+        .select('id, email, role')
+        .eq('role', 'bidder')
+        .eq('is_active', true);
 
       if (error) {
         console.error('Error loading bidders:', error);
         throw error;
       }
 
-      // Get user details for bidders
-      const bidderIds = data?.map(r => r.user_id) || [];
-      console.log('Found bidder IDs:', bidderIds);
-      
-      if (bidderIds.length > 0) {
-        try {
-          const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
-          if (usersError) {
-            console.warn('Admin API error:', usersError);
-            throw usersError;
-          }
-
-          const biddersWithDetails = users.users
-            .filter(u => bidderIds.includes(u.id))
-            .map(u => ({
-              id: u.id,
-              email: u.email || '',
-              role: 'bidder',
-            }));
-          
-          console.log('Loaded bidders with details:', biddersWithDetails.length);
-          setBidders(biddersWithDetails);
-        } catch (adminError) {
-          console.warn('Admin API not available, using role data only:', adminError);
-          
-          // Fallback: use only role data
-          const biddersWithDetails = bidderIds.map(id => ({
-            id,
-            email: 'bidder@example.com', // Placeholder
-            role: 'bidder',
-          }));
-          
-          console.log('Using fallback bidder data:', biddersWithDetails.length);
-          setBidders(biddersWithDetails);
-        }
-      } else {
-        console.log('No bidders found');
-        setBidders([]);
-      }
+      console.log('Loaded bidders:', data?.length || 0);
+      setBidders(data || []);
     } catch (error) {
       console.error('Error loading bidders:', error);
       setBidders([]);

@@ -1,9 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   setIsAuthenticated: (isAuthenticated: boolean) => void;
+  session: Session | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -24,14 +26,17 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
 
   const getSession = useCallback( async () => {
     const { data: { session } } = await supabase.auth.getSession()
 
     if (session) {
       setIsAuthenticated(true)
+      setSession(session)
     } else {
       setIsAuthenticated(false)
+      setSession(null)
     }
   }, [])
 
@@ -54,6 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const value = {
     isAuthenticated,
+    session,
     setIsAuthenticated,
     signIn,
     signOut
