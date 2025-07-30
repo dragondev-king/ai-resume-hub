@@ -170,6 +170,43 @@ const ResumeGenerator: React.FC = () => {
     }
   };
 
+  const handleUpdateExperienceDescription = (expIndex: number, descIndex: number, value: string) => {
+    if (editingResume) {
+      const updatedExperience = [...editingResume.experience];
+      const descriptions = [...(updatedExperience[expIndex].descriptions || [])];
+      descriptions[descIndex] = value;
+      updatedExperience[expIndex] = { ...updatedExperience[expIndex], descriptions };
+      setEditingResume({
+        ...editingResume,
+        experience: updatedExperience
+      });
+    }
+  };
+
+  const handleAddExperienceDescription = (expIndex: number) => {
+    if (editingResume) {
+      const updatedExperience = [...editingResume.experience];
+      const descriptions = [...(updatedExperience[expIndex].descriptions || []), ''];
+      updatedExperience[expIndex] = { ...updatedExperience[expIndex], descriptions };
+      setEditingResume({
+        ...editingResume,
+        experience: updatedExperience
+      });
+    }
+  };
+
+  const handleRemoveExperienceDescription = (expIndex: number, descIndex: number) => {
+    if (editingResume) {
+      const updatedExperience = [...editingResume.experience];
+      const descriptions = updatedExperience[expIndex].descriptions?.filter((_: string, i: number) => i !== descIndex) || [];
+      updatedExperience[expIndex] = { ...updatedExperience[expIndex], descriptions };
+      setEditingResume({
+        ...editingResume,
+        experience: updatedExperience
+      });
+    }
+  };
+
   const handleDownload = async () => {
     if (!generatedResume) {
       toast.error('No resume to download');
@@ -204,7 +241,7 @@ const ResumeGenerator: React.FC = () => {
       }
 
       const fileName = `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`;
-      await generateDocx(generatedResume, fileName);
+      await generateDocx(generatedResume, fileName, profile);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
       console.error('Error downloading resume:', error);
@@ -459,55 +496,88 @@ const ResumeGenerator: React.FC = () => {
               <div className="space-y-3">
                 {currentResume.experience.map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={exp.position || ''}
-                            onChange={(e) => handleUpdateExperience(index, 'position', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="Position"
-                          />
-                          <input
-                            type="text"
-                            value={exp.company || ''}
-                            onChange={(e) => handleUpdateExperience(index, 'company', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="Company"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={exp.start_date || ''}
-                            onChange={(e) => handleUpdateExperience(index, 'start_date', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="Start Date"
-                          />
-                          <input
-                            type="text"
-                            value={exp.end_date || ''}
-                            onChange={(e) => handleUpdateExperience(index, 'end_date', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="End Date"
-                          />
-                        </div>
-                        <textarea
-                          value={exp.description || ''}
-                          onChange={(e) => handleUpdateExperience(index, 'description', e.target.value)}
-                          rows={3}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                          placeholder="Description"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
-                        <div className="text-sm text-gray-600">{exp.start_date} - {exp.end_date}</div>
-                        <p className="text-gray-700 mt-2">{exp.description}</p>
-                      </>
-                    )}
+                                         {isEditing ? (
+                       <div className="space-y-2">
+                         <div className="grid grid-cols-2 gap-2">
+                           <input
+                             type="text"
+                             value={exp.position || ''}
+                             onChange={(e) => handleUpdateExperience(index, 'position', e.target.value)}
+                             className="px-2 py-1 border border-gray-300 rounded text-sm"
+                             placeholder="Position"
+                           />
+                           <input
+                             type="text"
+                             value={exp.company || ''}
+                             onChange={(e) => handleUpdateExperience(index, 'company', e.target.value)}
+                             className="px-2 py-1 border border-gray-300 rounded text-sm"
+                             placeholder="Company"
+                           />
+                         </div>
+                         <div className="grid grid-cols-2 gap-2">
+                           <input
+                             type="text"
+                             value={exp.start_date || ''}
+                             onChange={(e) => handleUpdateExperience(index, 'start_date', e.target.value)}
+                             className="px-2 py-1 border border-gray-300 rounded text-sm"
+                             placeholder="Start Date"
+                           />
+                           <input
+                             type="text"
+                             value={exp.end_date || ''}
+                             onChange={(e) => handleUpdateExperience(index, 'end_date', e.target.value)}
+                             className="px-2 py-1 border border-gray-300 rounded text-sm"
+                             placeholder="End Date"
+                           />
+                         </div>
+                         
+                         {/* Bullet Points */}
+                         <div className="space-y-2">
+                           <div className="flex items-center justify-between">
+                             <label className="text-sm font-medium text-gray-700">Bullet Points:</label>
+                             <button
+                               type="button"
+                               onClick={() => handleAddExperienceDescription(index)}
+                               className="text-sm text-primary-600 hover:text-primary-700"
+                             >
+                               + Add Bullet Point
+                             </button>
+                           </div>
+                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
+                             <div key={descIndex} className="flex items-center space-x-2">
+                               <span className="text-primary-600 text-sm">•</span>
+                               <input
+                                 type="text"
+                                 value={desc}
+                                 onChange={(e) => handleUpdateExperienceDescription(index, descIndex, e.target.value)}
+                                 className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                 placeholder="Enter bullet point description..."
+                               />
+                               <button
+                                 type="button"
+                                 onClick={() => handleRemoveExperienceDescription(index, descIndex)}
+                                 className="text-red-600 hover:text-red-700"
+                               >
+                                 <X className="w-3 h-3" />
+                               </button>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                                          ) : (
+                       <>
+                         <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
+                         <div className="text-sm text-gray-600">{exp.start_date} - {exp.end_date}</div>
+                         <div className="text-gray-700 mt-2 space-y-1">
+                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
+                             <div key={descIndex} className="flex items-start">
+                               <span className="text-primary-600 mr-2 mt-1">•</span>
+                               <span>{desc}</span>
+                             </div>
+                           ))}
+                         </div>
+                       </>
+                     )}
                   </div>
                 ))}
               </div>

@@ -16,14 +16,21 @@ interface Profile {
 
 interface GeneratedResume {
   summary: string;
-  experience: any[];
+  experience: {
+    position: string;
+    company: string;
+    start_date: string;
+    end_date: string;
+    location?: string;
+    descriptions: string[]; // Array of bullet points
+  }[];
   skills: string[];
 }
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.REACT_APP_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true, // Note: In production, this should be handled server-side
+  dangerouslyAllowBrowser: true,
 });
 
 export const generateResume = async (profile: Profile, jobDescription: string): Promise<GeneratedResume> => {
@@ -32,27 +39,23 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
     const prompt = createAIPrompt(profile, jobDescription);
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
         {
-          role: "system",
-          content: "You are an expert resume writer and career coach. Your task is to enhance a resume based on a job description. Focus on making the resume more relevant and compelling for the specific role."
+          role: 'system',
+          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Always provide at least 5 bullet points per work experience.'
         },
         {
-          role: "user",
+          role: 'user',
           content: prompt
         }
       ],
-      max_tokens: 2000,
       temperature: 0.7,
+      max_tokens: 2000,
     });
 
-    const aiResponse = completion.choices[0]?.message?.content;
+    const aiResponse = completion.choices[0]?.message?.content || '';
     
-    if (!aiResponse) {
-      throw new Error('No response from AI');
-    }
-
     // Parse the AI response and enhance the resume data
     const enhancedData = parseAIResponse(profile, aiResponse);
     
@@ -62,7 +65,14 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
     // Return the original data if AI generation fails
     return {
       summary: profile.summary || '',
-      experience: profile.experience,
+      experience: profile.experience.map(exp => ({
+        position: exp.position,
+        company: exp.company,
+        start_date: exp.start_date,
+        end_date: exp.end_date,
+        location: exp.location,
+        descriptions: exp.description ? [exp.description] : []
+      })),
       skills: profile.skills,
     };
   }
@@ -82,7 +92,7 @@ Current Summary: ${profile.summary || 'Not provided'}
 EXPERIENCE:
 ${profile.experience.map(exp => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
-  Description: ${exp.description}
+  Current Description: ${exp.description || 'No description provided'}
 `).join('\n')}
 
 EDUCATION:
@@ -95,23 +105,42 @@ ${profile.skills.filter(skill => skill.trim()).join(', ')}
 
 Please provide the following enhancements in JSON format:
 
-1. An improved professional summary that highlights relevant experience and skills for this specific role
-2. Enhanced descriptions for each work experience that emphasize achievements and skills relevant to the job
-3. A prioritized list of skills that match the job requirements
+1. A compelling professional summary (3 sentences)
+2. Enhanced work experience with MORE THAN 10 bullet points per position that:
+   - Reference the original work experience
+   - Include specific achievements and quantifiable results
+   - Use action verbs and industry-specific terminology
+   - Align with the job description requirements
+3. Enhanced skills list that includes relevant technical and soft skills
 
-Return your response in this exact JSON format:
+IMPORTANT REQUIREMENTS:
+- Generate MORE THAN 10 bullet points for each work experience
+- Each bullet point should be a complete sentence starting with an action verb
+- Include specific metrics, percentages, or quantifiable results where possible
+- Reference the original work experience but enhance it significantly
+- Make bullet points specific and impactful
+- Use industry-standard terminology
+
+Please respond with ONLY valid JSON in this exact format:
 {
-  "summary": "Enhanced professional summary...",
+  "summary": "Professional summary here...",
   "experience": [
     {
-      "company": "Company Name",
       "position": "Job Title",
+      "company": "Company Name", 
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",
-      "description": "Enhanced description with achievements..."
+      "location": "City, State",
+      "descriptions": [
+        "First bullet point with specific achievement...",
+        "Second bullet point with quantifiable result...",
+        "Third bullet point highlighting key responsibility...",
+        "Fourth bullet point showing impact...",
+        "Fifth bullet point demonstrating leadership or innovation..."
+      ]
     }
   ],
-  "skills": ["Skill 1", "Skill 2", "Skill 3"]
+  "skills": ["skill1", "skill2", "skill3"]
 }
 `;
 };
@@ -121,17 +150,44 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     // Try to extract JSON from the response
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('No JSON found in AI response');
+      throw new Error('No JSON found in response');
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
     
-    // Create enhanced resume data
+    // Validate and enhance the parsed data
     const enhancedData: GeneratedResume = {
       summary: parsed.summary || originalProfile.summary || '',
-      experience: parsed.experience || originalProfile.experience,
+      experience: parsed.experience || originalProfile.experience.map(exp => ({
+        position: exp.position,
+        company: exp.company,
+        start_date: exp.start_date,
+        end_date: exp.end_date,
+        location: exp.location,
+        descriptions: exp.description ? [exp.description] : []
+      })),
       skills: parsed.skills || originalProfile.skills,
     };
+
+    // Ensure each experience has at least 5 descriptions
+    enhancedData.experience = enhancedData.experience.map(exp => {
+      if (!exp.descriptions || exp.descriptions.length < 5) {
+        // If AI didn't provide enough descriptions, use original and pad
+        const originalDesc = exp.descriptions?.[0] || 'Contributed to team success and project delivery.';
+        const paddedDescriptions = [
+          originalDesc,
+          'Collaborated with cross-functional teams to deliver high-quality solutions.',
+          'Demonstrated strong problem-solving skills and attention to detail.',
+          'Maintained excellent communication with stakeholders and team members.',
+          'Contributed to process improvements and best practices implementation.'
+        ];
+        return {
+          ...exp,
+          descriptions: paddedDescriptions
+        };
+      }
+      return exp;
+    });
 
     return enhancedData;
   } catch (error) {
@@ -139,7 +195,14 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     // Return original data if parsing fails
     return {
       summary: originalProfile.summary || '',
-      experience: originalProfile.experience,
+      experience: originalProfile.experience.map(exp => ({
+        position: exp.position,
+        company: exp.company,
+        start_date: exp.start_date,
+        end_date: exp.end_date,
+        location: exp.location,
+        descriptions: exp.description ? [exp.description] : []
+      })),
       skills: originalProfile.skills,
     };
   }

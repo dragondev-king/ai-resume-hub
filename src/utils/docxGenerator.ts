@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
 import { saveAs } from 'file-saver';
 
 interface GeneratedResume {
@@ -7,7 +7,20 @@ interface GeneratedResume {
   skills: string[];
 }
 
-export const generateDocx = async (generatedResume: GeneratedResume, fileName: string): Promise<void> => {
+interface Profile {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  portfolio?: string;
+  experience: any[];
+  education: any[];
+  skills: string[];
+}
+
+export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile): Promise<void> => {
   const doc = new Document({
     sections: [
       {
@@ -22,84 +35,45 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
           },
         },
         children: [
-          // Summary
+          // Header with name and contact info
+          createHeader(profile),
+          
+          // Contact Information
+          ...(profile ? [createContactSection(profile)] : []),
+          
+          // Professional Summary
           ...(generatedResume.summary ? [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: 'PROFESSIONAL SUMMARY',
-                  size: 24,
-                  bold: true,
-                  color: '2E5BBA',
-                  allCaps: true,
-                }),
-              ],
-              spacing: {
-                before: 400,
-                after: 200,
-              },
-            }),
+            createSectionHeader('SUMMARY'),
             new Paragraph({
               children: [
                 new TextRun({
                   text: generatedResume.summary,
                   size: 22,
+                  color: '2F2F2F',
                 }),
               ],
               spacing: {
-                after: 300,
+                after: 400,
               },
             }),
           ] : []),
           
-          // Experience
-          ...(generatedResume.experience.length > 0 ? [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: 'PROFESSIONAL EXPERIENCE',
-                  size: 24,
-                  bold: true,
-                  color: '2E5BBA',
-                  allCaps: true,
-                }),
-              ],
-              spacing: {
-                before: 400,
-                after: 200,
-              },
-            }),
-            ...createExperienceSection(generatedResume.experience),
+          // Professional Experience (combine original profile experience with AI enhancements)
+          ...(profile?.experience && profile.experience.length > 0 ? [
+            createSectionHeader('PROFESSIONAL EXPERIENCE'),
+            ...createProfessionalExperienceSection(profile.experience, generatedResume.experience),
           ] : []),
           
-          // Skills
-          ...(generatedResume.skills.length > 0 ? [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: 'SKILLS',
-                  size: 24,
-                  bold: true,
-                  color: '2E5BBA',
-                  allCaps: true,
-                }),
-              ],
-              spacing: {
-                before: 400,
-                after: 200,
-              },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: generatedResume.skills.join(', '),
-                  size: 22,
-                }),
-              ],
-              spacing: {
-                after: 300,
-              },
-            }),
+          // Education
+          ...(profile?.education && profile.education.length > 0 ? [
+            createSectionHeader('EDUCATION'),
+            ...createEducationSection(profile.education),
+          ] : []),
+          
+          // Skills (combine original profile skills with AI enhancements)
+          ...(profile?.skills && profile.skills.length > 0 ? [
+            createSectionHeader('SKILLS'),
+            createSkillsSection(Array.from(new Set([...profile.skills, ...generatedResume.skills]))),
           ] : []),
         ],
       },
@@ -111,64 +85,224 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
   saveAs(blob, fileName);
 };
 
-const createExperienceSection = (experience: any[]): Paragraph[] => {
+const createHeader = (profile?: Profile): Paragraph => {
+  const name = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
+  
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: name,
+        size: 36,
+        bold: true,
+        color: '1F2937',
+        font: 'Calibri',
+      }),
+    ],
+    alignment: AlignmentType.CENTER,
+    spacing: {
+      before: 200,
+      after: 200,
+    },
+  });
+};
+
+const createContactSection = (profile: Profile): Paragraph => {
+  const contactInfo = [];
+  
+  if (profile.email) contactInfo.push(`Email: ${profile.email}`);
+  if (profile.phone) contactInfo.push(`Phone: ${profile.phone}`);
+  if (profile.location) contactInfo.push(`Location: ${profile.location}`);
+  if (profile.linkedin) contactInfo.push(`LinkedIn: ${profile.linkedin}`);
+  if (profile.portfolio) contactInfo.push(`Portfolio: ${profile.portfolio}`);
+  
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: contactInfo.join(' | '),
+        size: 20,
+        color: '4B5563',
+        font: 'Calibri',
+      }),
+    ],
+    alignment: AlignmentType.CENTER,
+    spacing: {
+      after: 400,
+    },
+  });
+};
+
+const createSectionHeader = (title: string): Paragraph => {
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: title,
+        size: 28,
+        bold: true,
+        color: '2E5BBA',
+        font: 'Calibri',
+        allCaps: true,
+      }),
+    ],
+    spacing: {
+      before: 400,
+      after: 200,
+    },
+    border: {
+      bottom: {
+        color: '2E5BBA',
+        space: 1,
+        style: BorderStyle.SINGLE,
+        size: 6,
+      },
+    },
+  });
+};
+
+const createProfessionalExperienceSection = (originalExperience: any[], aiExperience: any[]): Paragraph[] => {
   const paragraphs: Paragraph[] = [];
   
-  experience.forEach((exp, index) => {
-    // Job title and company
+  // Use original experience data, but enhance with AI-generated descriptions if available
+  originalExperience.forEach((exp, index) => {
+    // Try to find matching AI-enhanced experience
+    const aiEnhanced = aiExperience.find(ai => 
+      ai.position?.toLowerCase().includes(exp.position?.toLowerCase()) ||
+      ai.company?.toLowerCase().includes(exp.company?.toLowerCase())
+    );
+    
+    // Use AI-enhanced descriptions array if available, otherwise convert original to array
+    const descriptions = aiEnhanced?.descriptions || (exp.description ? [exp.description] : []);
+    
+    // Add spacing before each experience entry
+    if (index > 0) {
+      paragraphs.push(
+        new Paragraph({
+          children: [],
+          spacing: { before: 300 },
+        })
+      );
+    }
+
+    // Company name
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: exp.company,
+            size: 24,
+            bold: true,
+            color: '1F2937',
+            font: 'Calibri',
+          }),
+        ],
+        spacing: { after: 100 },
+      })
+    );
+
+    // Job title
     paragraphs.push(
       new Paragraph({
         children: [
           new TextRun({
             text: exp.position,
-            size: 24,
-            bold: true,
-          }),
-          new TextRun({
-            text: ` at ${exp.company}`,
-            size: 24,
+            size: 22,
             bold: true,
             color: '2E5BBA',
+            font: 'Calibri',
           }),
         ],
-        spacing: {
-          before: index > 0 ? 300 : 0,
-          after: 100,
-        },
+        spacing: { after: 100 },
       })
     );
-    
-    // Date range
+
+    // Date range and location
+    const dateLocation = [];
     const dateRange = formatDateRange(exp.start_date, exp.end_date);
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: dateRange,
-            size: 20,
-            color: '666666',
-            italics: true,
-          }),
-        ],
-        spacing: {
-          after: 200,
-        },
-      })
-    );
+    if (dateRange) dateLocation.push(dateRange);
+    if (exp.location) dateLocation.push(exp.location);
     
-    // Description
-    if (exp.description) {
+    if (dateLocation.length > 0) {
       paragraphs.push(
         new Paragraph({
           children: [
             new TextRun({
-              text: exp.description,
-              size: 22,
+              text: dateLocation.join(' | '),
+              size: 20,
+              color: '6B7280',
+              italics: true,
+              font: 'Calibri',
             }),
           ],
-          spacing: {
-            after: 200,
-          },
+          spacing: { after: 200 },
+        })
+      );
+    }
+
+    // Experience bullet points
+    if (descriptions && descriptions.length > 0) {
+      const bulletPoints = createExperienceBulletPoints(descriptions);
+      paragraphs.push(...bulletPoints);
+    }
+
+    // Add spacing after the experience entry
+    paragraphs.push(
+      new Paragraph({
+        children: [],
+        spacing: { after: 200 },
+      })
+    );
+  });
+  
+  return paragraphs;
+};
+
+const createEducationSection = (education: any[]): Paragraph[] => {
+  const paragraphs: Paragraph[] = [];
+  
+  education.forEach((edu, index) => {
+    if (index > 0) {
+      paragraphs.push(
+        new Paragraph({
+          children: [],
+          spacing: { before: 200 },
+        })
+      );
+    }
+
+    // Degree and field
+    const degreeText = [edu.degree, edu.field].filter(Boolean).join(' in ');
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: degreeText,
+            size: 22,
+            bold: true,
+            color: '1F2937',
+            font: 'Calibri',
+          }),
+        ],
+        spacing: { after: 100 },
+      })
+    );
+
+    // School and dates
+    const schoolInfo = [];
+    if (edu.school) schoolInfo.push(edu.school);
+    const dateRange = formatDateRange(edu.start_date, edu.end_date);
+    if (dateRange) schoolInfo.push(`(${dateRange})`);
+    
+    if (schoolInfo.length > 0) {
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: schoolInfo.join(' '),
+              size: 20,
+              color: '6B7280',
+              font: 'Calibri',
+            }),
+          ],
+          spacing: { after: 200 },
         })
       );
     }
@@ -177,14 +311,100 @@ const createExperienceSection = (experience: any[]): Paragraph[] => {
   return paragraphs;
 };
 
+const createExperienceBulletPoints = (descriptions: string[]): Paragraph[] => {
+  if (!descriptions || descriptions.length === 0) return [];
+
+  return descriptions.map(description => 
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: '• ',
+          size: 22,
+          color: '2E5BBA',
+          font: 'Calibri',
+        }),
+        new TextRun({
+          text: description.endsWith('.') ? description : description + '.',
+          size: 22,
+          color: '2F2F2F',
+          font: 'Calibri',
+        }),
+      ],
+      spacing: {
+        after: 120,
+      },
+      indent: {
+        left: 360, // 0.25 inch indent
+      },
+    })
+  );
+};
+
+const createSkillsSection = (skills: string[]): Paragraph => {
+  // Group skills into categories for better presentation
+  const technicalSkills = skills.filter(skill => 
+    /(javascript|python|java|c\+\+|react|angular|vue|node|sql|aws|docker|kubernetes|git|agile|scrum|api|html|css|typescript|php|ruby|go|rust|swift|kotlin|flutter|react native|machine learning|ai|data|analytics|cloud|devops|testing|ci\/cd)/i.test(skill)
+  );
+  
+  const softSkills = skills.filter(skill => 
+    /(leadership|communication|teamwork|problem solving|project management|collaboration|mentoring|presentation|negotiation|customer service|time management|organization|creativity|adaptability|critical thinking|decision making)/i.test(skill)
+  );
+
+  const otherSkills = skills.filter(skill => 
+    !technicalSkills.includes(skill) && !softSkills.includes(skill)
+  );
+
+  let skillsText = '';
+
+  if (technicalSkills.length > 0) {
+    skillsText += `Technical: ${technicalSkills.join(', ')}`;
+  }
+  
+  if (softSkills.length > 0) {
+    if (skillsText) skillsText += ' | ';
+    skillsText += `Soft Skills: ${softSkills.join(', ')}`;
+  }
+  
+  if (otherSkills.length > 0) {
+    if (skillsText) skillsText += ' | ';
+    skillsText += `Other: ${otherSkills.join(', ')}`;
+  }
+
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: skillsText,
+        size: 22,
+        color: '2F2F2F',
+        font: 'Calibri',
+      }),
+    ],
+    spacing: {
+      after: 300,
+    },
+  });
+};
+
 const formatDateRange = (startDate: string, endDate: string): string => {
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
+    } catch {
+      return dateString;
+    }
   };
   
   const start = formatDate(startDate);
   const end = formatDate(endDate);
-  return `${start} - ${end}`;
+  
+  if (!start && !end) return '';
+  if (!start) return `Until ${end}`;
+  if (!end) return `${start} - Present`;
+  
+  return `${start} – ${end}`;
 }; 
