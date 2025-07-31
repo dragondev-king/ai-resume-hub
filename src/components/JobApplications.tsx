@@ -338,16 +338,22 @@ const JobApplications: React.FC = () => {
                          {application.company_name || '-'}
                        </div>
                      </td>
-                     <td className="px-6 py-4 whitespace-nowrap">
-                       <div className="text-sm text-gray-900">
-                         {application.profile ? `${application.profile.first_name} ${application.profile.last_name}` : '-'}
-                       </div>
-                     </td>
-                     <td className="px-6 py-4 whitespace-nowrap">
-                       <div className="text-sm text-gray-900">
-                         {application.bidder ? `${application.bidder.first_name} ${application.bidder.last_name}` : '-'}
-                       </div>
-                     </td>
+                                           <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {application.profile_first_name && application.profile_last_name 
+                            ? `${application.profile_first_name} ${application.profile_last_name}` 
+                            : '-'
+                          }
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {application.bidder_first_name && application.bidder_last_name 
+                            ? `${application.bidder_first_name} ${application.bidder_last_name}` 
+                            : '-'
+                          }
+                        </div>
+                      </td>
                      <td className="px-6 py-4 whitespace-nowrap">
                        <div className="text-sm text-gray-900">
                          {formatDate(application.created_at)}

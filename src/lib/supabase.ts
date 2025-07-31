@@ -91,8 +91,13 @@ export interface ProfileWithAssignments extends Profile {
 }
 
 export interface JobApplicationWithDetails extends JobApplication {
-  profile?: Profile;
-  bidder?: User;
+  updated_at: string;
+  profile_first_name?: string;
+  profile_last_name?: string;
+  profile_email?: string;
+  bidder_first_name?: string;
+  bidder_last_name?: string;
+  bidder_email?: string;
 }
 
 // Simple bidder type for filter dropdowns
