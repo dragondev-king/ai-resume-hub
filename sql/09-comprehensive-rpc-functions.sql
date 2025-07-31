@@ -206,9 +206,9 @@ BEGIN
   JOIN users b ON ja.bidder_id = b.id
   WHERE 
     -- Role-based filtering
-    (p_user_role = 'admin') OR 
-    (p_user_role = 'manager' AND ja.profile_id = ANY(v_profile_ids)) OR 
-    (p_user_role = 'bidder' AND ja.bidder_id = p_user_id)
+    ((p_user_role = 'admin') OR 
+     (p_user_role = 'manager' AND ja.profile_id = ANY(v_profile_ids)) OR 
+     (p_user_role = 'bidder' AND ja.bidder_id = p_user_id))
     -- Additional filters
     AND (p_profile_id IS NULL OR ja.profile_id = p_profile_id)
     AND (p_bidder_id IS NULL OR ja.bidder_id = p_bidder_id)
