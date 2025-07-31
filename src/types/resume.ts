@@ -18,7 +18,8 @@ export interface Experience {
   position: string;
   start_date: string;
   end_date: string;
-  description: string;
+  description?: string; // Keep for backward compatibility
+  descriptions?: string[]; // Array of bullet points
 }
 
 export interface Education {

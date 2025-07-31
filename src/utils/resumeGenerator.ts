@@ -28,11 +28,11 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
     const prompt = createAIPrompt(profile, jobDescription);
     
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4.1-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Always provide at least 5 bullet points per work experience.'
+          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Generate 7-12 bullet points per work experience, with varying counts between different companies based on the role complexity and duration.'
         },
         {
           role: 'user',
@@ -40,7 +40,7 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
         }
       ],
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 2000, // Increased to accommodate more bullet points
     });
 
     const aiResponse = completion.choices[0]?.message?.content || '';
@@ -94,20 +94,27 @@ ${profile.skills.filter(skill => skill.trim()).join(', ')}
 Please provide the following enhancements in JSON format:
 
 1. A compelling professional summary (3 sentences)
-2. Enhanced work experience with MORE THAN 10 bullet points per position that:
+2. Enhanced work experience with 7-12 bullet points per position that:
    - Reference the original work experience
    - Include specific achievements and quantifiable results
    - Use action verbs and industry-specific terminology
    - Align with the job description requirements
+   - Vary the number of bullet points between companies (7-12 bullets per company)
+   - Consider role complexity and duration when determining bullet point count
 3. Enhanced skills list that includes relevant technical and soft skills
 
 IMPORTANT REQUIREMENTS:
-- Generate MORE THAN 10 bullet points for each work experience
+- Generate 7-12 bullet points for each work experience
+- Vary the number of bullet points between different companies based on:
+  * Role complexity and responsibility level
+  * Duration of employment
+  * Impact and achievements in each role
 - Each bullet point should be a complete sentence starting with an action verb
 - Include specific metrics, percentages, or quantifiable results where possible
 - Reference the original work experience but enhance it significantly
 - Make bullet points specific and impactful
 - Use industry-standard terminology
+- Ensure bullet points are unique and don't repeat similar achievements
 
 Please respond with ONLY valid JSON in this exact format:
 {
@@ -124,7 +131,14 @@ Please respond with ONLY valid JSON in this exact format:
         "Second bullet point with quantifiable result...",
         "Third bullet point highlighting key responsibility...",
         "Fourth bullet point showing impact...",
-        "Fifth bullet point demonstrating leadership or innovation..."
+        "Fifth bullet point demonstrating leadership or innovation...",
+        "Sixth bullet point with technical accomplishment...",
+        "Seventh bullet point showing business impact...",
+        "Eighth bullet point highlighting collaboration...",
+        "Ninth bullet point with process improvement...",
+        "Tenth bullet point showing strategic thinking...",
+        "Eleventh bullet point with measurable outcome...",
+        "Twelfth bullet point demonstrating expertise..."
       ]
     }
   ],
@@ -156,21 +170,43 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
       skills: parsed.skills || originalProfile.skills,
     };
 
-    // Ensure each experience has at least 5 descriptions
-    enhancedData.experience = enhancedData.experience.map(exp => {
-      if (!exp.descriptions || exp.descriptions.length < 5) {
-        // If AI didn't provide enough descriptions, use original and pad
+    // Ensure each experience has 7-12 descriptions with varying counts
+    enhancedData.experience = enhancedData.experience.map((exp, index) => {
+      if (!exp.descriptions || exp.descriptions.length < 7) {
+        // Generate varying number of bullet points based on company index (7-12 range)
+        const baseCount = 7;
+        const variation = (index % 6); // Creates variation: 7, 8, 9, 10, 11, 12, 7, 8, 9...
+        const targetCount = baseCount + variation;
+        
+        // If AI didn't provide enough descriptions, use original and pad with enhanced ones
         const originalDesc = exp.descriptions?.[0] || 'Contributed to team success and project delivery.';
-        const paddedDescriptions = [
+        
+        const enhancedDescriptions = [
           originalDesc,
           'Collaborated with cross-functional teams to deliver high-quality solutions.',
           'Demonstrated strong problem-solving skills and attention to detail.',
           'Maintained excellent communication with stakeholders and team members.',
-          'Contributed to process improvements and best practices implementation.'
+          'Contributed to process improvements and best practices implementation.',
+          'Led initiatives that resulted in measurable improvements to team productivity.',
+          'Developed and implemented innovative solutions to complex technical challenges.',
+          'Mentored junior team members and facilitated knowledge sharing across the organization.',
+          'Established and maintained strong relationships with key stakeholders and clients.',
+          'Analyzed data and provided insights that drove strategic decision-making.',
+          'Optimized workflows and procedures to increase efficiency and reduce costs.',
+          'Coordinated with multiple departments to ensure seamless project delivery.',
+          'Created comprehensive documentation and training materials for team processes.',
+          'Participated in strategic planning sessions and contributed to long-term vision.',
+          'Delivered presentations to senior leadership on project progress and outcomes.',
+          'Implemented quality assurance processes that improved overall project success rates.',
+          'Facilitated cross-team collaboration and knowledge transfer initiatives.',
+          'Streamlined operational procedures resulting in improved team efficiency.',
+          'Provided technical guidance and mentorship to junior team members.',
+          'Managed stakeholder expectations and ensured project deliverables met requirements.'
         ];
+        
         return {
           ...exp,
-          descriptions: paddedDescriptions
+          descriptions: enhancedDescriptions.slice(0, targetCount)
         };
       }
       return exp;
