@@ -39,7 +39,6 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
                 new TextRun({
                   text: generatedResume.summary,
                   size: 22,
-                  color: '2F2F2F',
                 }),
               ],
               spacing: {
@@ -85,8 +84,7 @@ const createHeader = (profile?: Profile): Paragraph => {
         text: name,
         size: 36,
         bold: true,
-        color: '1F2937',
-        font: 'Calibri',
+        font: 'Cambria',
       }),
       ...(title ? [
         new TextRun({
@@ -96,8 +94,7 @@ const createHeader = (profile?: Profile): Paragraph => {
         new TextRun({
           text: title,
           size: 24,
-          color: '4B5563',
-          font: 'Calibri',
+          font: 'Cambria',
         }),
       ] : []),
     ],
@@ -123,8 +120,7 @@ const createContactSection = (profile: Profile): Paragraph => {
       new TextRun({
         text: contactInfo.join(' | '),
         size: 20,
-        color: '4B5563',
-        font: 'Calibri',
+        font: 'Cambria',
       }),
     ],
     alignment: AlignmentType.CENTER,
@@ -141,8 +137,7 @@ const createSectionHeader = (title: string): Paragraph => {
         text: title,
         size: 28,
         bold: true,
-        color: '2E5BBA',
-        font: 'Calibri',
+        font: 'Cambria',
         allCaps: true,
       }),
     ],
@@ -152,7 +147,6 @@ const createSectionHeader = (title: string): Paragraph => {
     },
     border: {
       bottom: {
-        color: '2E5BBA',
         space: 1,
         style: BorderStyle.SINGLE,
         size: 6,
@@ -193,8 +187,7 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
             text: exp.company,
             size: 24,
             bold: true,
-            color: '1F2937',
-            font: 'Calibri',
+            font: 'Cambria',
           }),
         ],
         spacing: { after: 100 },
@@ -209,8 +202,7 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
             text: exp.position,
             size: 22,
             bold: true,
-            color: '2E5BBA',
-            font: 'Calibri',
+            font: 'Cambria',
           }),
         ],
         spacing: { after: 100 },
@@ -230,9 +222,8 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
             new TextRun({
               text: dateLocation.join(' | '),
               size: 20,
-              color: '6B7280',
               italics: true,
-              font: 'Calibri',
+              font: 'Cambria',
             }),
           ],
           spacing: { after: 200 },
@@ -280,8 +271,7 @@ const createEducationSection = (education: any[]): Paragraph[] => {
             text: degreeText,
             size: 22,
             bold: true,
-            color: '1F2937',
-            font: 'Calibri',
+            font: 'Cambria',
           }),
         ],
         spacing: { after: 100 },
@@ -301,8 +291,7 @@ const createEducationSection = (education: any[]): Paragraph[] => {
             new TextRun({
               text: schoolInfo.join(' '),
               size: 20,
-              color: '6B7280',
-              font: 'Calibri',
+              font: 'Cambria',
             }),
           ],
           spacing: { after: 200 },
@@ -323,14 +312,12 @@ const createExperienceBulletPoints = (descriptions: string[]): Paragraph[] => {
         new TextRun({
           text: '• ',
           size: 22,
-          color: '2E5BBA',
-          font: 'Calibri',
+          font: 'Cambria',
         }),
         new TextRun({
           text: description.endsWith('.') ? description : description + '.',
           size: 22,
-          color: '2F2F2F',
-          font: 'Calibri',
+          font: 'Cambria',
         }),
       ],
       spacing: {
@@ -378,8 +365,7 @@ const createSkillsSection = (skills: string[]): Paragraph => {
       new TextRun({
         text: skillsText,
         size: 22,
-        color: '2F2F2F',
-        font: 'Calibri',
+        font: 'Cambria',
       }),
     ],
     spacing: {
