@@ -4,7 +4,6 @@ import { createContext, useContext, useCallback, useState, useEffect } from 'rea
 import { supabase, UserRole } from '../lib/supabase';
 import IUser from '../types/user';
 import { useAuth } from './AuthContext';
-import { Session } from '@supabase/supabase-js';
 
 
 interface UserContextType {
