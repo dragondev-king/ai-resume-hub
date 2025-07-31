@@ -161,7 +161,16 @@ BEGIN
   END IF;
 
   -- Calculate date range if specified
-  IF p_date_range = 'this-week' THEN
+  IF p_date_range = 'today' THEN
+    v_start_date := date_trunc('day', CURRENT_DATE);
+    v_end_date := v_start_date + interval '23:59:59';
+  ELSIF p_date_range = 'last-week' THEN
+    v_start_date := date_trunc('week', CURRENT_DATE - interval '1 week');
+    v_end_date := v_start_date + interval '6 days 23:59:59';
+  ELSIF p_date_range = 'last-month' THEN
+    v_start_date := date_trunc('month', CURRENT_DATE - interval '1 month');
+    v_end_date := (v_start_date + interval '1 month') - interval '1 second';
+  ELSIF p_date_range = 'this-week' THEN
     v_start_date := date_trunc('week', CURRENT_DATE);
     v_end_date := v_start_date + interval '6 days 23:59:59';
   ELSIF p_date_range = 'this-month' THEN
