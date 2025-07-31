@@ -63,9 +63,9 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
           ] : []),
           
           // Skills (combine original profile skills with AI enhancements)
-          ...(profile?.skills && profile.skills.length > 0 ? [
+          ...(generatedResume?.skills && generatedResume.skills.length > 0 ? [
             createSectionHeader('SKILLS'),
-            createSkillsSection(Array.from(new Set([...profile.skills, ...generatedResume.skills]))),
+            ...createSkillsSection(Array.from(new Set([...generatedResume.skills]))),
           ] : []),
         ],
       },
@@ -357,7 +357,7 @@ const createExperienceBulletPoints = (descriptions: string[]): Paragraph[] => {
   );
 };
 
-const createSkillsSection = (skills: string[]): Paragraph => {
+const createSkillsSection = (skills: string[]): Paragraph[] => {
   // Group skills into categories for better presentation
   const technicalSkills = skills.filter(skill => 
     /(javascript|python|java|c\+\+|react|angular|vue|node|sql|aws|docker|kubernetes|git|agile|scrum|api|html|css|typescript|php|ruby|go|rust|swift|kotlin|flutter|react native|machine learning|ai|data|analytics|cloud|devops|testing|ci\/cd)/i.test(skill)
@@ -371,34 +371,78 @@ const createSkillsSection = (skills: string[]): Paragraph => {
     !technicalSkills.includes(skill) && !softSkills.includes(skill)
   );
 
-  let skillsText = '';
+  const paragraphs: Paragraph[] = [];
 
   if (technicalSkills.length > 0) {
-    skillsText += `Technical: ${technicalSkills.join(', ')}`;
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'Technical: ',
+            size: 22,
+            font: 'Cambria',
+            bold: true,
+          }),
+          new TextRun({
+            text: technicalSkills.join(', '),
+            size: 22,
+            font: 'Cambria',
+          }),
+        ],
+        spacing: {
+          after: 150,
+        },
+      })
+    );
   }
   
   if (softSkills.length > 0) {
-    if (skillsText) skillsText += ' | ';
-    skillsText += `Soft Skills: ${softSkills.join(', ')}`;
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'Soft Skills: ',
+            size: 22,
+            font: 'Cambria',
+            bold: true,
+          }),
+          new TextRun({
+            text: softSkills.join(', '),
+            size: 22,
+            font: 'Cambria',
+          }),
+        ],
+        spacing: {
+          after: 150,
+        },
+      })
+    );
   }
   
   if (otherSkills.length > 0) {
-    if (skillsText) skillsText += ' | ';
-    skillsText += `Other: ${otherSkills.join(', ')}`;
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'Other: ',
+            size: 22,
+            font: 'Cambria',
+            bold: true,
+          }),
+          new TextRun({
+            text: otherSkills.join(', '),
+            size: 22,
+            font: 'Cambria',
+          }),
+        ],
+        spacing: {
+          after: 300,
+        },
+      })
+    );
   }
 
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text: skillsText,
-        size: 22,
-        font: 'Cambria',
-      }),
-    ],
-    spacing: {
-      after: 300,
-    },
-  });
+  return paragraphs;
 };
 
 const formatDateRange = (startDate: string, endDate: string): string => {
