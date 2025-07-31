@@ -26,10 +26,13 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
         },
         children: [
           // Header with name and contact info
-          createHeader(profile),
+          ...createHeader(profile),
           
           // Contact Information
-          ...(profile ? [createContactSection(profile)] : []),
+          ...(profile ? [
+            createSectionHeader('CONTACT'),
+            ...createContactSection(profile)
+          ] : []),
           
           // Professional Summary
           ...(generatedResume.summary ? [
@@ -74,60 +77,84 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
   saveAs(blob, fileName);
 };
 
-const createHeader = (profile?: Profile): Paragraph => {
+const createHeader = (profile?: Profile): Paragraph[] => {
   const name = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
   const title = profile?.title;
   
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text: name,
-        size: 36,
-        bold: true,
-        font: 'Cambria',
-      }),
-      ...(title ? [
+  const paragraphs: Paragraph[] = [
+    new Paragraph({
+      children: [
         new TextRun({
-          text: '\n',
+          text: name,
           size: 36,
-        }),
-        new TextRun({
-          text: title,
-          size: 24,
+          bold: true,
           font: 'Cambria',
         }),
-      ] : []),
-    ],
-    alignment: AlignmentType.CENTER,
-    spacing: {
-      before: 200,
-      after: 200,
-    },
-  });
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: {
+        before: 200,
+        after: title ? 100 : 200,
+      },
+    })
+  ];
+
+  if (title) {
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: title,
+            size: 24,
+            font: 'Cambria',
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: {
+          after: 200,
+        },
+      })
+    );
+  }
+
+  return paragraphs;
 };
 
-const createContactSection = (profile: Profile): Paragraph => {
+const createContactSection = (profile: Profile): Paragraph[] => {
   const contactInfo = [];
   
-  if (profile.email) contactInfo.push(`Email: ${profile.email}`);
-  if (profile.phone) contactInfo.push(`Phone: ${profile.phone}`);
-  if (profile.location) contactInfo.push(`Location: ${profile.location}`);
-  if (profile.linkedin) contactInfo.push(`LinkedIn: ${profile.linkedin}`);
-  if (profile.portfolio) contactInfo.push(`Portfolio: ${profile.portfolio}`);
+  if (profile.email) contactInfo.push({ label: 'Email', value: profile.email });
+  if (profile.phone) contactInfo.push({ label: 'Phone', value: profile.phone });
+  if (profile.location) contactInfo.push({ label: 'Location', value: profile.location });
+  if (profile.linkedin) contactInfo.push({ label: 'LinkedIn', value: profile.linkedin });
+  if (profile.portfolio) contactInfo.push({ label: 'Portfolio', value: profile.portfolio });
   
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text: contactInfo.join(' | '),
-        size: 20,
-        font: 'Cambria',
-      }),
-    ],
-    alignment: AlignmentType.CENTER,
-    spacing: {
-      after: 400,
-    },
-  });
+  return contactInfo.map(info => 
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: '• ',
+          size: 20,
+          font: 'Cambria',
+        }),
+        new TextRun({
+          text: `${info.label}: `,
+          size: 20,
+          font: 'Cambria',
+          bold: true,
+        }),
+        new TextRun({
+          text: info.value,
+          size: 20,
+          font: 'Cambria',
+        }),
+      ],
+      alignment: AlignmentType.LEFT,
+      spacing: {
+        after: 100,
+      },
+    })
+  );
 };
 
 const createSectionHeader = (title: string): Paragraph => {
