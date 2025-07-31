@@ -5,6 +5,7 @@ import { Profile, ProfileWithDetailsRPC } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import ProfileForm from '../components/ProfileForm';
 import ProfileDetails from '../components/ProfileDetails';
+import AssignBiddersModal from '../components/AssignBiddersModal';
 import { toast } from 'react-hot-toast';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -16,6 +17,8 @@ const ProfilesPage: React.FC = () => {
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<ProfileWithDetailsRPC | null>(null);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [assigningProfile, setAssigningProfile] = useState<ProfileWithDetailsRPC | null>(null);
+  const [showAssignBidders, setShowAssignBidders] = useState(false);
 
 
   const handleProfileSave = () => {
@@ -33,6 +36,11 @@ const ProfilesPage: React.FC = () => {
   const handleViewProfile = (profile: ProfileWithDetailsRPC) => {
     setViewingProfile(profile);
     setShowProfileDetails(true);
+  };
+
+  const handleAssignBidders = (profile: ProfileWithDetailsRPC) => {
+    setAssigningProfile(profile);
+    setShowAssignBidders(true);
   };
 
   const handleDeleteProfile = async (profileId: string) => {
@@ -114,10 +122,28 @@ const ProfilesPage: React.FC = () => {
       {showProfileDetails && viewingProfile && (
         <ProfileDetails
           profile={viewingProfile}
+          userRole={role}
           onClose={() => {
             setShowProfileDetails(false);
             setViewingProfile(null);
           }}
+          onAssignBidders={() => {
+            setShowProfileDetails(false);
+            setViewingProfile(null);
+            handleAssignBidders(viewingProfile);
+          }}
+        />
+      )}
+
+      {/* Assign Bidders Modal */}
+      {showAssignBidders && assigningProfile && (
+        <AssignBiddersModal
+          profile={assigningProfile}
+          onClose={() => {
+            setShowAssignBidders(false);
+            setAssigningProfile(null);
+          }}
+          onAssignmentsUpdated={refreshProfiles}
         />
       )}
 
@@ -127,7 +153,7 @@ const ProfilesPage: React.FC = () => {
           <User className="w-16 h-16 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Profiles Yet</h3>
           <p className="text-gray-600 mb-4">
-            {role === 'bidder' 
+            {role === 'bidder'
               ? "You don't have any profiles assigned to you yet. Contact your manager to get access to profiles."
               : "Create your first profile to start generating AI-powered resumes."
             }
@@ -182,7 +208,7 @@ const ProfilesPage: React.FC = () => {
                     <span className="text-xs font-medium text-gray-700">Profile Owner</span>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {profile.owner_first_name && profile.owner_last_name 
+                    {profile.owner_first_name && profile.owner_last_name
                       ? `${profile.owner_first_name} ${profile.owner_last_name}`
                       : profile.owner_email
                     }
@@ -194,29 +220,41 @@ const ProfilesPage: React.FC = () => {
               )}
 
               {/* Assigned Bidders */}
-              {profile.assigned_bidders && profile.assigned_bidders.length > 0 && (
-                <div className="mb-3 p-3 bg-green-50 rounded-md">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Users className="w-4 h-4 text-green-600" />
-                    <span className="text-xs font-medium text-gray-700">
-                      Assigned Bidders ({profile.assigned_bidders.length})
-                    </span>
+              {(role === 'admin' || role === 'manager') && (
+                <div
+                  className="mb-3 p-3 bg-green-50 rounded-md cursor-pointer hover:bg-green-100 transition-colors"
+                  onClick={() => handleAssignBidders(profile)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <Users className="w-4 h-4 text-green-600" />
+                      <span className="text-xs font-medium text-gray-700">
+                        Assigned Bidders ({profile.assigned_bidders?.length || 0})
+                      </span>
+                    </div>
+                    <span className="text-xs text-green-600">Click to manage</span>
                   </div>
-                  <div className="space-y-1">
-                    {profile.assigned_bidders.slice(0, 2).map((bidder) => (
-                      <div key={bidder.id} className="text-sm text-gray-600">
-                        {bidder.first_name && bidder.last_name 
-                          ? `${bidder.first_name} ${bidder.last_name}`
-                          : bidder.email
-                        }
-                      </div>
-                    ))}
-                    {profile.assigned_bidders.length > 2 && (
-                      <div className="text-xs text-gray-500">
-                        +{profile.assigned_bidders.length - 2} more
-                      </div>
-                    )}
-                  </div>
+                  {profile.assigned_bidders && profile.assigned_bidders.length > 0 ? (
+                    <div className="space-y-1">
+                      {profile.assigned_bidders.slice(0, 2).map((bidder) => (
+                        <div key={bidder.id} className="text-sm text-gray-600">
+                          {bidder.first_name && bidder.last_name
+                            ? `${bidder.first_name} ${bidder.last_name}`
+                            : bidder.email
+                          }
+                        </div>
+                      ))}
+                      {profile.assigned_bidders.length > 2 && (
+                        <div className="text-xs text-gray-500">
+                          +{profile.assigned_bidders.length - 2} more
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">
+                      No assigned bidders
+                    </div>
+                  )}
                 </div>
               )}
 

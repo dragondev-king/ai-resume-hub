@@ -6,9 +6,11 @@ import { useUser } from '../contexts/UserContext';
 interface ProfileDetailsProps {
   profile: ProfileWithDetailsRPC;
   onClose: () => void;
+  onAssignBidders?: () => void;
+  userRole?: string;
 }
 
-const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose }) => {
+const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAssignBidders, userRole }) => {
   const { role } = useUser();
 
   const formatDate = (dateString: string) => {
@@ -69,9 +71,9 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose }) => 
                     <label className="block text-sm font-medium text-gray-700">LinkedIn</label>
                     <div className="flex items-center mt-1">
                       <Linkedin className="w-4 h-4 text-gray-400 mr-2" />
-                      <a 
-                        href={profile.linkedin} 
-                        target="_blank" 
+                      <a
+                        href={profile.linkedin}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm text-blue-600 hover:text-blue-800"
                       >
@@ -85,9 +87,9 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose }) => 
                     <label className="block text-sm font-medium text-gray-700">Portfolio</label>
                     <div className="flex items-center mt-1">
                       <Globe className="w-4 h-4 text-gray-400 mr-2" />
-                      <a 
-                        href={profile.portfolio} 
-                        target="_blank" 
+                      <a
+                        href={profile.portfolio}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm text-blue-600 hover:text-blue-800"
                       >
@@ -190,7 +192,7 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose }) => 
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Owner Name</label>
                     <p className="text-sm text-gray-900 mt-1">
-                      {profile.owner_first_name && profile.owner_last_name 
+                      {profile.owner_first_name && profile.owner_last_name
                         ? `${profile.owner_first_name} ${profile.owner_last_name}`
                         : 'N/A'
                       }
@@ -210,31 +212,51 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose }) => 
               </div>
             )}
 
-            {profile.assigned_bidders && profile.assigned_bidders.length > 0 && role !== 'bidder' && (
-              <div className="bg-green-50 rounded-lg p-4">
-                <h4 className="text-lg font-medium text-gray-900 mb-4">
-                  Assigned Bidders ({profile.assigned_bidders.length})
-                </h4>
-                <div className="space-y-2">
-                  {profile.assigned_bidders.map((bidder: any) => (
-                    <div key={bidder.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {bidder.first_name && bidder.last_name 
-                            ? `${bidder.first_name} ${bidder.last_name}`
-                            : 'N/A'
-                          }
-                        </p>
-                        <p className="text-xs text-gray-600">{bidder.email}</p>
+            {profile.assigned_bidders && role !== 'bidder' && (
+              <>
+                {
+                  profile.assigned_bidders.length > 0 ? (
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">
+                        Assigned Bidders ({profile.assigned_bidders.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {profile.assigned_bidders.map((bidder: any) => (
+                          <div key={bidder.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {bidder.first_name && bidder.last_name
+                                  ? `${bidder.first_name} ${bidder.last_name}`
+                                  : 'N/A'
+                                }
+                              </p>
+                              <p className="text-xs text-gray-600">{bidder.email}</p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  ) : (
+                    <div className="bg-red-50 rounded-lg p-4">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">
+                        No Bidders Assigned
+                      </h4>
+                    </div>
+                  )
+                }
+              </>
             )}
           </div>
 
-          <div className="flex justify-end mt-6">
+          <div className="flex justify-end space-x-3 mt-6">
+            {(userRole === 'admin' || userRole === 'manager') && onAssignBidders && (
+              <button
+                onClick={onAssignBidders}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              >
+                Manage Bidders
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
