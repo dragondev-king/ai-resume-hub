@@ -138,7 +138,9 @@ CREATE OR REPLACE FUNCTION get_job_applications_with_filters(
   p_bidder_id UUID DEFAULT NULL,
   p_date_from TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   p_date_to TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-  p_date_range TEXT DEFAULT 'all'
+  p_date_range TEXT DEFAULT 'all',
+  p_page_size INTEGER DEFAULT 10,
+  p_page_number INTEGER DEFAULT 1
 )
 RETURNS TABLE (
   id UUID, profile_id UUID, bidder_id UUID, job_title TEXT, company_name TEXT, 
@@ -204,7 +206,9 @@ BEGIN
     AND (p_bidder_id IS NULL OR ja.bidder_id = p_bidder_id)
     AND (v_start_date IS NULL OR ja.created_at >= v_start_date)
     AND (v_end_date IS NULL OR ja.created_at <= v_end_date)
-  ORDER BY ja.created_at DESC;
+  ORDER BY ja.created_at DESC
+  LIMIT p_page_size
+  OFFSET (p_page_number - 1) * p_page_size;
 END; $$;
 
 -- BIDDER MANAGEMENT FUNCTIONS
@@ -267,7 +271,74 @@ GRANT EXECUTE ON FUNCTION create_profile_assignment(UUID, UUID, UUID) TO authent
 GRANT EXECUTE ON FUNCTION delete_profile_assignment(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION create_job_application(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_bidders_for_applications(UUID, user_role) TO authenticated;
-GRANT EXECUTE ON FUNCTION get_job_applications_with_filters(UUID, user_role, UUID, UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT) TO authenticated;
+-- Function to get total count for pagination
+CREATE OR REPLACE FUNCTION get_job_applications_count(
+  p_user_id UUID, 
+  p_user_role user_role,
+  p_profile_id UUID DEFAULT NULL,
+  p_bidder_id UUID DEFAULT NULL,
+  p_date_from TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  p_date_to TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  p_date_range TEXT DEFAULT 'all'
+)
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_profile_ids UUID[];
+DECLARE v_start_date TIMESTAMP WITH TIME ZONE;
+DECLARE v_end_date TIMESTAMP WITH TIME ZONE;
+DECLARE v_count INTEGER;
+BEGIN
+  -- Get profile IDs for role-based filtering
+  IF p_user_role = 'manager' THEN
+    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
+  ELSIF p_user_role = 'bidder' THEN
+    -- For bidders, we'll filter by bidder_id in the main query
+    v_profile_ids := NULL;
+  END IF;
+
+  -- Calculate date range if specified
+  IF p_date_range = 'today' THEN
+    v_start_date := date_trunc('day', CURRENT_DATE);
+    v_end_date := v_start_date + interval '23:59:59';
+  ELSIF p_date_range = 'last-week' THEN
+    v_start_date := date_trunc('week', CURRENT_DATE - interval '1 week');
+    v_end_date := v_start_date + interval '6 days 23:59:59';
+  ELSIF p_date_range = 'last-month' THEN
+    v_start_date := date_trunc('month', CURRENT_DATE - interval '1 month');
+    v_end_date := (v_start_date + interval '1 month') - interval '1 second';
+  ELSIF p_date_range = 'this-week' THEN
+    v_start_date := date_trunc('week', CURRENT_DATE);
+    v_end_date := v_start_date + interval '6 days 23:59:59';
+  ELSIF p_date_range = 'this-month' THEN
+    v_start_date := date_trunc('month', CURRENT_DATE);
+    v_end_date := (v_start_date + interval '1 month') - interval '1 second';
+  ELSIF p_date_range = 'custom' THEN
+    v_start_date := p_date_from;
+    v_end_date := p_date_to;
+  ELSE
+    v_start_date := NULL;
+    v_end_date := NULL;
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM job_applications ja
+  JOIN profiles p ON ja.profile_id = p.id
+  JOIN users b ON ja.bidder_id = b.id
+  WHERE 
+    -- Role-based filtering
+    ((p_user_role = 'admin') OR 
+     (p_user_role = 'manager' AND ja.profile_id = ANY(v_profile_ids)) OR 
+     (p_user_role = 'bidder' AND ja.bidder_id = p_user_id))
+    -- Additional filters
+    AND (p_profile_id IS NULL OR ja.profile_id = p_profile_id)
+    AND (p_bidder_id IS NULL OR ja.bidder_id = p_bidder_id)
+    AND (v_start_date IS NULL OR ja.created_at >= v_start_date)
+    AND (v_end_date IS NULL OR ja.created_at <= v_end_date);
+
+  RETURN v_count;
+END; $$;
+
+GRANT EXECUTE ON FUNCTION get_job_applications_with_filters(UUID, user_role, UUID, UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT, INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_job_applications_count(UUID, user_role, UUID, UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_all_bidders() TO authenticated;
 
 SELECT 'Comprehensive RPC functions created successfully!' as status; 
