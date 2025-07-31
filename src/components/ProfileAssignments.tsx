@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Users, Plus, X } from 'lucide-react';
-import { Profile, ProfileAssignment } from '../lib/supabase';
+import { ProfileAssignment } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import { useProfiles } from '../contexts/ProfilesContext';
 
 interface UserWithRole {
   id: string;
@@ -12,7 +13,7 @@ interface UserWithRole {
 
 const ProfileAssignments: React.FC = () => {
   const { user, role } = useUser();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const { profiles } = useProfiles();
   const [bidders, setBidders] = useState<UserWithRole[]>([]);
   const [assignments, setAssignments] = useState<ProfileAssignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,35 +21,7 @@ const ProfileAssignments: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [selectedBidder, setSelectedBidder] = useState<string>('');
 
-  const loadProfiles = useCallback(async () => {
-    try {
-      console.log('Loading profiles for assignments');
-      
-      // Ensure we have valid parameters before calling the RPC function
-      if (!user?.id || !role) {
-        console.log('User or role not loaded yet, skipping profile load');
-        setProfiles([]);
-        return;
-      }
-      
-      console.log('Calling get_profiles_with_details with params:', { p_user_id: user.id, p_user_role: role });
-      
-      const { data, error } = await supabase.rpc('get_profiles_with_details', {
-        p_user_id: user.id,
-        p_user_role: role
-      });
-      
-      if (error) {
-        console.error('Error loading profiles for assignments:', error);
-        throw error;
-      }
-      console.log('Loaded profiles for assignments:', data?.length || 0);
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error loading profiles for assignments:', error);
-      setProfiles([]);
-    }
-  }, [user, role]);
+
 
   const loadBidders = useCallback(async () => {
     try {
@@ -92,7 +65,6 @@ const ProfileAssignments: React.FC = () => {
     try {
       console.log('Loading profile assignments data for user:', user?.id, 'Role:', { role });
       await Promise.all([
-        loadProfiles(),
         loadBidders(),
         loadAssignments(),
       ]);
@@ -101,7 +73,7 @@ const ProfileAssignments: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, loadProfiles, loadBidders, loadAssignments, role]);
+  }, [user, loadBidders, loadAssignments, role]);
 
   useEffect(() => {
     if (user) {

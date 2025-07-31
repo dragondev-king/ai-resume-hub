@@ -1,64 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { User, Plus, Settings, Crown, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Profile, ProfileWithDetailsRPC } from '../lib/supabase';
+import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import ProfileForm from '../components/ProfileForm';
 import { toast } from 'react-hot-toast';
 import { useUser } from '../contexts/UserContext';
+import { useProfiles } from '../contexts/ProfilesContext';
 
 const ProfilesPage: React.FC = () => {
-  const { user, role } = useUser()
-  const [profiles, setProfiles] = useState<ProfileWithDetailsRPC[]>([]);
-  const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
+  const { role } = useUser()
+  const { profiles, loading, refreshProfiles } = useProfiles();
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
-
-  
-  const loadProfiles = useCallback(async (userID: string) => {
-    try {
-      setIsLoadingProfiles(true)
-      
-      // Ensure we have valid parameters before calling the RPC function
-      if (!user?.id || !role) {
-        console.log('User or role not loaded yet, skipping profile load');
-        setProfiles([]);
-        return;
-      }
-      
-      console.log('Calling get_profiles_with_details with params:', { p_user_id: user.id, p_user_role: role });
-      
-      const { data, error } = await supabase.rpc('get_profiles_with_details', {
-        p_user_id: user.id,
-        p_user_role: role
-      });
-
-      if (error) {
-        console.error('RPC function error:', error);
-        throw error;
-      }
-
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error loading profiles:', error);
-    } finally {
-      setIsLoadingProfiles(false)
-    }
-  }, [user, role]);
-
-  useEffect(() => {
-    if (user && user.id) {
-      loadProfiles(user.id);
-    }
-  }, [user, loadProfiles]);
 
 
   const handleProfileSave = () => {
     setShowProfileForm(false);
     setEditingProfile(null);
-    if (user && user.id) {
-      loadProfiles(user.id);
-    }
+    refreshProfiles();
     toast.success('Profile saved successfully!');
   };
 
@@ -75,9 +35,7 @@ const ProfilesPage: React.FC = () => {
         });
 
         if (error) throw error;
-        if (user && user.id) {
-          loadProfiles(user.id);
-        }
+        refreshProfiles();
         toast.success('Profile deleted successfully!');
       } catch (error) {
         console.error('Error deleting profile:', error);
@@ -86,7 +44,7 @@ const ProfilesPage: React.FC = () => {
     }
   };
 
-  if (isLoadingProfiles) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>

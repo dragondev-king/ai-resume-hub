@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Filter, Download, Eye } from 'lucide-react';
-import { JobApplicationWithDetails, Profile, Bidder } from '../lib/supabase';
+import { JobApplicationWithDetails, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import { useProfiles } from '../contexts/ProfilesContext';
 
 const JobApplications: React.FC = () => {
   const { user, role } = useUser();
+  const { profiles } = useProfiles();
   const [applications, setApplications] = useState<JobApplicationWithDetails[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [bidders, setBidders] = useState<Bidder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false);
@@ -51,35 +52,7 @@ const JobApplications: React.FC = () => {
     }
   }, [user, filters, role]);
 
-  const loadProfiles = useCallback(async () => {
-    try {
-      console.log('Loading profiles for applications page');
-      
-      // Ensure we have valid parameters before calling the RPC function
-      if (!user?.id || !role) {
-        console.log('User or role not loaded yet, skipping profile load');
-        setProfiles([]);
-        return;
-      }
-      
-      console.log('Calling get_profiles_with_details with params:', { p_user_id: user.id, p_user_role: role });
-      
-      const { data, error } = await supabase.rpc('get_profiles_with_details', {
-        p_user_id: user.id,
-        p_user_role: role
-      });
-      
-      if (error) {
-        console.error('Error loading profiles for applications:', error);
-        throw error;
-      }
-      console.log('Loaded profiles for applications:', data?.length || 0);
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error loading profiles for applications:', error);
-      setProfiles([]);
-    }
-  }, [user, role]);
+
 
   const loadBidders = useCallback(async () => {
     try {
@@ -104,16 +77,12 @@ const JobApplications: React.FC = () => {
   useEffect(() => {
     if (user) {
       loadApplications();
-      // Load profiles for admin, manager, and bidder roles
-      if (role === 'admin' || role === 'manager' || role === 'bidder') {
-        loadProfiles();
-      }
       // Load bidders for admin and manager roles
       if (role === 'admin' || role === 'manager') {
         loadBidders();
       }
     }
-  }, [user, filters, loadApplications, role, loadProfiles, loadBidders]);
+  }, [user, filters, loadApplications, role, loadBidders]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
