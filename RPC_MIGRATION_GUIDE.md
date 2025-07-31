@@ -15,7 +15,6 @@ This guide outlines the complete migration from direct Supabase queries to RPC f
 - `get_profiles_with_details()` - Get profiles with owner and assigned bidders
 - `upsert_profile()` - Create or update profile
 - `delete_profile()` - Delete profile
-- `get_profiles_for_resume_generation()` - Get profiles for resume generator
 
 ### 3. Profile Assignment Functions
 - `get_profile_assignments_with_details()` - Get assignments with profile and bidder details
@@ -186,11 +185,6 @@ const { data: profileId } = await supabase.rpc('upsert_profile', {
 
 **Migration Plan:**
 ```typescript
-// Replace profile loading
-const { data: profiles } = await supabase.rpc('get_profiles_for_resume_generation', {
-  p_user_id: user?.id,
-  p_user_role: role
-});
 
 // Replace job application creation
 const { data: applicationId } = await supabase.rpc('create_job_application', {

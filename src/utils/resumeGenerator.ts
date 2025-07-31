@@ -1,18 +1,8 @@
 import OpenAI from 'openai';
+import { ProfileWithDetailsRPC } from '../lib/supabase';
 
-interface Profile {
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string;
-  location?: string;
-  linkedin?: string;
-  portfolio?: string;
-  summary?: string;
-  experience: any[];
-  education: any[];
-  skills: string[];
-}
+// Using ProfileWithDetailsRPC type from supabase.ts
+type Profile = ProfileWithDetailsRPC;
 
 interface GeneratedResume {
   summary: string;
@@ -21,7 +11,6 @@ interface GeneratedResume {
     company: string;
     start_date: string;
     end_date: string;
-    location?: string;
     descriptions: string[]; // Array of bullet points
   }[];
   skills: string[];
@@ -70,7 +59,6 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
-        location: exp.location,
         descriptions: exp.description ? [exp.description] : []
       })),
       skills: profile.skills,
@@ -97,7 +85,7 @@ ${profile.experience.map(exp => `
 
 EDUCATION:
 ${profile.education.map(edu => `
-- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
+- ${edu.degree} in ${edu.field} from ${edu.institution} (${edu.start_date} - ${edu.end_date})
 `).join('\n')}
 
 CURRENT SKILLS:
@@ -163,7 +151,6 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
-        location: exp.location,
         descriptions: exp.description ? [exp.description] : []
       })),
       skills: parsed.skills || originalProfile.skills,
@@ -200,7 +187,6 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
-        location: exp.location,
         descriptions: exp.description ? [exp.description] : []
       })),
       skills: originalProfile.skills,

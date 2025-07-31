@@ -5,21 +5,7 @@ import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
 import { generateDocx } from '../utils/docxGenerator';
 import { useUser } from '../contexts/UserContext';
-
-interface Profile {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string;
-  location?: string;
-  linkedin?: string;
-  portfolio?: string;
-  summary?: string;
-  experience: any[];
-  education: any[];
-  skills: string[];
-}
+import { useProfiles } from '../contexts/ProfilesContext';
 
 interface EditableResume {
   summary: string;
@@ -28,7 +14,7 @@ interface EditableResume {
 }
 
 const ResumeGenerator: React.FC = () => {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const { profiles, loading: profilesLoading } = useProfiles();
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
@@ -41,37 +27,12 @@ const ResumeGenerator: React.FC = () => {
   const [newSkill, setNewSkill] = useState('');
   const { user, role } = useUser();
 
-  const loadProfiles = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase.rpc('get_profiles_for_resume_generation', {
-        p_user_id: userId,
-        p_user_role: role
-      });
-
-      if (error) {
-        console.error('Error loading profiles:', error);
-        toast.error('Failed to load profiles');
-        return;
-      }
-
-      const profilesData = data || [];
-      setProfiles(profilesData);
-
-      // Auto-select profile if there's only one
-      if (profilesData.length === 1) {
-        setSelectedProfile(profilesData[0].id);
-      }
-    } catch (error) {
-      console.error('Error loading profiles:', error);
-      toast.error('Failed to load profiles');
-    }
-  }, [role]);
-
+  // Auto-select profile if there's only one
   useEffect(() => {
-    if (user) {
-      loadProfiles(user?.id);
+    if (profiles.length === 1 && !selectedProfile) {
+      setSelectedProfile(profiles[0].id);
     }
-  }, [loadProfiles, user]);
+  }, [profiles, selectedProfile]);
 
   const handleGenerate = async () => {
     if (!selectedProfile || !jobDescription) {
@@ -234,6 +195,14 @@ const ResumeGenerator: React.FC = () => {
 
   const currentResume = isEditing ? editingResume : generatedResume;
 
+  if (profilesLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -269,7 +238,7 @@ const ResumeGenerator: React.FC = () => {
             </select>
             {profiles.length === 0 && (
               <p className="text-sm text-gray-500 mt-2">
-                {role === 'bidder' 
+                {role === 'bidder'
                   ? 'No profiles have been assigned to you yet. Contact your manager.'
                   : 'No profiles available. Create a profile first.'
                 }
@@ -479,88 +448,88 @@ const ResumeGenerator: React.FC = () => {
               <div className="space-y-3">
                 {currentResume.experience.map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
-                                         {isEditing ? (
-                       <div className="space-y-2">
-                         <div className="grid grid-cols-2 gap-2">
-                           <input
-                             type="text"
-                             value={exp.position || ''}
-                             onChange={(e) => handleUpdateExperience(index, 'position', e.target.value)}
-                             className="px-2 py-1 border border-gray-300 rounded text-sm"
-                             placeholder="Position"
-                           />
-                           <input
-                             type="text"
-                             value={exp.company || ''}
-                             onChange={(e) => handleUpdateExperience(index, 'company', e.target.value)}
-                             className="px-2 py-1 border border-gray-300 rounded text-sm"
-                             placeholder="Company"
-                           />
-                         </div>
-                         <div className="grid grid-cols-2 gap-2">
-                           <input
-                             type="text"
-                             value={exp.start_date || ''}
-                             onChange={(e) => handleUpdateExperience(index, 'start_date', e.target.value)}
-                             className="px-2 py-1 border border-gray-300 rounded text-sm"
-                             placeholder="Start Date"
-                           />
-                           <input
-                             type="text"
-                             value={exp.end_date || ''}
-                             onChange={(e) => handleUpdateExperience(index, 'end_date', e.target.value)}
-                             className="px-2 py-1 border border-gray-300 rounded text-sm"
-                             placeholder="End Date"
-                           />
-                         </div>
-                         
-                         {/* Bullet Points */}
-                         <div className="space-y-2">
-                           <div className="flex items-center justify-between">
-                             <label className="text-sm font-medium text-gray-700">Bullet Points:</label>
-                             <button
-                               type="button"
-                               onClick={() => handleAddExperienceDescription(index)}
-                               className="text-sm text-primary-600 hover:text-primary-700"
-                             >
-                               + Add Bullet Point
-                             </button>
-                           </div>
-                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
-                             <div key={descIndex} className="flex items-center space-x-2">
-                               <span className="text-primary-600 text-sm">•</span>
-                               <input
-                                 type="text"
-                                 value={desc}
-                                 onChange={(e) => handleUpdateExperienceDescription(index, descIndex, e.target.value)}
-                                 className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                                 placeholder="Enter bullet point description..."
-                               />
-                               <button
-                                 type="button"
-                                 onClick={() => handleRemoveExperienceDescription(index, descIndex)}
-                                 className="text-red-600 hover:text-red-700"
-                               >
-                                 <X className="w-3 h-3" />
-                               </button>
-                             </div>
-                           ))}
-                         </div>
-                       </div>
-                                          ) : (
-                       <>
-                         <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
-                         <div className="text-sm text-gray-600">{exp.start_date} - {exp.end_date}</div>
-                         <div className="text-gray-700 mt-2 space-y-1">
-                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
-                             <div key={descIndex} className="flex items-start">
-                               <span className="text-primary-600 mr-2 mt-1">•</span>
-                               <span>{desc}</span>
-                             </div>
-                           ))}
-                         </div>
-                       </>
-                     )}
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={exp.position || ''}
+                            onChange={(e) => handleUpdateExperience(index, 'position', e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Position"
+                          />
+                          <input
+                            type="text"
+                            value={exp.company || ''}
+                            onChange={(e) => handleUpdateExperience(index, 'company', e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Company"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={exp.start_date || ''}
+                            onChange={(e) => handleUpdateExperience(index, 'start_date', e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Start Date"
+                          />
+                          <input
+                            type="text"
+                            value={exp.end_date || ''}
+                            onChange={(e) => handleUpdateExperience(index, 'end_date', e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="End Date"
+                          />
+                        </div>
+
+                        {/* Bullet Points */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-gray-700">Bullet Points:</label>
+                            <button
+                              type="button"
+                              onClick={() => handleAddExperienceDescription(index)}
+                              className="text-sm text-primary-600 hover:text-primary-700"
+                            >
+                              + Add Bullet Point
+                            </button>
+                          </div>
+                          {(exp.descriptions || []).map((desc: string, descIndex: number) => (
+                            <div key={descIndex} className="flex items-center space-x-2">
+                              <span className="text-primary-600 text-sm">•</span>
+                              <input
+                                type="text"
+                                value={desc}
+                                onChange={(e) => handleUpdateExperienceDescription(index, descIndex, e.target.value)}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="Enter bullet point description..."
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveExperienceDescription(index, descIndex)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
+                        <div className="text-sm text-gray-600">{exp.start_date} - {exp.end_date}</div>
+                        <div className="text-gray-700 mt-2 space-y-1">
+                          {(exp.descriptions || []).map((desc: string, descIndex: number) => (
+                            <div key={descIndex} className="flex items-start">
+                              <span className="text-primary-600 mr-2 mt-1">•</span>
+                              <span>{desc}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

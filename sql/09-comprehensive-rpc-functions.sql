@@ -120,25 +120,6 @@ CREATE OR REPLACE FUNCTION delete_profile_assignment(p_assignment_id UUID) RETUR
 BEGIN DELETE FROM profile_assignments WHERE id = p_assignment_id; RETURN FOUND; END; $$;
 
 -- RESUME GENERATOR FUNCTIONS
-CREATE OR REPLACE FUNCTION get_profiles_for_resume_generation(p_user_id UUID, p_user_role user_role)
-RETURNS TABLE (
-  id UUID, first_name TEXT, last_name TEXT, email TEXT, phone TEXT, location TEXT,
-  linkedin TEXT, portfolio TEXT, summary TEXT, experience JSONB, education JSONB, skills TEXT[]
-) LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_profile_ids UUID[];
-BEGIN
-  IF p_user_role = 'manager' THEN
-    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
-  ELSIF p_user_role = 'bidder' THEN
-    SELECT ARRAY_AGG(pa.profile_id) INTO v_profile_ids FROM profile_assignments pa WHERE pa.bidder_id = p_user_id;
-  END IF;
-
-  RETURN QUERY SELECT p.id, p.first_name, p.last_name, p.email, p.phone, p.location, p.linkedin, p.portfolio, p.summary, p.experience, p.education, p.skills
-  FROM profiles p
-  WHERE (p_user_role = 'admin') OR (p_user_role = 'manager' AND p.user_id = p_user_id) OR (p_user_role = 'bidder' AND p.id = ANY(v_profile_ids))
-  ORDER BY p.first_name, p.last_name;
-END; $$;
-
 CREATE OR REPLACE FUNCTION create_job_application(p_profile_id UUID, p_bidder_id UUID, p_job_title TEXT, p_job_description TEXT, p_company_name TEXT DEFAULT NULL, p_job_description_link TEXT DEFAULT NULL, p_resume_file_name TEXT DEFAULT NULL, p_generated_summary TEXT DEFAULT NULL, p_generated_experience JSONB DEFAULT NULL, p_generated_skills TEXT[] DEFAULT NULL)
 RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_application_id UUID;

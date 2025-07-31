@@ -1,5 +1,6 @@
 import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
 import { saveAs } from 'file-saver';
+import { ProfileWithDetailsRPC } from '../lib/supabase';
 
 interface GeneratedResume {
   summary: string;
@@ -7,18 +8,7 @@ interface GeneratedResume {
   skills: string[];
 }
 
-interface Profile {
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string;
-  location?: string;
-  linkedin?: string;
-  portfolio?: string;
-  experience: any[];
-  education: any[];
-  skills: string[];
-}
+type Profile = ProfileWithDetailsRPC;
 
 export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile): Promise<void> => {
   const doc = new Document({
