@@ -32,11 +32,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { data: { session } } = await supabase.auth.getSession()
 
     if (session) {
-      setIsAuthenticated(true)
       setSession(session)
+      setIsAuthenticated(true)
     } else {
-      setIsAuthenticated(false)
       setSession(null)
+      setIsAuthenticated(false)
     }
   }, [])
 
@@ -50,11 +50,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       password,
     });
     if (error) throw error;
+    getSession()
   };
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    getSession()
   };
 
   const value = {

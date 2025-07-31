@@ -54,8 +54,18 @@ const JobApplications: React.FC = () => {
   const loadProfiles = useCallback(async () => {
     try {
       console.log('Loading profiles for applications page');
+      
+      // Ensure we have valid parameters before calling the RPC function
+      if (!user?.id || !role) {
+        console.log('User or role not loaded yet, skipping profile load');
+        setProfiles([]);
+        return;
+      }
+      
+      console.log('Calling get_profiles_with_details with params:', { p_user_id: user.id, p_user_role: role });
+      
       const { data, error } = await supabase.rpc('get_profiles_with_details', {
-        p_user_id: user?.id || '',
+        p_user_id: user.id,
         p_user_role: role
       });
       

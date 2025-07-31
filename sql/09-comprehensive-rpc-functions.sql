@@ -46,9 +46,9 @@ RETURNS TABLE (
 DECLARE v_profile_ids UUID[];
 BEGIN
   IF p_user_role = 'manager' THEN
-    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
   ELSIF p_user_role = 'bidder' THEN
-    SELECT ARRAY_AGG(profile_id) INTO v_profile_ids FROM profile_assignments WHERE bidder_id = p_user_id;
+    SELECT ARRAY_AGG(pa.profile_id) INTO v_profile_ids FROM profile_assignments pa WHERE pa.bidder_id = p_user_id;
   END IF;
 
   RETURN QUERY SELECT 
@@ -56,8 +56,8 @@ BEGIN
     p.linkedin, p.portfolio, p.summary, p.experience, p.education, p.skills,
     p.created_at, p.updated_at, u.id as owner_id, u.email as owner_email,
     u.first_name as owner_first_name, u.last_name as owner_last_name, u.role as owner_role,
-    COALESCE((SELECT json_agg(json_build_object('id', bidder.id, 'email', bidder.email, 'first_name', bidder.first_name, 'last_name', bidder.last_name))
-      FROM profile_assignments pa JOIN users bidder ON pa.bidder_id = bidder.id WHERE pa.profile_id = p.id), '[]'::json) as assigned_bidders
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('id', u_bidder.id, 'email', u_bidder.email, 'first_name', u_bidder.first_name, 'last_name', u_bidder.last_name))
+      FROM profile_assignments pa JOIN users u_bidder ON pa.bidder_id = u_bidder.id WHERE pa.profile_id = p.id), '[]'::jsonb) as assigned_bidders
   FROM profiles p LEFT JOIN users u ON p.user_id = u.id
   WHERE (p_user_role = 'admin') OR (p_user_role = 'manager' AND p.user_id = p_user_id) OR (p_user_role = 'bidder' AND p.id = ANY(v_profile_ids))
   ORDER BY p.created_at DESC;
@@ -92,7 +92,7 @@ RETURNS TABLE (
 DECLARE v_profile_ids UUID[];
 BEGIN
   IF p_user_role = 'manager' THEN
-    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
   END IF;
 
   RETURN QUERY SELECT 
@@ -128,9 +128,9 @@ RETURNS TABLE (
 DECLARE v_profile_ids UUID[];
 BEGIN
   IF p_user_role = 'manager' THEN
-    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
   ELSIF p_user_role = 'bidder' THEN
-    SELECT ARRAY_AGG(profile_id) INTO v_profile_ids FROM profile_assignments WHERE bidder_id = p_user_id;
+    SELECT ARRAY_AGG(pa.profile_id) INTO v_profile_ids FROM profile_assignments pa WHERE pa.bidder_id = p_user_id;
   END IF;
 
   RETURN QUERY SELECT p.id, p.first_name, p.last_name, p.email, p.phone, p.location, p.linkedin, p.portfolio, p.summary, p.experience, p.education, p.skills
@@ -173,7 +173,7 @@ DECLARE v_end_date TIMESTAMP WITH TIME ZONE;
 BEGIN
   -- Get profile IDs for role-based filtering
   IF p_user_role = 'manager' THEN
-    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
   ELSIF p_user_role = 'bidder' THEN
     -- For bidders, we'll filter by bidder_id in the main query
     v_profile_ids := NULL;
@@ -198,7 +198,7 @@ BEGIN
     ja.id, ja.profile_id, ja.bidder_id, ja.job_title, ja.company_name,
     ja.job_description, ja.job_description_link, ja.resume_file_name,
     ja.generated_summary, ja.generated_experience, ja.generated_skills,
-    ja.created_at, ja.updated_at,
+    ja.created_at, ja.created_at as updated_at,
     p.first_name as profile_first_name, p.last_name as profile_last_name, p.email as profile_email,
     b.first_name as bidder_first_name, b.last_name as bidder_last_name, b.email as bidder_email
   FROM job_applications ja
@@ -228,7 +228,7 @@ BEGIN
   -- For managers, get bidders assigned to their profiles
   IF p_user_role = 'manager' THEN
     -- Get manager's profile IDs
-    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+    SELECT ARRAY_AGG(p.id) INTO v_profile_ids FROM profiles p WHERE p.user_id = p_user_id;
     
     IF v_profile_ids IS NOT NULL AND array_length(v_profile_ids, 1) > 0 THEN
       -- Get bidder IDs assigned to manager's profiles

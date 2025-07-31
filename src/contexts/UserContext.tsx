@@ -26,8 +26,8 @@ const UserProvider: React.FC<UserContextProps> = ({ children }) => {
 
   const getUser = useCallback(async (userID: string) => {
     if (!userID) return
-          const { data, error } = await supabase.rpc('get_user_by_id', { p_user_id: userID })
-    setUser(data)
+    const { data, error } = await supabase.rpc('get_user_by_id', { p_user_id: userID })
+    setUser(data?.[0])
 
     if (error) {
       console.error('Error fetching user:', error)

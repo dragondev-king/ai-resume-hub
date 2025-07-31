@@ -13,17 +13,30 @@ const ProfilesPage: React.FC = () => {
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
+
   
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (userID: string) => {
     try {
       setIsLoadingProfiles(true)
       
+      // Ensure we have valid parameters before calling the RPC function
+      if (!user?.id || !role) {
+        console.log('User or role not loaded yet, skipping profile load');
+        setProfiles([]);
+        return;
+      }
+      
+      console.log('Calling get_profiles_with_details with params:', { p_user_id: user.id, p_user_role: role });
+      
       const { data, error } = await supabase.rpc('get_profiles_with_details', {
-        p_user_id: user?.id,
+        p_user_id: user.id,
         p_user_role: role
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('RPC function error:', error);
+        throw error;
+      }
 
       setProfiles(data || []);
     } catch (error) {
@@ -34,8 +47,8 @@ const ProfilesPage: React.FC = () => {
   }, [user, role]);
 
   useEffect(() => {
-    if (user) {
-      loadProfiles();
+    if (user && user.id) {
+      loadProfiles(user.id);
     }
   }, [user, loadProfiles]);
 
@@ -43,7 +56,9 @@ const ProfilesPage: React.FC = () => {
   const handleProfileSave = () => {
     setShowProfileForm(false);
     setEditingProfile(null);
-    loadProfiles();
+    if (user && user.id) {
+      loadProfiles(user.id);
+    }
     toast.success('Profile saved successfully!');
   };
 
@@ -60,7 +75,9 @@ const ProfilesPage: React.FC = () => {
         });
 
         if (error) throw error;
-        loadProfiles();
+        if (user && user.id) {
+          loadProfiles(user.id);
+        }
         toast.success('Profile deleted successfully!');
       } catch (error) {
         console.error('Error deleting profile:', error);
