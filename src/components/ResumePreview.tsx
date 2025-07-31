@@ -53,6 +53,11 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ data }) => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {data.first_name} {data.last_name}
           </h1>
+          {data.title && (
+            <h2 className="text-xl text-gray-600 mb-4">
+              {data.title}
+            </h2>
+          )}
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
             <div className="flex items-center space-x-1">
               <Mail className="w-4 h-4" />

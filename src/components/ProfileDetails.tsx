@@ -41,6 +41,14 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAss
                     {profile.first_name} {profile.last_name}
                   </p>
                 </div>
+                {profile.title && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Professional Title</label>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {profile.title}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Email</label>
                   <div className="flex items-center mt-1">

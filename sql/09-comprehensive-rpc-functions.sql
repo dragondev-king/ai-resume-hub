@@ -37,7 +37,7 @@ END; $$;
 -- PROFILE MANAGEMENT FUNCTIONS
 CREATE OR REPLACE FUNCTION get_profiles_with_details(p_user_id UUID, p_user_role user_role)
 RETURNS TABLE (
-  id UUID, user_id UUID, first_name TEXT, last_name TEXT, email TEXT, phone TEXT, location TEXT,
+  id UUID, user_id UUID, first_name TEXT, last_name TEXT, title TEXT, email TEXT, phone TEXT, location TEXT,
   linkedin TEXT, portfolio TEXT, summary TEXT, experience JSONB, education JSONB, skills TEXT[],
   created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE,
   owner_id UUID, owner_email TEXT, owner_first_name TEXT, owner_last_name TEXT, owner_role user_role,
@@ -52,7 +52,7 @@ BEGIN
   END IF;
 
   RETURN QUERY SELECT 
-    p.id, p.user_id, p.first_name, p.last_name, p.email, p.phone, p.location,
+    p.id, p.user_id, p.first_name, p.last_name, p.title, p.email, p.phone, p.location,
     p.linkedin, p.portfolio, p.summary, p.experience, p.education, p.skills,
     p.created_at, p.updated_at, u.id as owner_id, u.email as owner_email,
     u.first_name as owner_first_name, u.last_name as owner_last_name, u.role as owner_role,
@@ -63,16 +63,16 @@ BEGIN
   ORDER BY p.created_at DESC;
 END; $$;
 
-CREATE OR REPLACE FUNCTION upsert_profile(p_user_id UUID, p_first_name TEXT, p_last_name TEXT, p_email TEXT, p_phone TEXT, p_location TEXT, p_profile_id UUID DEFAULT NULL, p_linkedin TEXT DEFAULT NULL, p_portfolio TEXT DEFAULT NULL, p_summary TEXT DEFAULT NULL, p_experience JSONB DEFAULT NULL, p_education JSONB DEFAULT NULL, p_skills TEXT[] DEFAULT NULL)
+CREATE OR REPLACE FUNCTION upsert_profile(p_user_id UUID, p_first_name TEXT, p_last_name TEXT, p_email TEXT, p_phone TEXT, p_location TEXT, p_title TEXT DEFAULT NULL, p_profile_id UUID DEFAULT NULL, p_linkedin TEXT DEFAULT NULL, p_portfolio TEXT DEFAULT NULL, p_summary TEXT DEFAULT NULL, p_experience JSONB DEFAULT NULL, p_education JSONB DEFAULT NULL, p_skills TEXT[] DEFAULT NULL)
 RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_profile_id UUID;
 BEGIN
   IF p_profile_id IS NULL THEN
-    INSERT INTO profiles (user_id, first_name, last_name, email, phone, location, linkedin, portfolio, summary, experience, education, skills)
-    VALUES (p_user_id, p_first_name, p_last_name, p_email, p_phone, p_location, p_linkedin, p_portfolio, p_summary, p_experience, p_education, p_skills)
+    INSERT INTO profiles (user_id, first_name, last_name, title, email, phone, location, linkedin, portfolio, summary, experience, education, skills)
+    VALUES (p_user_id, p_first_name, p_last_name, p_title, p_email, p_phone, p_location, p_linkedin, p_portfolio, p_summary, p_experience, p_education, p_skills)
     RETURNING id INTO v_profile_id;
   ELSE
-    UPDATE profiles SET first_name = p_first_name, last_name = p_last_name, email = p_email, phone = p_phone, location = p_location, linkedin = p_linkedin, portfolio = p_portfolio, summary = p_summary, experience = p_experience, education = p_education, skills = p_skills, updated_at = NOW() WHERE id = p_profile_id;
+    UPDATE profiles SET first_name = p_first_name, last_name = p_last_name, title = p_title, email = p_email, phone = p_phone, location = p_location, linkedin = p_linkedin, portfolio = p_portfolio, summary = p_summary, experience = p_experience, education = p_education, skills = p_skills, updated_at = NOW() WHERE id = p_profile_id;
     v_profile_id := p_profile_id;
   END IF;
   RETURN v_profile_id;
@@ -85,7 +85,7 @@ BEGIN DELETE FROM profiles WHERE id = p_profile_id; RETURN FOUND; END; $$;
 CREATE OR REPLACE FUNCTION get_profile_assignments_with_details(p_user_id UUID, p_user_role user_role)
 RETURNS TABLE (
   id UUID, profile_id UUID, bidder_id UUID, assigned_by UUID, created_at TIMESTAMP WITH TIME ZONE,
-  profile_first_name TEXT, profile_last_name TEXT, profile_email TEXT,
+  profile_first_name TEXT, profile_last_name TEXT, profile_email TEXT, profile_title TEXT,
   bidder_first_name TEXT, bidder_last_name TEXT, bidder_email TEXT,
   assigned_by_first_name TEXT, assigned_by_last_name TEXT
 ) LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -97,7 +97,7 @@ BEGIN
 
   RETURN QUERY SELECT 
     pa.id, pa.profile_id, pa.bidder_id, pa.assigned_by, pa.created_at,
-    p.first_name as profile_first_name, p.last_name as profile_last_name, p.email as profile_email,
+    p.first_name as profile_first_name, p.last_name as profile_last_name, p.email as profile_email, p.title as profile_title,
     b.first_name as bidder_first_name, b.last_name as bidder_last_name, b.email as bidder_email,
     ab.first_name as assigned_by_first_name, ab.last_name as assigned_by_last_name
   FROM profile_assignments pa
@@ -251,12 +251,11 @@ GRANT EXECUTE ON FUNCTION update_user_details(UUID, TEXT, TEXT, TEXT, TEXT, user
 GRANT EXECUTE ON FUNCTION update_user_role(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_user_by_id(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_profiles_with_details(UUID, user_role) TO authenticated;
-GRANT EXECUTE ON FUNCTION upsert_profile(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, TEXT, TEXT, JSONB, JSONB, TEXT[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION upsert_profile(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, TEXT, TEXT, JSONB, JSONB, TEXT[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION delete_profile(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_profile_assignments_with_details(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION create_profile_assignment(UUID, UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION delete_profile_assignment(UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION get_profiles_for_resume_generation(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION create_job_application(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_bidders_for_applications(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_job_applications_with_filters(UUID, user_role, UUID, UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT) TO authenticated;

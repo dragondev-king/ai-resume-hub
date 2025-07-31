@@ -177,6 +177,9 @@ const ProfilesPage: React.FC = () => {
                   <h3 className="text-lg font-semibold text-gray-900">
                     {profile.first_name} {profile.last_name}
                   </h3>
+                  {profile.title && (
+                    <p className="text-sm text-primary-600 font-medium">{profile.title}</p>
+                  )}
                   <p className="text-sm text-gray-600">{profile.email}</p>
                   <p className="text-sm text-gray-500">{profile.location}</p>
                 </div>

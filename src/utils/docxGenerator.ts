@@ -77,6 +77,7 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
 
 const createHeader = (profile?: Profile): Paragraph => {
   const name = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
+  const title = profile?.title;
   
   return new Paragraph({
     children: [
@@ -87,6 +88,18 @@ const createHeader = (profile?: Profile): Paragraph => {
         color: '1F2937',
         font: 'Calibri',
       }),
+      ...(title ? [
+        new TextRun({
+          text: '\n',
+          size: 36,
+        }),
+        new TextRun({
+          text: title,
+          size: 24,
+          color: '4B5563',
+          font: 'Calibri',
+        }),
+      ] : []),
     ],
     alignment: AlignmentType.CENTER,
     spacing: {

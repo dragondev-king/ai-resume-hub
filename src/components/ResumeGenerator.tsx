@@ -232,7 +232,7 @@ const ResumeGenerator: React.FC = () => {
               <option value="">Choose a profile...</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
-                  {profile.first_name} {profile.last_name} - {profile.email}
+                  {profile.first_name} {profile.last_name} {profile.title ? `(${profile.title})` : ''} - {profile.email}
                 </option>
               ))}
             </select>

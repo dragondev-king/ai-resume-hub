@@ -26,6 +26,7 @@ export interface Profile {
   user_id: string;
   first_name: string;
   last_name: string;
+  title?: string;
   email: string;
   phone: string;
   location: string;
@@ -167,6 +168,7 @@ export interface ProfileWithDetailsRPC {
   user_id: string;
   first_name: string;
   last_name: string;
+  title?: string;
   email: string;
   phone: string;
   location: string;
@@ -195,6 +197,7 @@ export interface ProfileForResumeRPC {
   id: string;
   first_name: string;
   last_name: string;
+  title?: string;
   email: string;
   phone: string;
   location: string;

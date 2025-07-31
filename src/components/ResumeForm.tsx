@@ -26,6 +26,7 @@ const ResumeForm: React.FC<ResumeFormProps> = ({ onSave }) => {
     defaultValues: {
       first_name: '',
       last_name: '',
+      title: '',
       email: '',
       phone: '',
       location: '',
@@ -74,6 +75,7 @@ const ResumeForm: React.FC<ResumeFormProps> = ({ onSave }) => {
         p_user_id: user.id,
         p_first_name: data.first_name,
         p_last_name: data.last_name,
+        p_title: data.title,
         p_email: data.email,
         p_phone: data.phone,
         p_location: data.location,
@@ -132,7 +134,7 @@ const ResumeForm: React.FC<ResumeFormProps> = ({ onSave }) => {
               {/* Personal Information */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -164,10 +166,21 @@ const ResumeForm: React.FC<ResumeFormProps> = ({ onSave }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Professional Title
+                  </label>
+                  <input
+                    {...register('title')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Full Stack Developer, AI Engineer, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Email *
                   </label>
                   <input
-                    {...register('email', { 
+                    {...register('email', {
                       required: 'Email is required',
                       pattern: {
                         value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
@@ -425,7 +438,7 @@ const ResumeForm: React.FC<ResumeFormProps> = ({ onSave }) => {
               {/* Skills */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900">Skills</h3>
-                
+
                 <div className="flex space-x-2">
                   <input
                     type="text"

@@ -22,6 +22,7 @@ CREATE TABLE profiles (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
+  title TEXT,
   email TEXT NOT NULL,
   phone TEXT,
   location TEXT,

@@ -9,6 +9,7 @@ import { useUser } from '../contexts/UserContext';
 interface ProfileFormData {
   first_name: string;
   last_name: string;
+  title?: string;
   email: string;
   phone: string;
   location: string;
@@ -54,6 +55,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
     defaultValues: {
       first_name: profile?.first_name || '',
       last_name: profile?.last_name || '',
+      title: profile?.title || '',
       email: profile?.email || '',
       phone: profile?.phone || '',
       location: profile?.location || '',
@@ -102,12 +104,12 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
 
   const onSubmit = async (data: ProfileFormData) => {
     if (!user) return;
-    
+
     if (role === 'bidder') {
       toast.error('Bidders cannot create or edit profiles');
       return;
     }
-    
+
     setIsSaving(true);
     try {
       const skills = skillFields.map(field => field.value).filter(skill => skill.trim());
@@ -117,6 +119,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         p_user_id: user.id,
         p_first_name: data.first_name,
         p_last_name: data.last_name,
+        p_title: data.title,
         p_email: data.email,
         p_phone: data.phone,
         p_location: data.location,
@@ -128,7 +131,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         p_education: data.education,
         p_skills: skills,
       });
-      
+
       if (error) throw error;
       toast.success(profile ? 'Profile updated successfully!' : 'Profile created successfully!');
 
@@ -188,6 +191,17 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             )}
           </div>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Professional Title
+          </label>
+          <input
+            type="text"
+            {...register('title')}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            placeholder="Full Stack Developer, AI Engineer, etc."
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -195,7 +209,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             </label>
             <input
               type="email"
-              {...register('email', { 
+              {...register('email', {
                 required: 'Email is required',
                 pattern: {
                   value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
