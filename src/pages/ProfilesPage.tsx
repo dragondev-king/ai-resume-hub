@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { User, Plus, Settings, Crown, Users } from 'lucide-react';
+import { User, Plus, Settings, Crown, Users, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Profile } from '../lib/supabase';
+import { Profile, ProfileWithDetailsRPC } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import ProfileForm from '../components/ProfileForm';
+import ProfileDetails from '../components/ProfileDetails';
 import { toast } from 'react-hot-toast';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -13,6 +14,8 @@ const ProfilesPage: React.FC = () => {
   const { profiles, loading, refreshProfiles } = useProfiles();
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState<ProfileWithDetailsRPC | null>(null);
+  const [showProfileDetails, setShowProfileDetails] = useState(false);
 
 
   const handleProfileSave = () => {
@@ -25,6 +28,11 @@ const ProfilesPage: React.FC = () => {
   const handleEditProfile = (profile: Profile) => {
     setEditingProfile(profile);
     setShowProfileForm(true);
+  };
+
+  const handleViewProfile = (profile: ProfileWithDetailsRPC) => {
+    setViewingProfile(profile);
+    setShowProfileDetails(true);
   };
 
   const handleDeleteProfile = async (profileId: string) => {
@@ -102,6 +110,17 @@ const ProfilesPage: React.FC = () => {
         </div>
       )}
 
+      {/* Profile Details Modal */}
+      {showProfileDetails && viewingProfile && (
+        <ProfileDetails
+          profile={viewingProfile}
+          onClose={() => {
+            setShowProfileDetails(false);
+            setViewingProfile(null);
+          }}
+        />
+      )}
+
       {/* Profiles List */}
       {profiles.length === 0 ? (
         <div className="text-center py-12">
@@ -135,16 +154,24 @@ const ProfilesPage: React.FC = () => {
                   <p className="text-sm text-gray-600">{profile.email}</p>
                   <p className="text-sm text-gray-500">{profile.location}</p>
                 </div>
-                {role !== 'bidder' && (
-                  <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleViewProfile(profile)}
+                    className="text-gray-400 hover:text-gray-600"
+                    title="View Details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  {role !== 'bidder' && (
                     <button
                       onClick={() => handleEditProfile(profile)}
                       className="text-gray-400 hover:text-gray-600"
+                      title="Edit Profile"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Profile Owner */}
