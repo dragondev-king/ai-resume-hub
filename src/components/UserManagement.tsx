@@ -1,26 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { User, Plus, Edit, Trash2, Shield, Users, Crown } from 'lucide-react';
-import { UserRole } from '../lib/supabase';
+import { UserRole, UserRPC } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
-interface UserData {
-  id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  phone?: string;
-  role: UserRole;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<UserData[]>([]);
+  const [users, setUsers] = useState<UserRPC[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserData | null>(null);
+  const [editingUser, setEditingUser] = useState<UserRPC | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -36,13 +24,9 @@ const UserManagement: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      console.log('Loading users from public.users table');
+      console.log('Loading users using RPC function');
       
-      // Query users table directly
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc('get_all_users');
 
       if (error) {
         console.error('Error loading users:', error);
@@ -94,10 +78,10 @@ const UserManagement: React.FC = () => {
         }
       } else {
         // Update the user's role in public.users table
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ role: formData.role })
-          .eq('id', authData.user.id);
+        const { error: updateError } = await supabase.rpc('update_user_role', {
+          p_user_id: authData.user.id,
+          p_role: formData.role
+        });
 
         if (updateError) {
           console.error('Error updating user role:', updateError);
@@ -122,25 +106,26 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Update user in public.users table
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          email: formData.email,
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          phone: formData.phone,
-          role: formData.role,
-        })
-        .eq('id', editingUser.id);
+      const { data, error } = await supabase.rpc('update_user_details', {
+        p_user_id: editingUser.id,
+        p_email: formData.email,
+        p_first_name: formData.first_name,
+        p_last_name: formData.last_name,
+        p_phone: formData.phone,
+        p_role: formData.role
+      });
 
-      if (updateError) throw updateError;
+      if (error) throw error;
 
-      toast.success('User updated successfully');
-      setShowUserModal(false);
-      setEditingUser(null);
-      setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
-      loadUsers();
+      if (data) {
+        toast.success('User updated successfully');
+        setShowUserModal(false);
+        setEditingUser(null);
+        setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
+        loadUsers();
+      } else {
+        toast.error('User not found');
+      }
     } catch (error: any) {
       console.error('Error updating user:', error);
       toast.error(error.message || 'Failed to update user');
@@ -179,7 +164,7 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const openEditModal = (user: UserData) => {
+  const openEditModal = (user: UserRPC) => {
     setEditingUser(user);
     setFormData({
       email: user.email,

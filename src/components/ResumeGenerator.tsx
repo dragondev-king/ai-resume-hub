@@ -43,27 +43,10 @@ const ResumeGenerator: React.FC = () => {
 
   const loadProfiles = useCallback(async (userId: string) => {
     try {
-      let query = supabase.from('profiles').select('*');
-
-      // If user is a bidder, only show assigned profiles
-      if (role === 'bidder') {
-        query = supabase
-          .from('profiles')
-          .select(`
-            *,
-            profile_assignments!inner(bidder_id)
-          `)
-          .eq('profile_assignments.bidder_id', userId);
-      }
-
-      if (role === "manager") {
-        query = supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', userId);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc('get_profiles_for_resume_generation', {
+        p_user_id: userId,
+        p_user_role: role
+      });
 
       if (error) {
         console.error('Error loading profiles:', error);
@@ -222,18 +205,18 @@ const ResumeGenerator: React.FC = () => {
     try {
       // Save job application record
       if (user) {
-        const { error: saveError } = await supabase.from('job_applications').insert([{
-          profile_id: selectedProfile,
-          bidder_id: user.id,
-          job_title: jobTitle || 'Not specified',
-          company_name: companyName || 'Not specified',
-          job_description: jobDescription,
-          job_description_link: jobDescriptionLink,
-          resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`,
-          generated_summary: generatedResume.summary,
-          generated_experience: generatedResume.experience,
-          generated_skills: generatedResume.skills,
-        }]);
+        const { error: saveError } = await supabase.rpc('create_job_application', {
+          p_profile_id: selectedProfile,
+          p_bidder_id: user.id,
+          p_job_title: jobTitle || 'Not specified',
+          p_job_description: jobDescription,
+          p_company_name: companyName || 'Not specified',
+          p_job_description_link: jobDescriptionLink,
+          p_resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`,
+          p_generated_summary: generatedResume.summary,
+          p_generated_experience: generatedResume.experience,
+          p_generated_skills: generatedResume.skills,
+        });
 
         if (saveError) {
           console.error('Error saving job application:', saveError);

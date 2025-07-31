@@ -70,13 +70,20 @@ const ResumeForm: React.FC<ResumeFormProps> = ({ onSave }) => {
 
     setLoading(true);
     try {
-      const profileData = {
-        ...data,
-        user_id: user.id,
-        skills,
-      };
-
-      const { error } = await supabase.from('profiles').insert([profileData]);
+      const { error } = await supabase.rpc('upsert_profile', {
+        p_user_id: user.id,
+        p_first_name: data.first_name,
+        p_last_name: data.last_name,
+        p_email: data.email,
+        p_phone: data.phone,
+        p_location: data.location,
+        p_linkedin: data.linkedin,
+        p_portfolio: data.portfolio,
+        p_summary: data.summary,
+        p_experience: data.experience,
+        p_education: data.education,
+        p_skills: skills,
+      });
 
       if (error) throw error;
 

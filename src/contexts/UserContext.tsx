@@ -26,7 +26,7 @@ const UserProvider: React.FC<UserContextProps> = ({ children }) => {
 
   const getUser = useCallback(async (userID: string) => {
     if (!userID) return
-    const { data, error } = await supabase.from('users').select('*').eq('id', userID).single()
+          const { data, error } = await supabase.rpc('get_user_by_id', { p_user_id: userID })
     setUser(data)
 
     if (error) {

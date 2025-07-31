@@ -20,6 +20,12 @@ BEGIN
   WHERE id = p_user_id; RETURN FOUND;
 END; $$;
 
+CREATE OR REPLACE FUNCTION update_user_role(p_user_id UUID, p_role user_role)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE users SET role = p_role, updated_at = NOW() WHERE id = p_user_id; RETURN FOUND;
+END; $$;
+
 CREATE OR REPLACE FUNCTION get_user_by_id(p_user_id UUID)
 RETURNS TABLE (id UUID, email TEXT, first_name TEXT, last_name TEXT, phone TEXT, role user_role, is_active BOOLEAN, created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE) 
 LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -143,9 +149,125 @@ BEGIN
   RETURN v_application_id;
 END; $$;
 
+-- JOB APPLICATION FUNCTIONS
+CREATE OR REPLACE FUNCTION get_job_applications_with_filters(
+  p_user_id UUID, 
+  p_user_role user_role,
+  p_profile_id UUID DEFAULT NULL,
+  p_bidder_id UUID DEFAULT NULL,
+  p_date_from TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  p_date_to TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  p_date_range TEXT DEFAULT 'all'
+)
+RETURNS TABLE (
+  id UUID, profile_id UUID, bidder_id UUID, job_title TEXT, company_name TEXT, 
+  job_description TEXT, job_description_link TEXT, resume_file_name TEXT,
+  generated_summary TEXT, generated_experience JSONB, generated_skills TEXT[],
+  created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE,
+  profile_first_name TEXT, profile_last_name TEXT, profile_email TEXT,
+  bidder_first_name TEXT, bidder_last_name TEXT, bidder_email TEXT
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_profile_ids UUID[];
+DECLARE v_start_date TIMESTAMP WITH TIME ZONE;
+DECLARE v_end_date TIMESTAMP WITH TIME ZONE;
+BEGIN
+  -- Get profile IDs for role-based filtering
+  IF p_user_role = 'manager' THEN
+    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+  ELSIF p_user_role = 'bidder' THEN
+    -- For bidders, we'll filter by bidder_id in the main query
+    v_profile_ids := NULL;
+  END IF;
+
+  -- Calculate date range if specified
+  IF p_date_range = 'this-week' THEN
+    v_start_date := date_trunc('week', CURRENT_DATE);
+    v_end_date := v_start_date + interval '6 days 23:59:59';
+  ELSIF p_date_range = 'this-month' THEN
+    v_start_date := date_trunc('month', CURRENT_DATE);
+    v_end_date := (v_start_date + interval '1 month') - interval '1 second';
+  ELSIF p_date_range = 'custom' THEN
+    v_start_date := p_date_from;
+    v_end_date := p_date_to;
+  ELSE
+    v_start_date := NULL;
+    v_end_date := NULL;
+  END IF;
+
+  RETURN QUERY SELECT 
+    ja.id, ja.profile_id, ja.bidder_id, ja.job_title, ja.company_name,
+    ja.job_description, ja.job_description_link, ja.resume_file_name,
+    ja.generated_summary, ja.generated_experience, ja.generated_skills,
+    ja.created_at, ja.updated_at,
+    p.first_name as profile_first_name, p.last_name as profile_last_name, p.email as profile_email,
+    b.first_name as bidder_first_name, b.last_name as bidder_last_name, b.email as bidder_email
+  FROM job_applications ja
+  JOIN profiles p ON ja.profile_id = p.id
+  JOIN users b ON ja.bidder_id = b.id
+  WHERE 
+    -- Role-based filtering
+    (p_user_role = 'admin') OR 
+    (p_user_role = 'manager' AND ja.profile_id = ANY(v_profile_ids)) OR 
+    (p_user_role = 'bidder' AND ja.bidder_id = p_user_id)
+    -- Additional filters
+    AND (p_profile_id IS NULL OR ja.profile_id = p_profile_id)
+    AND (p_bidder_id IS NULL OR ja.bidder_id = p_bidder_id)
+    AND (v_start_date IS NULL OR ja.created_at >= v_start_date)
+    AND (v_end_date IS NULL OR ja.created_at <= v_end_date)
+  ORDER BY ja.created_at DESC;
+END; $$;
+
+-- BIDDER MANAGEMENT FUNCTIONS
+CREATE OR REPLACE FUNCTION get_bidders_for_applications(p_user_id UUID, p_user_role user_role)
+RETURNS TABLE (
+  id UUID, first_name TEXT, last_name TEXT, email TEXT
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_profile_ids UUID[];
+DECLARE v_bidder_ids UUID[];
+BEGIN
+  -- For managers, get bidders assigned to their profiles
+  IF p_user_role = 'manager' THEN
+    -- Get manager's profile IDs
+    SELECT ARRAY_AGG(id) INTO v_profile_ids FROM profiles WHERE user_id = p_user_id;
+    
+    IF v_profile_ids IS NOT NULL AND array_length(v_profile_ids, 1) > 0 THEN
+      -- Get bidder IDs assigned to manager's profiles
+      SELECT ARRAY_AGG(DISTINCT bidder_id) INTO v_bidder_ids 
+      FROM profile_assignments 
+      WHERE profile_id = ANY(v_profile_ids);
+      
+      -- Return bidders assigned to manager's profiles
+      IF v_bidder_ids IS NOT NULL AND array_length(v_bidder_ids, 1) > 0 THEN
+        RETURN QUERY SELECT u.id, u.first_name, u.last_name, u.email
+        FROM users u
+        WHERE u.id = ANY(v_bidder_ids) AND u.role = 'bidder' AND u.is_active = true
+        ORDER BY u.first_name, u.last_name;
+      END IF;
+    END IF;
+  ELSIF p_user_role = 'admin' THEN
+    -- Admins can see all active bidders
+    RETURN QUERY SELECT u.id, u.first_name, u.last_name, u.email
+    FROM users u
+    WHERE u.role = 'bidder' AND u.is_active = true
+    ORDER BY u.first_name, u.last_name;
+  END IF;
+END; $$;
+
+CREATE OR REPLACE FUNCTION get_all_bidders()
+RETURNS TABLE (
+  id UUID, email TEXT, role user_role
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY SELECT u.id, u.email, u.role
+  FROM users u
+  WHERE u.role = 'bidder' AND u.is_active = true
+  ORDER BY u.email;
+END; $$;
+
 -- GRANT PERMISSIONS
 GRANT EXECUTE ON FUNCTION get_all_users() TO authenticated;
 GRANT EXECUTE ON FUNCTION update_user_details(UUID, TEXT, TEXT, TEXT, TEXT, user_role) TO authenticated;
+GRANT EXECUTE ON FUNCTION update_user_role(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_user_by_id(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_profiles_with_details(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION upsert_profile(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, TEXT, TEXT, JSONB, JSONB, TEXT[]) TO authenticated;
@@ -155,5 +277,8 @@ GRANT EXECUTE ON FUNCTION create_profile_assignment(UUID, UUID, UUID) TO authent
 GRANT EXECUTE ON FUNCTION delete_profile_assignment(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_profiles_for_resume_generation(UUID, user_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION create_job_application(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_bidders_for_applications(UUID, user_role) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_job_applications_with_filters(UUID, user_role, UUID, UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_all_bidders() TO authenticated;
 
 SELECT 'Comprehensive RPC functions created successfully!' as status; 

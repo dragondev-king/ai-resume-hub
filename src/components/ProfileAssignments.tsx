@@ -23,17 +23,11 @@ const ProfileAssignments: React.FC = () => {
   const loadProfiles = useCallback(async () => {
     try {
       console.log('Loading profiles for assignments');
-      let query = supabase.from('profiles').select('*');
+      const { data, error } = await supabase.rpc('get_profiles_with_details', {
+        p_user_id: user?.id || '',
+        p_user_role: role
+      });
       
-      if (role === 'manager') {
-        console.log('Loading manager profiles for assignments');
-        query = query.eq('user_id', user?.id);
-      } else if (role === 'admin') {
-        console.log('Loading all profiles for admin assignments');
-      }
-      // Admins can see all profiles
-
-      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
         console.error('Error loading profiles for assignments:', error);
         throw error;
@@ -49,12 +43,7 @@ const ProfileAssignments: React.FC = () => {
   const loadBidders = useCallback(async () => {
     try {
       console.log('Loading bidders for assignments');
-      // Query users table directly for bidders
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, email, role')
-        .eq('role', 'bidder')
-        .eq('is_active', true);
+      const { data, error } = await supabase.rpc('get_all_bidders');
 
       if (error) {
         console.error('Error loading bidders:', error);
@@ -72,34 +61,11 @@ const ProfileAssignments: React.FC = () => {
   const loadAssignments = useCallback(async () => {
     try {
       console.log('Loading profile assignments');
-      let query = supabase.from('profile_assignments').select('*');
+      const { data, error } = await supabase.rpc('get_profile_assignments_with_details', {
+        p_user_id: user?.id || '',
+        p_user_role: role
+      });
       
-      if (role === 'manager') {
-        // Managers can only see assignments for their profiles
-        console.log('Loading assignments for manager profiles');
-        const { data: managerProfiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user?.id);
-        
-        if (profileError) {
-          console.error('Error loading manager profiles for assignments:', profileError);
-          throw profileError;
-        }
-        
-        const profileIds = managerProfiles?.map(p => p.id) || [];
-        console.log('Manager profile IDs for assignments:', profileIds);
-        if (profileIds.length > 0) {
-          query = query.in('profile_id', profileIds);
-        } else {
-          query = query.eq('profile_id', 'no-profiles'); // This will return empty results
-        }
-      } else if (role === 'admin') {
-        console.log('Loading all assignments for admin');
-      }
-      // Admins can see all assignments
-
-      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
         console.error('Error loading assignments:', error);
         throw error;
@@ -137,13 +103,11 @@ const ProfileAssignments: React.FC = () => {
     if (!selectedProfile || !selectedBidder) return;
 
     try {
-      const { error } = await supabase
-        .from('profile_assignments')
-        .insert([{
-          profile_id: selectedProfile,
-          bidder_id: selectedBidder,
-          assigned_by: user?.id!,
-        }]);
+      const { error } = await supabase.rpc('create_profile_assignment', {
+        p_profile_id: selectedProfile,
+        p_bidder_id: selectedBidder,
+        p_assigned_by: user?.id!,
+      });
 
       if (error) throw error;
 
@@ -158,10 +122,9 @@ const ProfileAssignments: React.FC = () => {
 
   const handleRemoveAssignment = async (assignmentId: string) => {
     try {
-      const { error } = await supabase
-        .from('profile_assignments')
-        .delete()
-        .eq('id', assignmentId);
+      const { error } = await supabase.rpc('delete_profile_assignment', {
+        p_assignment_id: assignmentId
+      });
 
       if (error) throw error;
       loadAssignments();

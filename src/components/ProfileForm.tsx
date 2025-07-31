@@ -111,31 +111,26 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
     setIsSaving(true);
     try {
       const skills = skillFields.map(field => field.value).filter(skill => skill.trim());
-      const profileData = {
-        ...data,
-        skills,
-        user_id: user.id,
-        updated_at: new Date().toISOString(),
-      };
 
-      if (profile) {
-        // Update existing profile
-        const { error } = await supabase
-          .from('profiles')
-          .update(profileData)
-          .eq('id', profile.id);
-        
-        if (error) throw error;
-        toast.success('Profile updated successfully!');
-      } else {
-        // Create new profile
-        const { error } = await supabase
-          .from('profiles')
-          .insert([profileData]);
-        
-        if (error) throw error;
-        toast.success('Profile created successfully!');
-      }
+      // Use upsert_profile RPC function for both create and update
+      const { error } = await supabase.rpc('upsert_profile', {
+        p_user_id: user.id,
+        p_first_name: data.first_name,
+        p_last_name: data.last_name,
+        p_email: data.email,
+        p_phone: data.phone,
+        p_location: data.location,
+        p_profile_id: profile?.id || null,
+        p_linkedin: data.linkedin,
+        p_portfolio: data.portfolio,
+        p_summary: data.summary,
+        p_experience: data.experience,
+        p_education: data.education,
+        p_skills: skills,
+      });
+      
+      if (error) throw error;
+      toast.success(profile ? 'Profile updated successfully!' : 'Profile created successfully!');
 
       onSave?.();
     } catch (error: any) {

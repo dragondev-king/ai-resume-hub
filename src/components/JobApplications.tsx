@@ -24,118 +24,23 @@ const JobApplications: React.FC = () => {
       setFilterLoading(true);
       console.log('Loading applications for user:', user?.id, 'Role:', { role });
       
-      let query = supabase
-        .from('job_applications')
-        .select(`
-          *,
-          profile:profiles(*)
-        `);
-
-      // Apply role-based filtering
-      if (role === 'bidder') {
-        console.log('Loading applications for bidder');
-        query = query.eq('bidder_id', user?.id);
-      } else if (role === 'manager') {
-        // Managers can see applications for their profiles
-        console.log('Loading applications for manager profiles');
-        const { data: managerProfiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user?.id);
-        
-        if (profileError) {
-          console.error('Error loading manager profiles:', profileError);
-          throw profileError;
-        }
-        
-        const profileIds = managerProfiles?.map(p => p.id) || [];
-        console.log('Manager profile IDs:', profileIds);
-        if (profileIds.length > 0) {
-          query = query.in('profile_id', profileIds);
-        } else {
-          query = query.eq('profile_id', 'no-profiles'); // This will return empty results
-        }
-      } else if (role === 'admin') {
-        console.log('Loading all applications for admin');
-      }
-      // Admins can see all applications (no additional filter)
-
-      // Apply user filters
-      if (filters.profileId) {
-        query = query.eq('profile_id', filters.profileId);
-      }
-      if (filters.bidderId) {
-        query = query.eq('bidder_id', filters.bidderId);
-      }
-
-      // Apply date range filters
-      if (filters.dateRange === 'this-week') {
-        const now = new Date();
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
-        startOfWeek.setHours(0, 0, 0, 0);
-        
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6); // End of week (Saturday)
-        endOfWeek.setHours(23, 59, 59, 999);
-        
-        query = query.gte('created_at', startOfWeek.toISOString())
-                   .lte('created_at', endOfWeek.toISOString());
-      } else if (filters.dateRange === 'this-month') {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
-        
-        query = query.gte('created_at', startOfMonth.toISOString())
-                   .lte('created_at', endOfMonth.toISOString());
-      } else if (filters.dateRange === 'custom') {
-        if (filters.dateFrom) {
-          const dateFrom = new Date(filters.dateFrom);
-          dateFrom.setHours(0, 0, 0, 0);
-          query = query.gte('created_at', dateFrom.toISOString());
-        }
-        if (filters.dateTo) {
-          const dateTo = new Date(filters.dateTo);
-          dateTo.setHours(23, 59, 59, 999);
-          query = query.lte('created_at', dateTo.toISOString());
-        }
-      }
-
-      const { data: applicationsData, error } = await query.order('created_at', { ascending: false });
+      const { data: applicationsData, error } = await supabase.rpc('get_job_applications_with_filters', {
+        p_user_id: user?.id || '',
+        p_user_role: role,
+        p_profile_id: filters.profileId || null,
+        p_bidder_id: filters.bidderId || null,
+        p_date_from: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : null,
+        p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
+        p_date_range: filters.dateRange
+      });
 
       if (error) {
         console.error('Error loading applications:', error);
         throw error;
       }
 
-      // Load bidder information separately
-      const bidderIds = Array.from(new Set(applicationsData?.map(app => app.bidder_id) || []));
-      let biddersData: any[] = [];
-      
-      if (bidderIds.length > 0) {
-        const { data: bidders, error: biddersError } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, email')
-          .in('id', bidderIds);
-        
-        if (biddersError) {
-          console.error('Error loading bidders:', biddersError);
-        } else {
-          biddersData = bidders || [];
-        }
-      }
-
-      // Combine applications with bidder data
-      const applicationsWithBidders = applicationsData?.map(app => ({
-        ...app,
-        bidder: biddersData.find(bidder => bidder.id === app.bidder_id)
-      })) || [];
-      
-      console.log('Loaded applications:', applicationsWithBidders.length);
-      setApplications(applicationsWithBidders);
+      console.log('Loaded applications:', applicationsData?.length || 0);
+      setApplications(applicationsData || []);
     } catch (error) {
       console.error('Error loading applications:', error);
       // Set empty array to prevent infinite loading
@@ -149,36 +54,11 @@ const JobApplications: React.FC = () => {
   const loadProfiles = useCallback(async () => {
     try {
       console.log('Loading profiles for applications page');
-      let query = supabase.from('profiles').select('*');
+      const { data, error } = await supabase.rpc('get_profiles_with_details', {
+        p_user_id: user?.id || '',
+        p_user_role: role
+      });
       
-      if (role === 'manager') {
-        console.log('Loading manager profiles for applications');
-        query = query.eq('user_id', user?.id);
-      } else if (role === 'bidder') {
-        console.log('Loading bidder assigned profiles for applications');
-        // Get profiles assigned to this bidder
-        const { data: assignments, error: assignmentError } = await supabase
-          .from('profile_assignments')
-          .select('profile_id')
-          .eq('bidder_id', user?.id);
-        
-        if (assignmentError) {
-          console.error('Error loading bidder assignments:', assignmentError);
-          throw assignmentError;
-        }
-        
-        const profileIds = assignments?.map(a => a.profile_id) || [];
-        if (profileIds.length > 0) {
-          query = query.in('id', profileIds);
-        } else {
-          query = query.eq('id', 'no-assignments'); // This will return empty results
-        }
-      } else if (role === 'admin') {
-        console.log('Loading all profiles for admin applications');
-      }
-      // Admins can see all profiles
-
-      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
         console.error('Error loading profiles for applications:', error);
         throw error;
@@ -194,50 +74,10 @@ const JobApplications: React.FC = () => {
   const loadBidders = useCallback(async () => {
     try {
       console.log('Loading bidders for applications page');
-      let query = supabase
-        .from('users')
-        .select('id, first_name, last_name, email')
-        .eq('role', 'bidder')
-        .eq('is_active', true);
-      
-      // Managers can only see bidders assigned to their profiles
-      if (role === 'manager') {
-        console.log('Loading bidders for manager profiles');
-        const { data: managerProfiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user?.id);
-        
-        if (profileError) {
-          console.error('Error loading manager profiles for bidders:', profileError);
-          throw profileError;
-        }
-        
-        const profileIds = managerProfiles?.map(p => p.id) || [];
-        if (profileIds.length > 0) {
-          const { data: assignments, error: assignmentError } = await supabase
-            .from('profile_assignments')
-            .select('bidder_id')
-            .in('profile_id', profileIds);
-          
-          if (assignmentError) {
-            console.error('Error loading profile assignments:', assignmentError);
-            throw assignmentError;
-          }
-          
-          const bidderIds = Array.from(new Set(assignments?.map(a => a.bidder_id) || []));
-          if (bidderIds.length > 0) {
-            query = query.in('id', bidderIds);
-          } else {
-            query = query.eq('id', 'no-bidders'); // This will return empty results
-          }
-        } else {
-          query = query.eq('id', 'no-profiles'); // This will return empty results
-        }
-      }
-      // Admins can see all bidders (no additional filter)
-      
-      const { data, error } = await query.order('first_name', { ascending: true });
+      const { data, error } = await supabase.rpc('get_bidders_for_applications', {
+        p_user_id: user?.id || '',
+        p_user_role: role
+      });
       
       if (error) {
         console.error('Error loading bidders:', error);
