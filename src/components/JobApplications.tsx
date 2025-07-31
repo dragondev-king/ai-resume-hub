@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Building, User, Filter, Download, Eye } from 'lucide-react';
-import { JobApplicationWithDetails, Profile } from '../lib/supabase';
+import { JobApplicationWithDetails, Profile, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 
@@ -8,16 +8,17 @@ const JobApplications: React.FC = () => {
   const { user, role } = useUser();
   const [applications, setApplications] = useState<JobApplicationWithDetails[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [bidders, setBidders] = useState<Bidder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     profileId: '',
+    bidderId: '',
     dateFrom: '',
     dateTo: '',
+    dateRange: 'all', // 'all', 'this-week', 'this-month', 'custom'
   });
 
-
-
-  const loadApplications =  useCallback(async () => {
+  const loadApplications = useCallback(async () => {
     try {
       console.log('Loading applications for user:', user?.id, 'Role:', { role });
       
@@ -61,22 +62,78 @@ const JobApplications: React.FC = () => {
       if (filters.profileId) {
         query = query.eq('profile_id', filters.profileId);
       }
-      if (filters.dateFrom) {
-        query = query.gte('created_at', filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        query = query.lte('created_at', filters.dateTo);
+      if (filters.bidderId) {
+        query = query.eq('bidder_id', filters.bidderId);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      // Apply date range filters
+      if (filters.dateRange === 'this-week') {
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6); // End of week (Saturday)
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        query = query.gte('created_at', startOfWeek.toISOString())
+                   .lte('created_at', endOfWeek.toISOString());
+      } else if (filters.dateRange === 'this-month') {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+        
+        query = query.gte('created_at', startOfMonth.toISOString())
+                   .lte('created_at', endOfMonth.toISOString());
+      } else if (filters.dateRange === 'custom') {
+        if (filters.dateFrom) {
+          const dateFrom = new Date(filters.dateFrom);
+          dateFrom.setHours(0, 0, 0, 0);
+          query = query.gte('created_at', dateFrom.toISOString());
+        }
+        if (filters.dateTo) {
+          const dateTo = new Date(filters.dateTo);
+          dateTo.setHours(23, 59, 59, 999);
+          query = query.lte('created_at', dateTo.toISOString());
+        }
+      }
+
+      const { data: applicationsData, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error loading applications:', error);
         throw error;
       }
+
+      // Load bidder information separately
+      const bidderIds = Array.from(new Set(applicationsData?.map(app => app.bidder_id) || []));
+      let biddersData: any[] = [];
       
-      console.log('Loaded applications:', data?.length || 0);
-      setApplications(data || []);
+      if (bidderIds.length > 0) {
+        const { data: bidders, error: biddersError } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, email')
+          .in('id', bidderIds);
+        
+        if (biddersError) {
+          console.error('Error loading bidders:', biddersError);
+        } else {
+          biddersData = bidders || [];
+        }
+      }
+
+      // Combine applications with bidder data
+      const applicationsWithBidders = applicationsData?.map(app => ({
+        ...app,
+        bidder: biddersData.find(bidder => bidder.id === app.bidder_id)
+      })) || [];
+      
+      console.log('Loaded applications:', applicationsWithBidders.length);
+      setApplications(applicationsWithBidders);
     } catch (error) {
       console.error('Error loading applications:', error);
       // Set empty array to prevent infinite loading
@@ -94,6 +151,25 @@ const JobApplications: React.FC = () => {
       if (role === 'manager') {
         console.log('Loading manager profiles for applications');
         query = query.eq('user_id', user?.id);
+      } else if (role === 'bidder') {
+        console.log('Loading bidder assigned profiles for applications');
+        // Get profiles assigned to this bidder
+        const { data: assignments, error: assignmentError } = await supabase
+          .from('profile_assignments')
+          .select('profile_id')
+          .eq('bidder_id', user?.id);
+        
+        if (assignmentError) {
+          console.error('Error loading bidder assignments:', assignmentError);
+          throw assignmentError;
+        }
+        
+        const profileIds = assignments?.map(a => a.profile_id) || [];
+        if (profileIds.length > 0) {
+          query = query.in('id', profileIds);
+        } else {
+          query = query.eq('id', 'no-assignments'); // This will return empty results
+        }
       } else if (role === 'admin') {
         console.log('Loading all profiles for admin applications');
       }
@@ -112,14 +188,79 @@ const JobApplications: React.FC = () => {
     }
   }, [user, role]);
 
+  const loadBidders = useCallback(async () => {
+    try {
+      console.log('Loading bidders for applications page');
+      let query = supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .eq('role', 'bidder')
+        .eq('is_active', true);
+      
+      // Managers can only see bidders assigned to their profiles
+      if (role === 'manager') {
+        console.log('Loading bidders for manager profiles');
+        const { data: managerProfiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user?.id);
+        
+        if (profileError) {
+          console.error('Error loading manager profiles for bidders:', profileError);
+          throw profileError;
+        }
+        
+        const profileIds = managerProfiles?.map(p => p.id) || [];
+        if (profileIds.length > 0) {
+          const { data: assignments, error: assignmentError } = await supabase
+            .from('profile_assignments')
+            .select('bidder_id')
+            .in('profile_id', profileIds);
+          
+          if (assignmentError) {
+            console.error('Error loading profile assignments:', assignmentError);
+            throw assignmentError;
+          }
+          
+          const bidderIds = Array.from(new Set(assignments?.map(a => a.bidder_id) || []));
+          if (bidderIds.length > 0) {
+            query = query.in('id', bidderIds);
+          } else {
+            query = query.eq('id', 'no-bidders'); // This will return empty results
+          }
+        } else {
+          query = query.eq('id', 'no-profiles'); // This will return empty results
+        }
+      }
+      // Admins can see all bidders (no additional filter)
+      
+      const { data, error } = await query.order('first_name', { ascending: true });
+      
+      if (error) {
+        console.error('Error loading bidders:', error);
+        throw error;
+      }
+      console.log('Loaded bidders:', data?.length || 0);
+      setBidders(data || []);
+    } catch (error) {
+      console.error('Error loading bidders:', error);
+      setBidders([]);
+    }
+  }, [user, role]);
+
   useEffect(() => {
     if (user) {
       loadApplications();
-      if (role === 'admin' || role === 'manager') {
+      // Load profiles for admin, manager, and bidder roles
+      if (role === 'admin' || role === 'manager' || role === 'bidder') {
         loadProfiles();
       }
+      // Load bidders for admin and manager roles
+      if (role === 'admin' || role === 'manager') {
+        loadBidders();
+      }
     }
-  }, [user, filters, loadApplications, role, loadProfiles]);
+  }, [user, filters, loadApplications, role, loadProfiles, loadBidders]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -134,8 +275,10 @@ const JobApplications: React.FC = () => {
   const clearFilters = () => {
     setFilters({
       profileId: '',
+      bidderId: '',
       dateFrom: '',
       dateTo: '',
+      dateRange: 'all',
     });
   };
 
@@ -161,34 +304,87 @@ const JobApplications: React.FC = () => {
       </div>
 
       {/* Filters */}
-      {(role === 'admin' || role === 'manager') && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center space-x-2 mb-4">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <h3 className="font-medium text-gray-900">Filters</h3>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {role === 'admin' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Profile
-                </label>
-                <select
-                  value={filters.profileId}
-                  onChange={(e) => setFilters({ ...filters, profileId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">All Profiles</option>
-                  {profiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.first_name} {profile.last_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center space-x-2 mb-4">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <h3 className="font-medium text-gray-900">Filters</h3>
+        </div>
+        
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+          role === 'admin' ? 'lg:grid-cols-6' : 
+          role === 'manager' ? 'lg:grid-cols-5' : 
+          'lg:grid-cols-4'
+        }`}>
+          {/* Profile Filter - Admin, Manager, and Bidder */}
+          {(role === 'admin' || role === 'manager' || role === 'bidder') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Profile
+              </label>
+              <select
+                value={filters.profileId}
+                onChange={(e) => setFilters({ ...filters, profileId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">All Profiles</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.first_name} {profile.last_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
+          {/* Bidder Filter - Admin and Manager */}
+          {(role === 'admin' || role === 'manager') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Bidder
+              </label>
+              <select
+                value={filters.bidderId}
+                onChange={(e) => setFilters({ ...filters, bidderId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">All Bidders</option>
+                {bidders.map((bidder) => (
+                  <option key={bidder.id} value={bidder.id}>
+                    {bidder.first_name} {bidder.last_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Date Range Filter - All roles */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date Range
+            </label>
+            <select
+              value={filters.dateRange}
+              onChange={(e) => {
+                const newRange = e.target.value;
+                setFilters({ 
+                  ...filters, 
+                  dateRange: newRange,
+                  // Clear custom dates when switching to preset ranges
+                  dateFrom: newRange === 'custom' ? filters.dateFrom : '',
+                  dateTo: newRange === 'custom' ? filters.dateTo : ''
+                });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="all">All Time</option>
+              <option value="this-week">This Week</option>
+              <option value="this-month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {/* Custom Date From Filter - Only when custom range is selected */}
+          {filters.dateRange === 'custom' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date From
@@ -200,7 +396,10 @@ const JobApplications: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
+          )}
 
+          {/* Custom Date To Filter - Only when custom range is selected */}
+          {filters.dateRange === 'custom' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date To
@@ -212,18 +411,19 @@ const JobApplications: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
+          )}
 
-            <div className="flex items-end">
-              <button
-                onClick={clearFilters}
-                className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-              >
-                Clear Filters
-              </button>
-            </div>
+          {/* Clear Filters Button - All roles */}
+          <div className="flex items-end">
+            <button
+              onClick={clearFilters}
+              className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+            >
+              Clear Filters
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Applications List */}
       {applications.length === 0 ? (
@@ -240,96 +440,85 @@ const JobApplications: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {applications.map((application) => (
-            <div key={application.id} className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {application.job_title}
-                    </h3>
-                    {application.company_name && (
-                      <>
-                        <span className="text-gray-400">•</span>
-                        <div className="flex items-center space-x-1 text-gray-600">
-                          <Building className="w-4 h-4" />
-                          <span>{application.company_name}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>{formatDate(application.created_at)}</span>
-                    </div>
-                    {application.profile && (
-                      <div className="flex items-center space-x-1">
-                        <User className="w-4 h-4" />
-                        <span>{application.profile.first_name} {application.profile.last_name}</span>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Job Title
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Company
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Profile
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Bidder
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {applications.map((application) => (
+                  <tr key={application.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {application.job_title}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {application.job_description_link && (
-                    <a
-                      href={application.job_description_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span className="text-sm">View Job</span>
-                    </a>
-                  )}
-                  {application.resume_file_name && (
-                    <button className="flex items-center space-x-1 text-primary-600 hover:text-primary-700">
-                      <Download className="w-4 h-4" />
-                      <span className="text-sm">Download</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-1">Job Description</h4>
-                  <p className="text-sm text-gray-600 line-clamp-3">
-                    {application.job_description}
-                  </p>
-                </div>
-
-                {application.generated_summary && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-1">Generated Summary</h4>
-                    <p className="text-sm text-gray-600 line-clamp-2">
-                      {application.generated_summary}
-                    </p>
-                  </div>
-                )}
-
-                {application.generated_skills && application.generated_skills.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-1">Generated Skills</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {application.generated_skills.map((skill, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 text-xs bg-primary-100 text-primary-800 rounded-full"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {application.company_name || '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {application.profile ? `${application.profile.first_name} ${application.profile.last_name}` : '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {application.bidder ? `${application.bidder.first_name} ${application.bidder.last_name}` : '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {formatDate(application.created_at)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        {application.job_description_link && (
+                          <a
+                            href={application.job_description_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span className="text-sm">View Job</span>
+                          </a>
+                        )}
+                        {application.resume_file_name && (
+                          <button className="flex items-center space-x-1 text-primary-600 hover:text-primary-700">
+                            <Download className="w-4 h-4" />
+                            <span className="text-sm">Download</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

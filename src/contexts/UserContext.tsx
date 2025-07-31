@@ -25,9 +25,9 @@ const UserProvider: React.FC<UserContextProps> = ({ children }) => {
   const [user, setUser] = useState<IUser | null>(null);
   const { session } = useAuth();
 
-  const getUser = useCallback(async (session: Session) => {
-    if (!session?.user.id) return
-    const { data, error } = await supabase.from('users').select('*').eq('id', session?.user.id).single()
+  const getUser = useCallback(async (userID: string) => {
+    if (!userID) return
+    const { data, error } = await supabase.from('users').select('*').eq('id', userID).single()
     setUser(data)
 
     if (error) {
@@ -36,10 +36,10 @@ const UserProvider: React.FC<UserContextProps> = ({ children }) => {
   }, [])
 
   useEffect(() => {
-    if (session) {
-      getUser(session)
+    if (session?.user.id) {
+      getUser(session.user.id)
     }
-  }, [getUser, session])
+  }, [getUser, session?.user.id])
 
   return (
     <UserContext.Provider value={{ user, role: user?.role || 'bidder' }}>

@@ -92,4 +92,13 @@ export interface ProfileWithAssignments extends Profile {
 
 export interface JobApplicationWithDetails extends JobApplication {
   profile?: Profile;
+  bidder?: User;
+}
+
+// Simple bidder type for filter dropdowns
+export interface Bidder {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
 } 
