@@ -173,7 +173,7 @@ const ResumeGenerator: React.FC = () => {
           p_job_description: jobDescription,
           p_company_name: generatedResume.companyName || 'Not specified',
           p_job_description_link: jobDescriptionLink,
-          p_resume_file_name: `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || 'resume'}_resume.docx`,
+          p_resume_file_name: `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}.docx`,
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
@@ -184,7 +184,7 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
-      const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || 'resume'}_resume.docx`;
+      const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}.docx`;
       await generateDocx(generatedResume, fileName, profile);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
