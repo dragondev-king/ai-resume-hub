@@ -187,9 +187,8 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
   
   // Use original experience data, but enhance with AI-generated descriptions if available
   originalExperience.forEach((exp, index) => {
-    // Try to find matching AI-enhanced experience
+    // Try to find matching AI-enhanced experience (only by company name)
     const aiEnhanced = aiExperience.find(ai => 
-      ai.position?.toLowerCase().includes(exp.position?.toLowerCase()) ||
       ai.company?.toLowerCase().includes(exp.company?.toLowerCase())
     );
     
@@ -226,7 +225,7 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
       new Paragraph({
         children: [
           new TextRun({
-            text: exp.position,
+            text: aiEnhanced?.position || exp.position,
             size: 22,
             bold: true,
             font: 'Cambria',
