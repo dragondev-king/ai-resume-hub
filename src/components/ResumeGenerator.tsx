@@ -187,6 +187,28 @@ const ResumeGenerator: React.FC = () => {
 
       const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}.docx`;
       await generateDocx(generatedResume, fileName, profile);
+      toast.success('Resume downloaded and job application saved!');
+    } catch (error: any) {
+      console.error('Error downloading resume:', error);
+      toast.error(error.message || 'Failed to download resume');
+    }
+  };
+
+  const handleDownloadOnly = async () => {
+    if (!generatedResume) {
+      toast.error('No resume to download');
+      return;
+    }
+
+    const profile = profiles.find(p => p.id === selectedProfile);
+    if (!profile) {
+      toast.error('Profile not found');
+      return;
+    }
+
+    try {
+      const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}.docx`;
+      await generateDocx(generatedResume, fileName, profile);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
       console.error('Error downloading resume:', error);
@@ -342,7 +364,14 @@ const ResumeGenerator: React.FC = () => {
                 className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
               >
                 <Download className="w-4 h-4" />
-                <span>Download DOCX</span>
+                <span>Download & Save</span>
+              </button>
+              <button
+                onClick={handleDownloadOnly}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Only</span>
               </button>
             </div>
           </div>
