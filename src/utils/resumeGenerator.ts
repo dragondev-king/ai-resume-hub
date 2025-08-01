@@ -34,7 +34,7 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
       messages: [
         {
           role: 'system',
-          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Generate 7-12 bullet points per work experience, with varying counts between different companies based on the role complexity and duration. Also extract the job title and company name from the job description.'
+          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Generate 7-12 bullet points per work experience, with varying counts between different companies based on the role complexity and duration. Also extract the job title and company name from the job description. IMPORTANT: Adjust job titles in work experience to better align with the target job description while keeping company names unchanged.'
         },
         {
           role: 'user',
@@ -107,6 +107,9 @@ Please provide the following enhancements in JSON format:
    - Align with the job description requirements
    - Vary the number of bullet points between companies (7-12 bullets per company)
    - Consider role complexity and duration when determining bullet point count
+   - IMPORTANT: Adjust job titles to better match the target job description while keeping company names unchanged
+   - For the most recent position, make the job title closely match the target job title from the description
+   - For older positions, adjust titles to show progression toward the target role
 4. Enhanced skills list that includes relevant technical and soft skills
 
 IMPORTANT REQUIREMENTS:
@@ -121,6 +124,12 @@ IMPORTANT REQUIREMENTS:
 - Make bullet points specific and impactful
 - Use industry-standard terminology
 - Ensure bullet points are unique and don't repeat similar achievements
+- JOB TITLE ADJUSTMENT: Modify job titles to better align with the target position:
+  * For the most recent position: Make the title closely match the target job title
+  * For older positions: Show career progression toward the target role
+  * Keep company names exactly as they were in the original experience
+  * Example: If applying for "Senior Software Engineer" and current title is "Developer", adjust to "Software Engineer" or "Senior Developer"
+  * Example: If applying for "Product Manager" and previous title was "Business Analyst", adjust to "Associate Product Manager" or "Product Analyst"
 
 Please respond with ONLY valid JSON in this exact format:
 {
