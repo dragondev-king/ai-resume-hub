@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Plus, Edit, Trash2, Shield, Users, Crown } from 'lucide-react';
 import { UserRole, UserRPC } from '../lib/supabase';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
 const UserManagement: React.FC = () => {
@@ -25,7 +25,7 @@ const UserManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       console.log('Loading users using RPC function');
-      
+
       const { data, error } = await supabase.rpc('get_all_users');
 
       if (error) {
@@ -50,8 +50,8 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Create user in auth (this will trigger the sync to public.users)
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // Create user in auth using admin client
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: formData.email,
         password: formData.password,
         email_confirm: true,
@@ -62,37 +62,24 @@ const UserManagement: React.FC = () => {
       });
 
       if (authError) {
-        // If Admin API is not available, show manual instructions
-        if (authError.message.includes('not_admin')) {
-          toast.error('Admin API not available. Please create users manually in Supabase Dashboard.');
-          console.log('=== MANUAL USER CREATION INSTRUCTIONS ===');
-          console.log('1. Go to Supabase Dashboard → Authentication → Users');
-          console.log('2. Click "Add User"');
-          console.log('3. Enter email:', formData.email);
-          console.log('4. Enter password:', formData.password);
-          console.log('5. After creating user, run this SQL:');
-          console.log(`UPDATE users SET role = '${formData.role}' WHERE email = '${formData.email}';`);
-          console.log('==========================================');
-        } else {
-          throw authError;
-        }
-      } else {
-        // Update the user's role in public.users table
-        const { error: updateError } = await supabase.rpc('update_user_role', {
-          p_user_id: authData.user.id,
-          p_role: formData.role
-        });
-
-        if (updateError) {
-          console.error('Error updating user role:', updateError);
-          // Don't throw error, user was created successfully
-        }
-
-        toast.success('User created successfully');
-        setShowUserModal(false);
-        setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
-        loadUsers();
+        throw authError;
       }
+
+      // Update the user's role in public.users table
+      const { error: updateError } = await supabase.rpc('update_user_role', {
+        p_user_id: authData.user.id,
+        p_role: formData.role
+      });
+
+      if (updateError) {
+        console.error('Error updating user role:', updateError);
+        // Don't throw error, user was created successfully
+      }
+
+      toast.success('User created successfully');
+      setShowUserModal(false);
+      setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '', role: 'bidder' });
+      loadUsers();
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast.error(error.message || 'Failed to create user');
@@ -138,26 +125,15 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      // Delete user from auth (this will cascade to public.users)
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-      
+      // Delete user from auth using admin client
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
       if (authError) {
-        // If Admin API is not available, show manual instructions
-        if (authError.message.includes('not_admin')) {
-          toast.error('Admin API not available. Please delete users manually in Supabase Dashboard.');
-          console.log('=== MANUAL USER DELETION INSTRUCTIONS ===');
-          console.log('1. Go to Supabase Dashboard → Authentication → Users');
-          console.log('2. Find the user with ID:', userId);
-          console.log('3. Click the delete button next to the user');
-          console.log('4. The user data will be automatically deleted due to CASCADE');
-          console.log('==========================================');
-        } else {
-          throw authError;
-        }
-      } else {
-        toast.success('User deleted successfully');
-        loadUsers();
+        throw authError;
       }
+
+      toast.success('User deleted successfully');
+      loadUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
@@ -246,11 +222,6 @@ const UserManagement: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
           <p className="text-gray-600">Manage users and their roles</p>
-          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-sm text-yellow-800">
-              <strong>Note:</strong> Admin API is not available in free tier. User creation/deletion must be done manually in Supabase Dashboard.
-            </p>
-          </div>
         </div>
         <button
           onClick={openCreateModal}
@@ -311,7 +282,7 @@ const UserManagement: React.FC = () => {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {user.first_name && user.last_name 
+                            {user.first_name && user.last_name
                               ? `${user.first_name} ${user.last_name}`
                               : user.email
                             }
