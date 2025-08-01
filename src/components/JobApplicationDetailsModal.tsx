@@ -44,7 +44,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         return;
       }
 
-      const fileName = `${profile.first_name}_${profile.last_name}_${application.job_title || 'resume'}_resume.docx`;
+      const fileName = `${profile.first_name}_${profile.last_name}_${application.job_title || ''}.docx`;
 
       const generatedResumeData = {
         summary: application.generated_summary || '',
