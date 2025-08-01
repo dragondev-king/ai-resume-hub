@@ -53,6 +53,7 @@ const ResumeGenerator: React.FC = () => {
       setGeneratedResume(generated);
       setEditingResume(generated);
       setIsEditing(false);
+      document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
       toast.success('Resume generated successfully! You can now edit the content before downloading.');
     } catch (error: any) {
       console.error('Error generating resume:', error);
@@ -306,7 +307,7 @@ const ResumeGenerator: React.FC = () => {
 
       {/* Generated Resume */}
       {currentResume && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div id="generated-resume" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
             <div className="flex items-center space-x-2">
