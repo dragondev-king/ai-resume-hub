@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Mail, Phone, MapPin, Linkedin, Globe, Briefcase, GraduationCap, Code } from 'lucide-react';
 import { Education, Experience, ProfileWithDetailsRPC } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
-import dayjs from 'dayjs';
+import { formatDate } from '../utils/helpers';
 
 interface ProfileDetailsProps {
   profile: ProfileWithDetailsRPC;
@@ -13,10 +13,6 @@ interface ProfileDetailsProps {
 
 const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAssignBidders, userRole }) => {
   const { role } = useUser();
-
-  const formatDate = (dateString: string) => {
-    return dayjs(dateString).format('MM/YYYY');
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

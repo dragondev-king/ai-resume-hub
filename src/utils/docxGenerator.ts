@@ -1,6 +1,7 @@
 import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
 import { saveAs } from 'file-saver';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
+import { formatDate } from './helpers';
 
 interface GeneratedResume {
   summary: string;
@@ -445,18 +446,7 @@ const createSkillsSection = (skills: string[]): Paragraph[] => {
 };
 
 const formatDateRange = (startDate: string, endDate: string): string => {
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        month: '2-digit', 
-        year: 'numeric' 
-      });
-    } catch {
-      return dateString;
-    }
-  };
+  
   
   const start = formatDate(startDate);
   const end = formatDate(endDate);

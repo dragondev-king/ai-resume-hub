@@ -4,6 +4,7 @@ import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { generateDocx } from '../utils/docxGenerator';
 import { toast } from 'react-hot-toast';
+import { formatDate } from '../utils/helpers';
 
 interface JobApplicationDetailsModalProps {
   application: JobApplicationWithDetails | null;
@@ -22,16 +23,6 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { profiles } = useProfiles();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   const handleRegenerateResume = useCallback(async () => {
     if (!application || !applicationProfile) return;
@@ -235,7 +226,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-semibold text-gray-900">{exp.position}</h4>
                         <span className="text-sm text-gray-600">
-                          {exp.start_date} - {exp.end_date}
+                          {formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}
                         </span>
                       </div>
                       <p className="text-gray-700 font-medium mb-2">{exp.company}</p>

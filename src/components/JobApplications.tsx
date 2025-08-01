@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import JobApplicationDetailsModal from './JobApplicationDetailsModal';
+import { formatDate } from '../utils/helpers';
 
 const JobApplications: React.FC = () => {
   const { user, role } = useUser();
@@ -114,16 +115,6 @@ const JobApplications: React.FC = () => {
       }
     }
   }, [user, filters, loadApplications, role, loadBidders]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const clearFilters = () => {
     setFilters({

@@ -6,6 +6,7 @@ import { generateResume } from '../utils/resumeGenerator';
 import { generateDocx } from '../utils/docxGenerator';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
+import { formatDate } from '../utils/helpers';
 
 interface EditableResume {
   summary: string;
@@ -562,7 +563,7 @@ const ResumeGenerator: React.FC = () => {
                     ) : (
                       <>
                         <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
-                        <div className="text-sm text-gray-600">{exp.start_date} - {exp.end_date}</div>
+                        <div className="text-sm text-gray-600">{formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}</div>
                         <div className="text-gray-700 mt-2 space-y-1">
                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
                             <div key={descIndex} className="flex items-start">
