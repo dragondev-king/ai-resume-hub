@@ -4,6 +4,7 @@ import { JobApplicationWithDetails, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
+import JobApplicationDetailsModal from './JobApplicationDetailsModal';
 
 const JobApplications: React.FC = () => {
   const { user, role } = useUser();
@@ -24,6 +25,10 @@ const JobApplications: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalApplications, setTotalApplications] = useState(0);
+
+  // Modal state
+  const [selectedApplication, setSelectedApplication] = useState<JobApplicationWithDetails | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const loadApplications = useCallback(async () => {
     try {
@@ -157,6 +162,22 @@ const JobApplications: React.FC = () => {
   const handlePageSizeChange = (newPageSize: number) => {
     setPageSize(newPageSize);
     setCurrentPage(1); // Reset to first page when changing page size
+  };
+
+  const handleRowClick = (application: JobApplicationWithDetails) => {
+    setSelectedApplication(application);
+    setIsModalOpen(true);
+  };
+
+  const handleViewClick = (e: React.MouseEvent, application: JobApplicationWithDetails) => {
+    e.stopPropagation(); // Prevent row click
+    setSelectedApplication(application);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedApplication(null);
   };
 
   if (loading) {
@@ -378,7 +399,11 @@ const JobApplications: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {applications.map((application) => (
-                    <tr key={application.id} className="hover:bg-gray-50">
+                    <tr
+                      key={application.id}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => handleRowClick(application)}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {application.job_title}
@@ -412,11 +437,19 @@ const JobApplications: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => handleViewClick(e, application)}
+                            className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span className="text-sm">View Details</span>
+                          </button>
                           {application.job_description_link && (
                             <a
                               href={application.job_description_link}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
                               className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
                             >
                               <Eye className="w-4 h-4" />
@@ -424,7 +457,10 @@ const JobApplications: React.FC = () => {
                             </a>
                           )}
                           {application.resume_file_name && (
-                            <button className="flex items-center space-x-1 text-primary-600 hover:text-primary-700">
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
+                            >
                               <Download className="w-4 h-4" />
                               <span className="text-sm">Download</span>
                             </button>
@@ -495,6 +531,13 @@ const JobApplications: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Job Application Details Modal */}
+      <JobApplicationDetailsModal
+        application={selectedApplication}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 };
