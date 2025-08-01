@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { X, Building, User, FileText, Download, Link } from 'lucide-react';
+import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp } from 'lucide-react';
 import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { generateDocx } from '../utils/docxGenerator';
@@ -17,8 +17,11 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   onClose
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
 
   const { profiles } = useProfiles();
+
+  const applicationProfile = profiles.find(p => p.id === application?.profile_id);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -31,20 +34,11 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   };
 
   const handleRegenerateResume = useCallback(async () => {
-    if (!application) return;
+    if (!application || !applicationProfile) return;
 
     try {
       setIsGenerating(true);
-      // get profile id first
-      const profileID = application.profile_id;
-      const profile = profiles.find(p => p.id === profileID);
-
-      if (!profile) {
-        console.error('Profile not found');
-        return;
-      }
-
-      const fileName = `${profile.first_name}_${profile.last_name}_${application.job_title || ''}.docx`;
+      const fileName = `${applicationProfile?.first_name}_${applicationProfile?.last_name}_${application.job_title || ''}.docx`;
 
       const generatedResumeData = {
         summary: application.generated_summary || '',
@@ -52,7 +46,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         skills: application.generated_skills || []
       }
 
-      await generateDocx(generatedResumeData, fileName, profile);
+      await generateDocx(generatedResumeData, fileName, applicationProfile);
 
       toast.success('Resume regenerated successfully!');
 
@@ -61,7 +55,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
     } finally {
       setIsGenerating(false);
     }
-  }, [application, profiles]);
+  }, [application, applicationProfile]);
 
   if (!isOpen || !application) return null;
 
@@ -72,7 +66,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Job Application Details</h2>
-            <p className="text-gray-600">Application submitted on {formatDate(application.created_at)}</p>
+            <p className="text-gray-600">submitted by <b>{application.bidder_first_name} {application.bidder_last_name}</b> on {formatDate(application.created_at)}</p>
           </div>
           <button
             onClick={onClose}
@@ -115,6 +109,51 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Job Description */}
+              {application.job_description && (
+                <div className="mt-4">
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setIsJobDescriptionExpanded(!isJobDescriptionExpanded)}
+                      className="flex items-center justify-between w-full text-left p-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
+                        <span className="font-semibold text-gray-900">Job Description</span>
+                        <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                          {application.job_description.length > 100 ? 'Long' : 'Short'}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-500">
+                          {isJobDescriptionExpanded ? 'Hide' : 'Show'} details
+                        </span>
+                        {isJobDescriptionExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-gray-500" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        )}
+                      </div>
+                    </button>
+                    {isJobDescriptionExpanded && (
+                      <div className="p-4 bg-gray-50">
+                        <div className="bg-white rounded-md p-4 border border-gray-200 max-h-96 overflow-y-auto">
+                          <div className="prose prose-sm max-w-none">
+                            <div className="text-gray-700 whitespace-pre-wrap leading-relaxed text-sm">
+                              {application.job_description}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                          <span>{application.job_description.length} characters</span>
+                          <span>{application.job_description.split('\n').length} lines</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Profile Information */}
@@ -135,6 +174,13 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                   <p className="text-lg text-gray-900 flex items-center">
                     {/* <Mail className="w-4 h-4 mr-1" /> */}
                     {application.profile_email}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Profile Title</label>
+                  <p className="text-lg text-gray-900 flex items-center">
+                    {/* <Mail className="w-4 h-4 mr-1" /> */}
+                    {applicationProfile?.title}
                   </p>
                 </div>
               </div>
