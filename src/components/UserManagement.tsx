@@ -3,6 +3,7 @@ import { User, Plus, Edit, Trash2, Shield, Users, Crown } from 'lucide-react';
 import { UserRole, UserRPC } from '../lib/supabase';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
+import ConfirmationModal from './ConfirmationModal';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<UserRPC[]>([]);
@@ -17,6 +18,9 @@ const UserManagement: React.FC = () => {
     phone: '',
     role: 'bidder' as UserRole,
   });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserRPC | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -120,11 +124,8 @@ const UserManagement: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
-
     try {
+      setIsDeleting(true);
       // Delete user from auth using admin client
       const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
@@ -137,7 +138,16 @@ const UserManagement: React.FC = () => {
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setUserToDelete(null);
     }
+  };
+
+  const openDeleteModal = (user: UserRPC) => {
+    setUserToDelete(user);
+    setShowDeleteModal(true);
   };
 
   const openEditModal = (user: UserRPC) => {
@@ -311,7 +321,7 @@ const UserManagement: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => openDeleteModal(user)}
                           className="text-red-600 hover:text-red-900"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -450,6 +460,24 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setUserToDelete(null);
+        }}
+        onConfirm={() => userToDelete && handleDeleteUser(userToDelete.id)}
+        title="Delete User"
+        message={`Are you sure you want to delete ${userToDelete?.first_name && userToDelete?.last_name
+          ? `${userToDelete.first_name} ${userToDelete.last_name}`
+          : userToDelete?.email}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };
