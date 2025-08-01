@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, Filter, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Filter, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { JobApplicationWithDetails, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
@@ -162,11 +162,6 @@ const JobApplications: React.FC = () => {
   const handlePageSizeChange = (newPageSize: number) => {
     setPageSize(newPageSize);
     setCurrentPage(1); // Reset to first page when changing page size
-  };
-
-  const handleRowClick = (application: JobApplicationWithDetails) => {
-    setSelectedApplication(application);
-    setIsModalOpen(true);
   };
 
   const handleViewClick = (e: React.MouseEvent, application: JobApplicationWithDetails) => {
@@ -402,7 +397,6 @@ const JobApplications: React.FC = () => {
                     <tr
                       key={application.id}
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => handleRowClick(application)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -455,15 +449,6 @@ const JobApplications: React.FC = () => {
                               <Eye className="w-4 h-4" />
                               <span className="text-sm">View Job</span>
                             </a>
-                          )}
-                          {application.resume_file_name && (
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
-                            >
-                              <Download className="w-4 h-4" />
-                              <span className="text-sm">Download</span>
-                            </button>
                           )}
                         </div>
                       </td>
