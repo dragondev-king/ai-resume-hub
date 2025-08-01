@@ -78,19 +78,20 @@ export interface Experience {
   position: string;
   start_date: string;
   end_date: string;
-  current: boolean;
-  description: string;
-  achievements: string[];
+  current?: boolean;
+  description?: string; // Keep for backward compatibility
+  descriptions?: string[]; // Array of bullet points (for AI-generated content)
+  achievements?: string[]; // Legacy field, use descriptions instead
 }
 
 export interface Education {
   id?: string;
-  institution: string;
+  school: string; // Alternative field name for resume generation
   degree: string;
   field: string;
   start_date: string;
   end_date: string;
-  current: boolean;
+  current?: boolean;
   gpa?: string;
 }
 

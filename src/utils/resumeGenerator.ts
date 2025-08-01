@@ -90,7 +90,7 @@ ${profile.experience.map(exp => `
 
 EDUCATION:
 ${profile.education.map(edu => `
-- ${edu.degree} in ${edu.field} from ${edu.institution} (${edu.start_date} - ${edu.end_date})
+- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
 `).join('\n')}
 
 CURRENT SKILLS:

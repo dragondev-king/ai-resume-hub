@@ -1,3 +1,5 @@
+import { Experience, Education } from '../lib/supabase';
+
 export interface ResumeData {
   first_name: string;
   last_name: string;
@@ -13,19 +15,5 @@ export interface ResumeData {
   skills: string[];
 }
 
-export interface Experience {
-  company: string;
-  position: string;
-  start_date: string;
-  end_date: string;
-  description?: string; // Keep for backward compatibility
-  descriptions?: string[]; // Array of bullet points
-}
-
-export interface Education {
-  school: string;
-  degree: string;
-  field: string;
-  start_date: string;
-  end_date: string;
-} 
+// Re-export the interfaces for convenience
+export type { Experience, Education }; 

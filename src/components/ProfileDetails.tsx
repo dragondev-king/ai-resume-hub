@@ -1,7 +1,8 @@
 import React from 'react';
 import { X, Mail, Phone, MapPin, Linkedin, Globe, Briefcase, GraduationCap, Code } from 'lucide-react';
-import { ProfileWithDetailsRPC } from '../lib/supabase';
+import { Education, Experience, ProfileWithDetailsRPC } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import dayjs from 'dayjs';
 
 interface ProfileDetailsProps {
   profile: ProfileWithDetailsRPC;
@@ -14,10 +15,7 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAss
   const { role } = useUser();
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-    });
+    return dayjs(dateString).format('MM/YYYY');
   };
 
   return (
@@ -123,16 +121,16 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAss
                   <h4 className="text-lg font-medium text-gray-900">Work Experience</h4>
                 </div>
                 <div className="space-y-4">
-                  {profile.experience.map((exp: any, index: number) => (
+                  {profile.experience.map((exp: Experience, index: number) => (
                     <div key={index} className="border-l-4 border-blue-500 pl-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h5 className="font-medium text-gray-900">{exp.title}</h5>
+                          <h5 className="font-medium text-gray-900">{exp.position}</h5>
                           <p className="text-sm text-gray-600">{exp.company}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">
-                            {exp.startDate && formatDate(exp.startDate)} - {exp.endDate ? formatDate(exp.endDate) : 'Present'}
+                            {exp.start_date && formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}
                           </p>
                         </div>
                       </div>
@@ -152,21 +150,21 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAss
                   <h4 className="text-lg font-medium text-gray-900">Education</h4>
                 </div>
                 <div className="space-y-4">
-                  {profile.education.map((edu: any, index: number) => (
+                  {profile.education.map((edu: Education, index: number) => (
                     <div key={index} className="border-l-4 border-green-500 pl-4">
                       <div className="flex justify-between items-start">
                         <div>
                           <h5 className="font-medium text-gray-900">{edu.degree}</h5>
-                          <p className="text-sm text-gray-600">{edu.institution}</p>
+                          <p className="text-sm text-gray-600">{edu.school}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">
-                            {edu.startDate && formatDate(edu.startDate)} - {edu.endDate ? formatDate(edu.endDate) : 'Present'}
+                            {edu.start_date && formatDate(edu.start_date)} - {edu.end_date ? formatDate(edu.end_date) : 'Present'}
                           </p>
                         </div>
                       </div>
-                      {edu.description && (
-                        <p className="text-sm text-gray-700 mt-2">{edu.description}</p>
+                      {edu.field && (
+                        <p className="text-sm text-gray-700 mt-2">{edu.field}</p>
                       )}
                     </div>
                   ))}
