@@ -11,6 +11,8 @@ interface EditableResume {
   summary: string;
   skills: string[];
   experience: any[];
+  jobTitle?: string;
+  companyName?: string;
 }
 
 const ResumeGenerator: React.FC = () => {
@@ -18,8 +20,6 @@ const ResumeGenerator: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
-  const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
   const [editingResume, setEditingResume] = useState<EditableResume | null>(null);
@@ -48,7 +48,7 @@ const ResumeGenerator: React.FC = () => {
 
     setLoading(true);
     try {
-      // Generate AI resume
+      // Generate AI resume with job title and company name extraction
       const generated = await generateResume(profile, jobDescription);
       setGeneratedResume(generated);
       setEditingResume(generated);
@@ -169,11 +169,11 @@ const ResumeGenerator: React.FC = () => {
         const { error: saveError } = await supabase.rpc('create_job_application', {
           p_profile_id: selectedProfile,
           p_bidder_id: user.id,
-          p_job_title: jobTitle || 'Not specified',
+          p_job_title: generatedResume.jobTitle || 'Not specified',
           p_job_description: jobDescription,
-          p_company_name: companyName || 'Not specified',
+          p_company_name: generatedResume.companyName || 'Not specified',
           p_job_description_link: jobDescriptionLink,
-          p_resume_file_name: `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`,
+          p_resume_file_name: `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || 'resume'}_resume.docx`,
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
@@ -184,7 +184,7 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
-      const fileName = `${profile.first_name}_${profile.last_name}_${jobTitle || 'resume'}_resume.docx`;
+      const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || 'resume'}_resume.docx`;
       await generateDocx(generatedResume, fileName, profile);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
@@ -211,7 +211,7 @@ const ResumeGenerator: React.FC = () => {
           <Sparkles className="w-8 h-8 text-primary-600" />
           <div>
             <h2 className="text-2xl font-bold text-gray-900">AI Resume Generator</h2>
-            <p className="text-gray-600">Generate tailored resumes using AI based on job descriptions</p>
+            <p className="text-gray-600">Generate tailored resumes using AI. Simply paste a job description and the AI will extract job details and create a customized resume.</p>
           </div>
         </div>
       </div>
@@ -251,33 +251,7 @@ const ResumeGenerator: React.FC = () => {
             )}
           </div>
 
-          {/* Job Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Job Title
-              </label>
-              <input
-                type="text"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Software Engineer (optional)"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Company Name
-              </label>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Tech Corp (optional)"
-              />
-            </div>
-          </div>
+
 
           {/* Job Description Link */}
           <div>
@@ -303,7 +277,7 @@ const ResumeGenerator: React.FC = () => {
               onChange={(e) => setJobDescription(e.target.value)}
               rows={8}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Paste the job description here. The AI will use this to tailor the resume..."
+              placeholder="Paste the job description here. The AI will extract the job title and company name, then tailor the resume accordingly..."
             />
           </div>
 
@@ -369,6 +343,45 @@ const ResumeGenerator: React.FC = () => {
                 <Download className="w-4 h-4" />
                 <span>Download DOCX</span>
               </button>
+            </div>
+          </div>
+
+          {/* Extracted Job Information */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+            <h4 className="font-medium text-blue-900 mb-2">Extracted Job Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-blue-700 mb-1">Job Title</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editingResume?.jobTitle || ''}
+                    onChange={(e) => setEditingResume(prev => prev ? { ...prev, jobTitle: e.target.value } : null)}
+                    className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Job title extracted from description"
+                  />
+                ) : (
+                  <p className="text-blue-900 bg-white p-2 rounded border">
+                    {currentResume?.jobTitle || 'Not specified'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-700 mb-1">Company Name</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editingResume?.companyName || ''}
+                    onChange={(e) => setEditingResume(prev => prev ? { ...prev, companyName: e.target.value } : null)}
+                    className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Company name extracted from description"
+                  />
+                ) : (
+                  <p className="text-blue-900 bg-white p-2 rounded border">
+                    {currentResume?.companyName || 'Not specified'}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

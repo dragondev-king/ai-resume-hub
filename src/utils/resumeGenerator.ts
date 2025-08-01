@@ -14,6 +14,8 @@ interface GeneratedResume {
     descriptions: string[]; // Array of bullet points
   }[];
   skills: string[];
+  jobTitle?: string;
+  companyName?: string;
 }
 
 // Initialize OpenAI client
@@ -24,7 +26,7 @@ const openai = new OpenAI({
 
 export const generateResume = async (profile: Profile, jobDescription: string): Promise<GeneratedResume> => {
   try {
-    // Create a comprehensive prompt for the AI
+    // Create a comprehensive prompt for the AI that includes job info extraction
     const prompt = createAIPrompt(profile, jobDescription);
     
     const completion = await openai.chat.completions.create({
@@ -32,7 +34,7 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
       messages: [
         {
           role: 'system',
-          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Generate 7-12 bullet points per work experience, with varying counts between different companies based on the role complexity and duration.'
+          content: 'You are a professional resume writer and career coach. Generate high-quality, specific, and impactful resume content that highlights achievements and quantifiable results. Generate 7-12 bullet points per work experience, with varying counts between different companies based on the role complexity and duration. Also extract the job title and company name from the job description.'
         },
         {
           role: 'user',
@@ -62,9 +64,12 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
         descriptions: exp.description ? [exp.description] : []
       })),
       skills: profile.skills,
+      jobTitle: 'Not specified',
+      companyName: 'Not specified'
     };
   }
 };
+
 
 const createAIPrompt = (profile: Profile, jobDescription: string): string => {
   return `
@@ -93,15 +98,16 @@ ${profile.skills.filter(skill => skill.trim()).join(', ')}
 
 Please provide the following enhancements in JSON format:
 
-1. A compelling professional summary (3 sentences)
-2. Enhanced work experience with 7-12 bullet points per position that:
+1. Extract the job title and company name from the job description (if not clearly stated, make your best educated guess based on context)
+2. A compelling professional summary (3 sentences)
+3. Enhanced work experience with 7-12 bullet points per position that:
    - Reference the original work experience
    - Include specific achievements and quantifiable results
    - Use action verbs and industry-specific terminology
    - Align with the job description requirements
    - Vary the number of bullet points between companies (7-12 bullets per company)
    - Consider role complexity and duration when determining bullet point count
-3. Enhanced skills list that includes relevant technical and soft skills
+4. Enhanced skills list that includes relevant technical and soft skills
 
 IMPORTANT REQUIREMENTS:
 - Generate 7-12 bullet points for each work experience
@@ -118,6 +124,8 @@ IMPORTANT REQUIREMENTS:
 
 Please respond with ONLY valid JSON in this exact format:
 {
+  "jobTitle": "extracted or inferred job title from the job description",
+  "companyName": "extracted or inferred company name from the job description",
   "summary": "Professional summary here...",
   "experience": [
     {
@@ -168,6 +176,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         descriptions: exp.description ? [exp.description] : []
       })),
       skills: parsed.skills || originalProfile.skills,
+      jobTitle: parsed.jobTitle || 'Not specified',
+      companyName: parsed.companyName || 'Not specified'
     };
 
     // Ensure each experience has 7-12 descriptions with varying counts
