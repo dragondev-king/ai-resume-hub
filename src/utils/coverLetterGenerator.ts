@@ -142,7 +142,7 @@ Please write a professional cover letter that:
 4. Explains why the candidate is the perfect fit
 5. Includes specific examples from their experience
 6. Maintains a professional yet engaging tone
-7. Is approximately 30-50 words (keep it concise and impactful)
+7. Is approximately 50-70 words (keep it concise and impactful)
 8. Uses the candidate's actual name and background information
 9. References specific aspects of the job description
 
@@ -211,7 +211,7 @@ The answer should be:
 - Relevant to the question and job
 - Based on the candidate's actual experience
 - Professional but engaging
-- Approximately 20-30 words (keep it brief and to the point)
+- Approximately 30-50 words (keep it brief and to the point)
 
 Please write the answer in the candidate's voice, using their actual experience and background. Be direct and avoid unnecessary elaboration.
 `;
