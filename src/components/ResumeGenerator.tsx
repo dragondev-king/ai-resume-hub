@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
@@ -704,7 +704,7 @@ const ResumeGenerator: React.FC = () => {
               ) : (
                 <>
                   <FileText className="w-4 h-4" />
-                  <span>Generate Cover Letter</span>
+                  <span>{generatedCoverLetter ? 'Regenerate Cover Letter' : 'Generate Cover Letter'}</span>
                 </>
               )}
             </button>
@@ -773,11 +773,32 @@ const ResumeGenerator: React.FC = () => {
                   </div>
 
                   {question.answer ? (
-                    <div className="bg-white rounded-md p-3 border border-gray-200">
-                      <div className="prose prose-sm max-w-none">
-                        <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                          {question.answer}
+                    <div className="space-y-3">
+                      <div className="bg-white rounded-md p-3 border border-gray-200">
+                        <div className="prose prose-sm max-w-none">
+                          <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                            {question.answer}
+                          </div>
                         </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleGenerateAnswer(question.id)}
+                          disabled={isGeneratingAnswer === question.id}
+                          className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingAnswer === question.id ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Regenerating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-4 h-4" />
+                              <span>Regenerate Answer</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   ) : (
