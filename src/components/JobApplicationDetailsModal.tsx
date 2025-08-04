@@ -57,7 +57,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Job Application Details</h2>
-            <p className="text-gray-600">submitted by <b>{application.bidder_first_name} {application.bidder_last_name}</b> on {formatDate(application.created_at)}</p>
+            <p className="text-gray-600">submitted by <b>{application.bidder_first_name} {application.bidder_last_name}</b> on {formatDate(application.created_at, true)}</p>
           </div>
           <button
             onClick={onClose}
