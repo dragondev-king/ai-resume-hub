@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
 import { generateDocx } from '../utils/docxGenerator';
+import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
@@ -16,6 +17,18 @@ interface EditableResume {
   companyName?: string;
 }
 
+interface GeneratedCoverLetter {
+  content: string;
+  jobTitle?: string;
+  companyName?: string;
+}
+
+interface ApplicationQuestion {
+  id: string;
+  question: string;
+  answer?: string;
+}
+
 const ResumeGenerator: React.FC = () => {
   const { profiles, loading: profilesLoading } = useProfiles();
   const [selectedProfile, setSelectedProfile] = useState<string>('');
@@ -26,6 +39,16 @@ const ResumeGenerator: React.FC = () => {
   const [editingResume, setEditingResume] = useState<EditableResume | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [newSkill, setNewSkill] = useState('');
+
+  // Cover Letter State
+  const [generatedCoverLetter, setGeneratedCoverLetter] = useState<GeneratedCoverLetter | null>(null);
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+
+  // Application Questions State
+  const [applicationQuestions, setApplicationQuestions] = useState<ApplicationQuestion[]>([]);
+  const [newQuestion, setNewQuestion] = useState('');
+  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<string | null>(null);
+
   const { user, role } = useUser();
 
   // Auto-select profile if there's only one
@@ -214,6 +237,84 @@ const ResumeGenerator: React.FC = () => {
     } catch (error: any) {
       console.error('Error downloading resume:', error);
       toast.error(error.message || 'Failed to download resume');
+    }
+  };
+
+  // Cover Letter Generation
+  const handleGenerateCoverLetter = async () => {
+    if (!generatedResume || !selectedProfile) {
+      toast.error('Please generate a resume first');
+      return;
+    }
+
+    const profile = profiles.find(p => p.id === selectedProfile);
+    if (!profile) {
+      toast.error('Profile not found');
+      return;
+    }
+
+    setIsGeneratingCoverLetter(true);
+    try {
+      const coverLetter = await generateCoverLetter(profile, jobDescription, generatedResume);
+      setGeneratedCoverLetter(coverLetter);
+      toast.success('Cover letter generated successfully!');
+    } catch (error: any) {
+      console.error('Error generating cover letter:', error);
+      toast.error(error.message || 'Failed to generate cover letter');
+    } finally {
+      setIsGeneratingCoverLetter(false);
+    }
+  };
+
+  // Application Questions Management
+  const handleAddQuestion = () => {
+    if (newQuestion.trim()) {
+      const question: ApplicationQuestion = {
+        id: Date.now().toString(),
+        question: newQuestion.trim()
+      };
+      setApplicationQuestions([...applicationQuestions, question]);
+      setNewQuestion('');
+    }
+  };
+
+  const handleRemoveQuestion = (id: string) => {
+    setApplicationQuestions(applicationQuestions.filter(q => q.id !== id));
+  };
+
+  const handleGenerateAnswer = async (questionId: string) => {
+    if (!generatedResume || !selectedProfile) {
+      toast.error('Please generate a resume first');
+      return;
+    }
+
+    const profile = profiles.find(p => p.id === selectedProfile);
+    if (!profile) {
+      toast.error('Profile not found');
+      return;
+    }
+
+    const question = applicationQuestions.find(q => q.id === questionId);
+    if (!question) return;
+
+    setIsGeneratingAnswer(questionId);
+    try {
+      const answer = await generateAnswer(profile, question.question, jobDescription, generatedResume);
+
+      setApplicationQuestions(prev =>
+        prev.map(q =>
+          q.id === questionId
+            ? { ...q, answer: answer.content }
+            : q
+        )
+      );
+
+      toast.success('Answer generated successfully!');
+    } catch (error: any) {
+      console.error('Error generating answer:', error);
+      toast.error(error.message || 'Failed to generate answer');
+    } finally {
+      setIsGeneratingAnswer(null);
     }
   };
 
@@ -579,6 +680,134 @@ const ResumeGenerator: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Cover Letter Section */}
+      {currentResume && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900 flex items-center">
+              <FileText className="w-5 h-5 mr-2" />
+              Cover Letter
+            </h3>
+            <button
+              onClick={handleGenerateCoverLetter}
+              disabled={isGeneratingCoverLetter}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingCoverLetter ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  <span>Generate Cover Letter</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {generatedCoverLetter ? (
+            <div className="bg-gray-50 rounded-md p-4">
+              <div className="prose max-w-none">
+                <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {generatedCoverLetter.content}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>Generate a personalized cover letter based on your resume and the job description.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Application Questions Section */}
+      {currentResume && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900 flex items-center">
+              <MessageSquare className="w-5 h-5 mr-2" />
+              Application Questions
+            </h3>
+          </div>
+
+          {/* Add Question Form */}
+          <div className="mb-6">
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={newQuestion}
+                onChange={(e) => setNewQuestion(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddQuestion())}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Enter a job application question (e.g., 'Why are you interested in this position?')"
+              />
+              <button
+                onClick={handleAddQuestion}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Questions List */}
+          {applicationQuestions.length > 0 ? (
+            <div className="space-y-4">
+              {applicationQuestions.map((question) => (
+                <div key={question.id} className="bg-gray-50 rounded-md p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <h4 className="font-medium text-gray-900">{question.question}</h4>
+                    <button
+                      onClick={() => handleRemoveQuestion(question.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {question.answer ? (
+                    <div className="bg-white rounded-md p-3 border border-gray-200">
+                      <div className="prose prose-sm max-w-none">
+                        <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {question.answer}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleGenerateAnswer(question.id)}
+                      disabled={isGeneratingAnswer === question.id}
+                      className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-md hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isGeneratingAnswer === question.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Generate Answer</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>Add common job application questions to generate personalized answers.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
