@@ -29,7 +29,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
 
     try {
       setIsGenerating(true);
-      const fileName = `${applicationProfile?.first_name}_${applicationProfile?.last_name}_${application.job_title || ''}.docx`;
+      const fileName = `${applicationProfile?.first_name}_${applicationProfile?.last_name}_${application.job_title || ''}-${application.company_name || ''}.docx`;
 
       const generatedResumeData = {
         summary: application.generated_summary || '',
