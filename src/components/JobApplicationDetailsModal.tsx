@@ -90,7 +90,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Job Application Details</h2>
-            <p className="text-gray-600">submitted by <b>{application.bidder_first_name} {application.bidder_last_name}</b> on {formatDate(application.created_at, true)}</p>
+            <p className="text-gray-600">submitted by <b>{application.bidder_first_name} {application.bidder_last_name}</b> on {formatDate(application.created_at, true, true)}</p>
             <div className="flex items-center mt-2">
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${application.status === 'active'
                 ? 'bg-green-100 text-green-800'

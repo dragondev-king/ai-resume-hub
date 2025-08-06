@@ -463,7 +463,7 @@ const JobApplications: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {formatDate(application.created_at, true)}
+                          {formatDate(application.created_at, true, true)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
