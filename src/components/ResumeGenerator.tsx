@@ -189,6 +189,25 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
+      // Check if user can apply to this company
+      if (user && generatedResume.companyName) {
+        const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
+          p_bidder_id: user.id,
+          p_company_name: generatedResume.companyName
+        });
+
+        if (checkError) {
+          console.error('Error checking application eligibility:', checkError);
+          toast.error('Error checking application eligibility');
+          return;
+        }
+
+        if (!canApply) {
+          toast.error(`You already have an active application to ${generatedResume.companyName}. You cannot submit multiple applications to the same company.`);
+          return;
+        }
+      }
+
       // Save job application record
       if (user) {
         const { error: saveError } = await supabase.rpc('create_job_application', {
@@ -206,6 +225,10 @@ const ResumeGenerator: React.FC = () => {
 
         if (saveError) {
           console.error('Error saving job application:', saveError);
+          if (saveError.message?.includes('already have an active application')) {
+            toast.error(saveError.message);
+            return;
+          }
         }
       }
 

@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp, AlertTriangle, CheckCircle } from 'lucide-react';
 import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
+import { useUser } from '../contexts/UserContext';
+import { supabase } from '../lib/supabase';
 import { generateDocx } from '../utils/docxGenerator';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
@@ -19,8 +21,10 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const { profiles } = useProfiles();
+  const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
 
@@ -48,6 +52,35 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
     }
   }, [application, applicationProfile]);
 
+  const handleRejectApplication = useCallback(async () => {
+    if (!application) return;
+
+    if (!window.confirm('Are you sure you want to reject this application? This will allow the bidder to apply to other roles at this company.')) {
+      return;
+    }
+
+    try {
+      setIsRejecting(true);
+      const { error } = await supabase.rpc('reject_job_application', {
+        p_application_id: application.id
+      });
+
+      if (error) {
+        console.error('Error rejecting application:', error);
+        toast.error('Failed to reject application');
+        return;
+      }
+
+      toast.success('Application rejected successfully. The bidder can now apply to other roles at this company.');
+      onClose(); // Close modal after successful rejection
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      toast.error('Failed to reject application');
+    } finally {
+      setIsRejecting(false);
+    }
+  }, [application, onClose]);
+
   if (!isOpen || !application) return null;
 
   return (
@@ -58,13 +91,65 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Job Application Details</h2>
             <p className="text-gray-600">submitted by <b>{application.bidder_first_name} {application.bidder_last_name}</b> on {formatDate(application.created_at, true)}</p>
+            <div className="flex items-center mt-2">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${application.status === 'active'
+                ? 'bg-green-100 text-green-800'
+                : application.status === 'rejected'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                {application.status === 'active' ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Active
+                  </>
+                ) : application.status === 'rejected' ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    Rejected
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    Withdrawn
+                  </>
+                )}
+              </span>
+              {application.status === 'rejected' && application.rejected_at && (
+                <span className="text-xs text-gray-500 ml-2">
+                  Rejected on {formatDate(application.rejected_at, true)}
+                </span>
+              )}
+              {application.status === 'withdrawn' && application.withdrawn_at && (
+                <span className="text-xs text-gray-500 ml-2">
+                  Withdrawn on {formatDate(application.withdrawn_at, true)}
+                </span>
+              )}
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* Reject Button - Only for managers and admins, only for active applications */}
+            {(role === 'manager' || role === 'admin') && application.status === 'active' && (
+              <button
+                onClick={handleRejectApplication}
+                disabled={isRejecting}
+                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isRejecting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                )}
+                {isRejecting ? 'Rejecting...' : 'Reject Application'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}

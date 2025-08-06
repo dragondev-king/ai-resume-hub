@@ -69,6 +69,9 @@ export interface JobApplication {
   generated_summary?: string;
   generated_experience?: Experience[];
   generated_skills?: string[];
+  status: 'active' | 'rejected' | 'withdrawn';
+  rejected_at?: string;
+  withdrawn_at?: string;
   created_at: string;
 }
 
@@ -136,6 +139,9 @@ export interface JobApplicationRPC {
   generated_summary?: string;
   generated_experience?: Experience[];
   generated_skills?: string[];
+  status: 'active' | 'rejected' | 'withdrawn';
+  rejected_at?: string;
+  withdrawn_at?: string;
   created_at: string;
   profile_first_name?: string;
   profile_last_name?: string;

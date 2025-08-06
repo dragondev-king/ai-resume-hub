@@ -20,6 +20,7 @@ const JobApplications: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     dateRange: 'today', // 'all', 'today', 'last-week', 'last-month', 'this-week', 'this-month', 'custom'
+    status: '', // 'active', 'rejected', 'withdrawn', or empty for all
   });
 
   // Pagination state
@@ -45,6 +46,7 @@ const JobApplications: React.FC = () => {
         p_date_from: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : null,
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
         p_date_range: filters.dateRange,
+        p_status: filters.status || null,
         p_page_size: pageSize,
         p_page_number: currentPage
       });
@@ -62,7 +64,8 @@ const JobApplications: React.FC = () => {
         p_bidder_id: filters.bidderId || null,
         p_date_from: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : null,
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
-        p_date_range: filters.dateRange
+        p_date_range: filters.dateRange,
+        p_status: filters.status || null
       });
 
       if (countError) {
@@ -123,6 +126,7 @@ const JobApplications: React.FC = () => {
       dateFrom: '',
       dateTo: '',
       dateRange: 'today', // Reset to today as default
+      status: '', // Reset status filter
     });
     setCurrentPage(1); // Reset to first page
   };
@@ -194,9 +198,9 @@ const JobApplications: React.FC = () => {
           <h3 className="font-medium text-gray-900">Filters</h3>
         </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-6' :
-          role === 'manager' ? 'lg:grid-cols-5' :
-            'lg:grid-cols-4'
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-7' :
+          role === 'manager' ? 'lg:grid-cols-6' :
+            'lg:grid-cols-5'
           }`}>
           {/* Profile Filter - Admin, Manager, and Bidder */}
           {(role === 'admin' || role === 'manager' || role === 'bidder') && (
@@ -299,6 +303,23 @@ const JobApplications: React.FC = () => {
             </div>
           )}
 
+          {/* Status Filter - All roles */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrawn">Withdrawn</option>
+            </select>
+          </div>
+
           {/* Clear Filters Button - All roles */}
           <div className="flex items-end">
             <button
@@ -376,6 +397,9 @@ const JobApplications: React.FC = () => {
                       Bidder
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -413,6 +437,20 @@ const JobApplications: React.FC = () => {
                             ? `${application.bidder_first_name} ${application.bidder_last_name}`
                             : '-'
                           }
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${application.status === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : application.status === 'rejected'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                            {application.status === 'active' ? 'Active' :
+                              application.status === 'rejected' ? 'Rejected' :
+                                application.status === 'withdrawn' ? 'Withdrawn' : 'Unknown'}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
