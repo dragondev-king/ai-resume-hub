@@ -78,10 +78,10 @@ const ResumeGenerator: React.FC = () => {
       // Generate AI resume with job title and company name extraction
       const generated = await generateResume(profile, jobDescription);
 
-      // Check if user can apply to this company before showing the resume
-      if (user && generated.companyName) {
+      // Check if this profile can apply to this company before showing the resume
+      if (generated.companyName) {
         const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
-          p_bidder_id: user.id,
+          p_profile_id: selectedProfile,
           p_company_name: generated.companyName
         });
 
@@ -94,7 +94,7 @@ const ResumeGenerator: React.FC = () => {
 
         if (!canApply) {
           setIsApplicationEligible(false);
-          toast.error(`You already have an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
+          toast.error(`This profile already has an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
           setLoading(false);
           return;
         }
@@ -439,7 +439,7 @@ const ResumeGenerator: React.FC = () => {
           <div className="flex justify-center">
             <button
               onClick={handleGenerate}
-              disabled={loading || !selectedProfile || !jobDescription}
+              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible}
               className="flex items-center space-x-2 px-8 py-3 text-lg font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

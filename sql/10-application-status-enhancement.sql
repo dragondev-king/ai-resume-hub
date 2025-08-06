@@ -18,21 +18,6 @@ CREATE UNIQUE INDEX idx_unique_active_company_application
 ON job_applications (bidder_id, company_name) 
 WHERE status = 'active' AND company_name IS NOT NULL;
 
--- Create function to check if bidder can apply to company
-CREATE OR REPLACE FUNCTION can_apply_to_company(p_bidder_id UUID, p_company_name TEXT)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_existing_count INTEGER;
-BEGIN
-  -- Check if there's already an active application to this company
-  SELECT COUNT(*) INTO v_existing_count
-  FROM job_applications 
-  WHERE bidder_id = p_bidder_id 
-    AND company_name = p_company_name 
-    AND status = 'active';
-  
-  RETURN v_existing_count = 0;
-END; $$;
-
 -- Create function to reject application
 CREATE OR REPLACE FUNCTION reject_job_application(p_application_id UUID)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -235,7 +220,6 @@ BEGIN
 END; $$;
 
 -- Grant permissions for new functions
-GRANT EXECUTE ON FUNCTION can_apply_to_company(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION reject_job_application(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION withdraw_job_application(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_job_applications_with_filters(UUID, user_role, UUID, UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT, application_status, INTEGER, INTEGER) TO authenticated;
