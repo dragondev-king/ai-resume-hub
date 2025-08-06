@@ -25,7 +25,7 @@ const JobApplications: React.FC = () => {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
   const [totalApplications, setTotalApplications] = useState(0);
 
   // Modal state
