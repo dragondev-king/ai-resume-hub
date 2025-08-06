@@ -62,7 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const baseClass = "px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200";
     const activeClass = "text-primary-600 bg-primary-50 border border-primary-200";
     const inactiveClass = "text-gray-700 hover:text-primary-600 hover:bg-gray-50";
-    
+
     return `${baseClass} ${isActiveRoute(path) ? activeClass : inactiveClass}`;
   };
 
@@ -144,7 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
     </div>
