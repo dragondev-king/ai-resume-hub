@@ -50,7 +50,7 @@ const ResumeGenerator: React.FC = () => {
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<string | null>(null);
 
   // Application Eligibility State
-  const [isApplicationEligible, setIsApplicationEligible] = useState(false);
+  const [isApplicationEligible, setIsApplicationEligible] = useState(true);
 
   const { user, role } = useUser();
 
