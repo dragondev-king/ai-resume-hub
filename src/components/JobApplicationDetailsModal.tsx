@@ -127,7 +127,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
               )}
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-4">
             {/* Reject Button - Only for managers and admins, only for active applications */}
             {(role === 'manager' || role === 'admin') && application.status === 'active' && (
               <button

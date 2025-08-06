@@ -467,18 +467,6 @@ const JobApplications: React.FC = () => {
                             <Eye className="w-4 h-4" />
                             <span className="text-sm">View Details</span>
                           </button>
-                          {application.job_description_link && (
-                            <a
-                              href={application.job_description_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
-                            >
-                              <Eye className="w-4 h-4" />
-                              <span className="text-sm">View Job</span>
-                            </a>
-                          )}
                         </div>
                       </td>
                     </tr>

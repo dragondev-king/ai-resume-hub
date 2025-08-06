@@ -49,6 +49,9 @@ const ResumeGenerator: React.FC = () => {
   const [newQuestion, setNewQuestion] = useState('');
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<string | null>(null);
 
+  // Application Eligibility State
+  const [isApplicationEligible, setIsApplicationEligible] = useState(false);
+
   const { user, role } = useUser();
 
   // Auto-select profile if there's only one
@@ -74,6 +77,30 @@ const ResumeGenerator: React.FC = () => {
     try {
       // Generate AI resume with job title and company name extraction
       const generated = await generateResume(profile, jobDescription);
+
+      // Check if user can apply to this company before showing the resume
+      if (user && generated.companyName) {
+        const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
+          p_bidder_id: user.id,
+          p_company_name: generated.companyName
+        });
+
+        if (checkError) {
+          console.error('Error checking application eligibility:', checkError);
+          toast.error('Error checking application eligibility');
+          setLoading(false);
+          return;
+        }
+
+        if (!canApply) {
+          setIsApplicationEligible(false);
+          toast.error(`You already have an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
+          setLoading(false);
+          return;
+        }
+        setIsApplicationEligible(true);
+      }
+
       setGeneratedResume(generated);
       setEditingResume(generated);
       setIsEditing(false);
@@ -189,25 +216,6 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      // Check if user can apply to this company
-      if (user && generatedResume.companyName) {
-        const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
-          p_bidder_id: user.id,
-          p_company_name: generatedResume.companyName
-        });
-
-        if (checkError) {
-          console.error('Error checking application eligibility:', checkError);
-          toast.error('Error checking application eligibility');
-          return;
-        }
-
-        if (!canApply) {
-          toast.error(`You already have an active application to ${generatedResume.companyName}. You cannot submit multiple applications to the same company.`);
-          return;
-        }
-      }
-
       // Save job application record
       if (user) {
         const { error: saveError } = await supabase.rpc('create_job_application', {
@@ -225,10 +233,8 @@ const ResumeGenerator: React.FC = () => {
 
         if (saveError) {
           console.error('Error saving job application:', saveError);
-          if (saveError.message?.includes('already have an active application')) {
-            toast.error(saveError.message);
-            return;
-          }
+          toast.error('Error saving job application');
+          return;
         }
       }
 
@@ -453,7 +459,7 @@ const ResumeGenerator: React.FC = () => {
       </div>
 
       {/* Generated Resume */}
-      {currentResume && (
+      {currentResume && isApplicationEligible && (
         <div id="generated-resume" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
@@ -707,7 +713,7 @@ const ResumeGenerator: React.FC = () => {
       )}
 
       {/* Cover Letter Section */}
-      {currentResume && (
+      {currentResume && isApplicationEligible && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center">
@@ -751,7 +757,7 @@ const ResumeGenerator: React.FC = () => {
       )}
 
       {/* Application Questions Section */}
-      {currentResume && (
+      {currentResume && isApplicationEligible && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center">
