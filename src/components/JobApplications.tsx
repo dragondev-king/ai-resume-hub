@@ -5,7 +5,9 @@ import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import JobApplicationDetailsModal from './JobApplicationDetailsModal';
+import ConfirmationModal from './ConfirmationModal';
 import { formatDate } from '../utils/helpers';
+import toast from 'react-hot-toast';
 
 const JobApplications: React.FC = () => {
   const { user, role } = useUser();
@@ -32,6 +34,15 @@ const JobApplications: React.FC = () => {
   const [selectedApplication, setSelectedApplication] = useState<JobApplicationWithDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Confirmation modal state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    applicationId: string | null;
+  }>({
+    isOpen: false,
+    applicationId: null
+  });
 
   const loadApplications = useCallback(async () => {
     try {
@@ -174,12 +185,6 @@ const JobApplications: React.FC = () => {
   const handleDeleteApplication = async (applicationId: string) => {
     if (!user) return;
 
-    // Confirm deletion
-    const confirmed = window.confirm('Are you sure you want to delete this job application? This action cannot be undone.');
-    if (!confirmed) {
-      return;
-    }
-
     try {
       setIsDeleting(true);
       const { error } = await supabase.rpc('delete_job_application', {
@@ -190,18 +195,39 @@ const JobApplications: React.FC = () => {
 
       if (error) {
         console.error('Error deleting application:', error);
-        alert('Failed to delete application: ' + error.message);
+        toast.error('Failed to delete application: ' + error.message);
         return;
       }
 
       // Refresh the applications list
       await loadApplications();
-      alert('Application deleted successfully!');
+      toast.success('Application deleted successfully!');
     } catch (error) {
       console.error('Error deleting application:', error);
-      alert('Failed to delete application');
+      toast.error('Failed to delete application');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const openDeleteConfirmation = (applicationId: string) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      applicationId
+    });
+  };
+
+  const closeDeleteConfirmation = () => {
+    setDeleteConfirmation({
+      isOpen: false,
+      applicationId: null
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (deleteConfirmation.applicationId) {
+      await handleDeleteApplication(deleteConfirmation.applicationId);
+      closeDeleteConfirmation();
     }
   };
 
@@ -514,7 +540,7 @@ const JobApplications: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteApplication(application.id);
+                                openDeleteConfirmation(application.id);
                               }}
                               disabled={isDeleting}
                               className="flex items-center space-x-1 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -596,7 +622,20 @@ const JobApplications: React.FC = () => {
         application={selectedApplication}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        onDelete={handleDeleteApplication}
+        onDelete={openDeleteConfirmation}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmation.isOpen}
+        onClose={closeDeleteConfirmation}
+        onConfirm={confirmDelete}
+        title="Delete Application"
+        message="Are you sure you want to delete this job application? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isDeleting}
       />
     </div>
   );

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import ProfileForm from '../components/ProfileForm';
 import ProfileDetails from '../components/ProfileDetails';
 import AssignBiddersModal from '../components/AssignBiddersModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { toast } from 'react-hot-toast';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -19,6 +20,15 @@ const ProfilesPage: React.FC = () => {
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [assigningProfile, setAssigningProfile] = useState<ProfileWithDetailsRPC | null>(null);
   const [showAssignBidders, setShowAssignBidders] = useState(false);
+
+  // Confirmation modal state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    profileId: string | null;
+  }>({
+    isOpen: false,
+    profileId: null
+  });
 
 
   const handleProfileSave = () => {
@@ -44,19 +54,38 @@ const ProfilesPage: React.FC = () => {
   };
 
   const handleDeleteProfile = async (profileId: string) => {
-    if (window.confirm('Are you sure you want to delete this profile?')) {
-      try {
-        const { error } = await supabase.rpc('delete_profile', {
-          p_profile_id: profileId
-        });
+    try {
+      const { error } = await supabase.rpc('delete_profile', {
+        p_profile_id: profileId
+      });
 
-        if (error) throw error;
-        refreshProfiles();
-        toast.success('Profile deleted successfully!');
-      } catch (error) {
-        console.error('Error deleting profile:', error);
-        toast.error('Failed to delete profile');
-      }
+      if (error) throw error;
+      refreshProfiles();
+      toast.success('Profile deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting profile:', error);
+      toast.error('Failed to delete profile');
+    }
+  };
+
+  const openDeleteConfirmation = (profileId: string) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      profileId
+    });
+  };
+
+  const closeDeleteConfirmation = () => {
+    setDeleteConfirmation({
+      isOpen: false,
+      profileId: null
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (deleteConfirmation.profileId) {
+      await handleDeleteProfile(deleteConfirmation.profileId);
+      closeDeleteConfirmation();
     }
   };
 
@@ -284,7 +313,7 @@ const ProfilesPage: React.FC = () => {
                 </Link>
                 {role !== 'bidder' && (
                   <button
-                    onClick={() => handleDeleteProfile(profile.id)}
+                    onClick={() => openDeleteConfirmation(profile.id)}
                     className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700"
                   >
                     Delete
@@ -295,6 +324,19 @@ const ProfilesPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmation.isOpen}
+        onClose={closeDeleteConfirmation}
+        onConfirm={confirmDelete}
+        title="Delete Profile"
+        message="Are you sure you want to delete this profile? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={false}
+      />
     </div>
   );
 };
