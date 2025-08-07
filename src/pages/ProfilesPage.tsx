@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Plus, Settings, Crown, Users, Eye } from 'lucide-react';
+import { User, Plus, Settings, Crown, Users, Eye, Sparkles, Trash2, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Profile, ProfileWithDetailsRPC } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
@@ -307,15 +307,18 @@ const ProfilesPage: React.FC = () => {
               <div className="mt-4 flex space-x-2">
                 <Link
                   to="/generator"
-                  className="flex-1 px-3 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-md hover:bg-primary-100 text-center"
+                  className="flex-1 px-3 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-md hover:bg-primary-100 text-center flex items-center justify-center"
                 >
+                  <Sparkles className="w-4 h-4 mr-2" />
                   Generate Resume
+                  <ArrowRight className="w-4 h-4 ml-2" />
                 </Link>
                 {role !== 'bidder' && (
                   <button
                     onClick={() => openDeleteConfirmation(profile.id)}
-                    className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700"
+                    className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 flex items-center justify-center"
                   >
+                    <Trash2 className="w-4 h-4 mr-2" />
                     Delete
                   </button>
                 )}
