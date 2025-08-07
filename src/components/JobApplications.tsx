@@ -415,19 +415,20 @@ const JobApplications: React.FC = () => {
                     <tr
                       key={application.id}
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={(e) => handleViewClick(e, application)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {(index + 1) + (currentPage - 1) * pageSize}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900 break-words max-w-xs">
                           {application.job_title}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900 break-words">
                           {application.company_name || '-'}
                         </div>
                       </td>
@@ -473,7 +474,7 @@ const JobApplications: React.FC = () => {
                             className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
                           >
                             <Eye className="w-4 h-4" />
-                            <span className="text-sm">View Details</span>
+                            <span className="text-sm">View</span>
                           </button>
                         </div>
                       </td>
