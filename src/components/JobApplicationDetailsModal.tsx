@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
 import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
@@ -12,12 +12,14 @@ interface JobApplicationDetailsModalProps {
   application: JobApplicationWithDetails | null;
   isOpen: boolean;
   onClose: () => void;
+  onDelete?: (applicationId: string) => void;
 }
 
 const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   application,
   isOpen,
-  onClose
+  onClose,
+  onDelete
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
@@ -81,6 +83,18 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
     }
   }, [application, onClose]);
 
+  const handleDeleteApplication = useCallback(() => {
+    if (!application || !onDelete) return;
+
+    const confirmed = window.confirm('Are you sure you want to delete this application? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    onDelete(application.id);
+    onClose();
+  }, [application, onDelete, onClose]);
+
   if (!isOpen || !application) return null;
 
   return (
@@ -128,12 +142,23 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            {/* Delete Button - Only for managers and admins */}
+            {(role === 'manager' || role === 'admin') && onDelete && (
+              <button
+                onClick={handleDeleteApplication}
+                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                title="Delete application"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </button>
+            )}
             {/* Reject Button - Only for managers and admins, only for active applications */}
             {(role === 'manager' || role === 'admin') && application.status === 'active' && (
               <button
                 onClick={handleRejectApplication}
                 disabled={isRejecting}
-                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isRejecting ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

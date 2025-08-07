@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, Filter, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Filter, Eye, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { JobApplicationWithDetails, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
@@ -31,6 +31,7 @@ const JobApplications: React.FC = () => {
   // Modal state
   const [selectedApplication, setSelectedApplication] = useState<JobApplicationWithDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadApplications = useCallback(async () => {
     try {
@@ -168,6 +169,40 @@ const JobApplications: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedApplication(null);
+  };
+
+  const handleDeleteApplication = async (applicationId: string) => {
+    if (!user) return;
+
+    // Confirm deletion
+    const confirmed = window.confirm('Are you sure you want to delete this job application? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const { error } = await supabase.rpc('delete_job_application', {
+        p_application_id: applicationId,
+        p_user_id: user.id,
+        p_user_role: role
+      });
+
+      if (error) {
+        console.error('Error deleting application:', error);
+        alert('Failed to delete application: ' + error.message);
+        return;
+      }
+
+      // Refresh the applications list
+      await loadApplications();
+      alert('Application deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting application:', error);
+      alert('Failed to delete application');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (loading) {
@@ -415,7 +450,6 @@ const JobApplications: React.FC = () => {
                     <tr
                       key={application.id}
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={(e) => handleViewClick(e, application)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -476,6 +510,20 @@ const JobApplications: React.FC = () => {
                             <Eye className="w-4 h-4" />
                             <span className="text-sm">View</span>
                           </button>
+                          {(role === 'admin' || role === 'manager') && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteApplication(application.id);
+                              }}
+                              disabled={isDeleting}
+                              className="flex items-center space-x-1 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete application"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span className="text-sm">Delete</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -548,6 +596,7 @@ const JobApplications: React.FC = () => {
         application={selectedApplication}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        onDelete={handleDeleteApplication}
       />
     </div>
   );
