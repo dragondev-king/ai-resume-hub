@@ -74,7 +74,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex justify-between items-center h-16">
             {/* Logo and Title */}
             <div className="flex items-center">
-              <Link to="/profiles" className="text-xl font-bold text-primary-600">
+              <Link to="/applications" className="text-xl font-bold text-primary-600">
                 AI Resume Hub
               </Link>
             </div>

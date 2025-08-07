@@ -22,7 +22,7 @@ const Auth: React.FC = () => {
     try {
       await signIn(email, password);
       setIsAuthenticated(true)
-      const from = location.state?.from?.pathname || '/profiles';
+      const from = location.state?.from?.pathname || '/applications';
       navigate(from, { replace: true });
       toast.success('Signed in successfully!');
     } catch (error: any) {

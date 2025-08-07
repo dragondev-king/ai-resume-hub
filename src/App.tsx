@@ -20,27 +20,27 @@ const AppContent: React.FC = () => {
         <ProfilesProvider>
           <Layout>
             <Routes>
-              <Route path="/" element={<Navigate to="/profiles" replace />} />
+              <Route path="/" element={<Navigate to="/applications" replace />} />
               <Route path="/profiles" element={<ProfilesPage />} />
               <Route path="/generator" element={<GeneratorPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
-              <Route 
-                path="/assignments" 
+              <Route
+                path="/assignments"
                 element={
                   <ProtectedRoute requiredRole="manager">
                     <AssignmentsPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/users" 
+              <Route
+                path="/users"
                 element={
                   <ProtectedRoute requiredRole="admin">
                     <UsersPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route path="*" element={<Navigate to="/profiles" replace />} />
+              <Route path="*" element={<Navigate to="/applications" replace />} />
             </Routes>
           </Layout>
         </ProfilesProvider>

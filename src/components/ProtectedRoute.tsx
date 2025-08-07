@@ -29,8 +29,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     const requiredRoleLevel = roleHierarchy[requiredRole];
 
     if (userRoleLevel < requiredRoleLevel) {
-      // Redirect to profiles page if user doesn't have required role
-      return <Navigate to="/profiles" replace />;
+      // Redirect to applications page if user doesn't have required role
+      return <Navigate to="/applications" replace />;
     }
   }
 
