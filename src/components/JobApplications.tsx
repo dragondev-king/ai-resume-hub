@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, Filter, Eye, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Calendar, Filter, Eye, ChevronLeft, ChevronRight, Trash2, Search } from 'lucide-react';
 import { JobApplicationWithDetails, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
@@ -8,27 +8,61 @@ import JobApplicationDetailsModal from './JobApplicationDetailsModal';
 import ConfirmationModal from './ConfirmationModal';
 import { formatDate } from '../utils/helpers';
 import toast from 'react-hot-toast';
+import { useSearchParams } from 'react-router-dom';
 
 const JobApplications: React.FC = () => {
   const { user, role } = useUser();
   const { profiles } = useProfiles();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [applications, setApplications] = useState<JobApplicationWithDetails[]>([]);
   const [bidders, setBidders] = useState<Bidder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    profileId: '',
-    bidderId: '',
-    dateFrom: '',
-    dateTo: '',
-    dateRange: 'today', // 'all', 'today', 'last-week', 'last-month', 'this-week', 'this-month', 'custom'
-    status: '', // 'active', 'rejected', 'withdrawn', or empty for all
+
+  // Initialize filters from URL params
+  const getInitialFilters = () => ({
+    profileId: searchParams.get('profileId') || '',
+    bidderId: searchParams.get('bidderId') || '',
+    dateFrom: searchParams.get('dateFrom') || '',
+    dateTo: searchParams.get('dateTo') || '',
+    dateRange: searchParams.get('dateRange') || 'today',
+    status: searchParams.get('status') || '',
+    companyName: searchParams.get('companyName') || '',
   });
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [filters, setFilters] = useState(getInitialFilters);
+
+  // Pagination state - initialize from URL params
+  const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
+  const [pageSize, setPageSize] = useState(parseInt(searchParams.get('pageSize') || '25'));
   const [totalApplications, setTotalApplications] = useState(0);
+
+  // Function to update URL parameters
+  const updateURLParams = useCallback((newFilters: any, newPage: number = 1, newPageSize: number = pageSize) => {
+    const params = new URLSearchParams();
+
+    // Add filter params (only if they have values)
+    if (newFilters.profileId) params.set('profileId', newFilters.profileId);
+    if (newFilters.bidderId) params.set('bidderId', newFilters.bidderId);
+    if (newFilters.dateFrom) params.set('dateFrom', newFilters.dateFrom);
+    if (newFilters.dateTo) params.set('dateTo', newFilters.dateTo);
+    if (newFilters.dateRange && newFilters.dateRange !== 'today') params.set('dateRange', newFilters.dateRange);
+    if (newFilters.status) params.set('status', newFilters.status);
+    if (newFilters.companyName) params.set('companyName', newFilters.companyName);
+
+    // Add pagination params
+    if (newPage > 1) params.set('page', newPage.toString());
+    if (newPageSize !== 25) params.set('pageSize', newPageSize.toString());
+
+    setSearchParams(params, { replace: true });
+  }, [setSearchParams, pageSize]);
+
+  // Custom setFilters function that also updates URL
+  const setFiltersAndUpdateURL = useCallback((newFilters: any) => {
+    setFilters(newFilters);
+    updateURLParams(newFilters, 1); // Reset to page 1 when filters change
+  }, [updateURLParams]);
 
   // Modal state
   const [selectedApplication, setSelectedApplication] = useState<JobApplicationWithDetails | null>(null);
@@ -59,6 +93,7 @@ const JobApplications: React.FC = () => {
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
         p_date_range: filters.dateRange,
         p_status: filters.status || null,
+        p_company_name: filters.companyName || null,
         p_page_size: pageSize,
         p_page_number: currentPage
       });
@@ -77,7 +112,8 @@ const JobApplications: React.FC = () => {
         p_date_from: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : null,
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
         p_date_range: filters.dateRange,
-        p_status: filters.status || null
+        p_status: filters.status || null,
+        p_company_name: filters.companyName || null
       });
 
       if (countError) {
@@ -132,21 +168,20 @@ const JobApplications: React.FC = () => {
   }, [user, filters, loadApplications, role, loadBidders]);
 
   const clearFilters = () => {
-    setFilters({
+    const clearedFilters = {
       profileId: '',
       bidderId: '',
       dateFrom: '',
       dateTo: '',
       dateRange: 'today', // Reset to today as default
       status: '', // Reset status filter
-    });
+      companyName: '', // Reset company name search
+    };
+    setFiltersAndUpdateURL(clearedFilters);
     setCurrentPage(1); // Reset to first page
   };
 
-  // Reset to first page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filters]);
+
 
   // Pagination calculations
   const totalPages = Math.ceil(totalApplications / pageSize);
@@ -155,7 +190,9 @@ const JobApplications: React.FC = () => {
 
   // Pagination handlers
   const goToPage = (page: number) => {
-    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+    const newPage = Math.max(1, Math.min(page, totalPages));
+    setCurrentPage(newPage);
+    updateURLParams(filters, newPage, pageSize);
   };
 
   const goToPreviousPage = () => {
@@ -169,6 +206,7 @@ const JobApplications: React.FC = () => {
   const handlePageSizeChange = (newPageSize: number) => {
     setPageSize(newPageSize);
     setCurrentPage(1); // Reset to first page when changing page size
+    updateURLParams(filters, 1, newPageSize);
   };
 
   const handleViewClick = (e: React.MouseEvent, application: JobApplicationWithDetails) => {
@@ -259,9 +297,9 @@ const JobApplications: React.FC = () => {
           <h3 className="font-medium text-gray-900">Filters</h3>
         </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-7' :
-          role === 'manager' ? 'lg:grid-cols-6' :
-            'lg:grid-cols-5'
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-8' :
+          role === 'manager' ? 'lg:grid-cols-7' :
+            'lg:grid-cols-6'
           }`}>
           {/* Profile Filter - Admin, Manager, and Bidder */}
           {(role === 'admin' || role === 'manager' || role === 'bidder') && (
@@ -271,7 +309,7 @@ const JobApplications: React.FC = () => {
               </label>
               <select
                 value={filters.profileId}
-                onChange={(e) => setFilters({ ...filters, profileId: e.target.value })}
+                onChange={(e) => setFiltersAndUpdateURL({ ...filters, profileId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">All Profiles</option>
@@ -292,7 +330,7 @@ const JobApplications: React.FC = () => {
               </label>
               <select
                 value={filters.bidderId}
-                onChange={(e) => setFilters({ ...filters, bidderId: e.target.value })}
+                onChange={(e) => setFiltersAndUpdateURL({ ...filters, bidderId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">All Bidders</option>
@@ -314,7 +352,7 @@ const JobApplications: React.FC = () => {
               value={filters.dateRange}
               onChange={(e) => {
                 const newRange = e.target.value;
-                setFilters({
+                setFiltersAndUpdateURL({
                   ...filters,
                   dateRange: newRange,
                   // Clear custom dates when switching to preset ranges
@@ -325,6 +363,7 @@ const JobApplications: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
               <option value="this-week">This Week</option>
               <option value="this-month">This Month</option>
               <option value="last-week">Last Week</option>
@@ -343,7 +382,7 @@ const JobApplications: React.FC = () => {
               <input
                 type="date"
                 value={filters.dateFrom}
-                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                onChange={(e) => setFiltersAndUpdateURL({ ...filters, dateFrom: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
@@ -358,7 +397,7 @@ const JobApplications: React.FC = () => {
               <input
                 type="date"
                 value={filters.dateTo}
-                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                onChange={(e) => setFiltersAndUpdateURL({ ...filters, dateTo: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
@@ -371,7 +410,7 @@ const JobApplications: React.FC = () => {
             </label>
             <select
               value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              onChange={(e) => setFiltersAndUpdateURL({ ...filters, status: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Statuses</option>
@@ -379,6 +418,25 @@ const JobApplications: React.FC = () => {
               <option value="rejected">Rejected</option>
               <option value="withdrawn">Withdrawn</option>
             </select>
+          </div>
+
+          {/* Company Name Search - All roles */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Company Name
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={filters.companyName}
+                onChange={(e) => setFiltersAndUpdateURL({ ...filters, companyName: e.target.value })}
+                placeholder="Search by company name..."
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* Clear Filters Button - All roles */}
