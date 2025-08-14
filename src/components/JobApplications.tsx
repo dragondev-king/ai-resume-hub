@@ -33,6 +33,10 @@ const JobApplications: React.FC = () => {
 
   const [filters, setFilters] = useState(getInitialFilters);
 
+  // Separate state for company name search input and actual search value
+  const [companyNameInput, setCompanyNameInput] = useState(filters.companyName);
+  const [activeCompanyName, setActiveCompanyName] = useState(filters.companyName);
+
   // Pagination state - initialize from URL params
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
   const [pageSize, setPageSize] = useState(parseInt(searchParams.get('pageSize') || '25'));
@@ -93,7 +97,7 @@ const JobApplications: React.FC = () => {
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
         p_date_range: filters.dateRange,
         p_status: filters.status || null,
-        p_company_name: filters.companyName || null,
+        p_company_name: activeCompanyName || null,
         p_page_size: pageSize,
         p_page_number: currentPage
       });
@@ -113,7 +117,7 @@ const JobApplications: React.FC = () => {
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
         p_date_range: filters.dateRange,
         p_status: filters.status || null,
-        p_company_name: filters.companyName || null
+        p_company_name: activeCompanyName || null
       });
 
       if (countError) {
@@ -133,7 +137,7 @@ const JobApplications: React.FC = () => {
       setLoading(false);
       setFilterLoading(false);
     }
-  }, [user, filters, role, pageSize, currentPage]);
+  }, [user, filters, role, pageSize, currentPage, activeCompanyName]);
 
 
 
@@ -167,6 +171,11 @@ const JobApplications: React.FC = () => {
     }
   }, [user, filters, loadApplications, role, loadBidders]);
 
+  const handleCompanySearch = () => {
+    setActiveCompanyName(companyNameInput);
+    setFiltersAndUpdateURL({ ...filters, companyName: companyNameInput });
+  };
+
   const clearFilters = () => {
     const clearedFilters = {
       profileId: '',
@@ -178,6 +187,8 @@ const JobApplications: React.FC = () => {
       companyName: '', // Reset company name search
     };
     setFiltersAndUpdateURL(clearedFilters);
+    setCompanyNameInput(''); // Reset search input
+    setActiveCompanyName(''); // Reset active search
     setCurrentPage(1); // Reset to first page
   };
 
@@ -297,9 +308,9 @@ const JobApplications: React.FC = () => {
           <h3 className="font-medium text-gray-900">Filters</h3>
         </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-8' :
-          role === 'manager' ? 'lg:grid-cols-7' :
-            'lg:grid-cols-6'
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-7' :
+          role === 'manager' ? 'lg:grid-cols-6' :
+            'lg:grid-cols-5'
           }`}>
           {/* Profile Filter - Admin, Manager, and Bidder */}
           {(role === 'admin' || role === 'manager' || role === 'bidder') && (
@@ -425,17 +436,30 @@ const JobApplications: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Company Name
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
+            <div className="flex space-x-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={companyNameInput}
+                  onChange={(e) => setCompanyNameInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCompanySearch();
+                    }
+                  }}
+                  placeholder="Search by company name..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
               </div>
-              <input
-                type="text"
-                value={filters.companyName}
-                onChange={(e) => setFiltersAndUpdateURL({ ...filters, companyName: e.target.value })}
-                placeholder="Search by company name..."
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
+              <button
+                onClick={handleCompanySearch}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+              >
+                Search
+              </button>
             </div>
           </div>
 
