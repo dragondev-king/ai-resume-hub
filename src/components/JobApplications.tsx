@@ -323,7 +323,7 @@ const JobApplications: React.FC = () => {
                 onChange={(e) => setFiltersAndUpdateURL({ ...filters, profileId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
-                <option value="">All Profiles</option>
+                {profiles.length > 1 ? <option value="">All Profiles</option> : null}
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
                     {profile.first_name} {profile.last_name}
@@ -345,6 +345,7 @@ const JobApplications: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">All Bidders</option>
+                {user?.role !== 'bidder' ? <option value={user?.id}>{user?.first_name} {user?.last_name}</option> : null}
                 {bidders.map((bidder) => (
                   <option key={bidder.id} value={bidder.id}>
                     {bidder.first_name} {bidder.last_name}
