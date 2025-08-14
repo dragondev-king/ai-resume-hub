@@ -308,10 +308,7 @@ const JobApplications: React.FC = () => {
           <h3 className="font-medium text-gray-900">Filters</h3>
         </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${role === 'admin' ? 'lg:grid-cols-7' :
-          role === 'manager' ? 'lg:grid-cols-6' :
-            'lg:grid-cols-5'
-          }`}>
+        <div className='flex gap-8 flex-wrap'>
           {/* Profile Filter - Admin, Manager, and Bidder */}
           {(role === 'admin' || role === 'manager' || role === 'bidder') && (
             <div>
