@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Plus, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
@@ -51,6 +51,10 @@ const ResumeGenerator: React.FC = () => {
 
   // Application Eligibility State
   const [isApplicationEligible, setIsApplicationEligible] = useState(true);
+
+  // Copy State
+  const [copiedCoverLetter, setCopiedCoverLetter] = useState(false);
+  const [copiedAnswers, setCopiedAnswers] = useState<{ [key: string]: boolean }>({});
 
   const { user, role } = useUser();
 
@@ -344,6 +348,48 @@ const ResumeGenerator: React.FC = () => {
       toast.error(error.message || 'Failed to generate answer');
     } finally {
       setIsGeneratingAnswer(null);
+    }
+  };
+
+  // Copy Functions
+  const handleCopyCoverLetter = async () => {
+    if (!generatedCoverLetter?.content) {
+      toast.error('No cover letter to copy');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(generatedCoverLetter.content);
+      setCopiedCoverLetter(true);
+      toast.success('Cover letter copied to clipboard!');
+
+      // Reset the copied state after 2 seconds
+      setTimeout(() => setCopiedCoverLetter(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy cover letter:', error);
+      toast.error('Failed to copy cover letter');
+    }
+  };
+
+  const handleCopyAnswer = async (questionId: string) => {
+    const question = applicationQuestions.find(q => q.id === questionId);
+    if (!question?.answer) {
+      toast.error('No answer to copy');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(question.answer);
+      setCopiedAnswers(prev => ({ ...prev, [questionId]: true }));
+      toast.success('Answer copied to clipboard!');
+
+      // Reset the copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedAnswers(prev => ({ ...prev, [questionId]: false }));
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy answer:', error);
+      toast.error('Failed to copy answer');
     }
   };
 
@@ -720,33 +766,55 @@ const ResumeGenerator: React.FC = () => {
               <FileText className="w-5 h-5 mr-2" />
               Cover Letter
             </h3>
-            <button
-              onClick={handleGenerateCoverLetter}
-              disabled={isGeneratingCoverLetter}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGeneratingCoverLetter ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4" />
-                  <span>{generatedCoverLetter ? 'Regenerate Cover Letter' : 'Generate Cover Letter'}</span>
-                </>
-              )}
-            </button>
           </div>
 
           {generatedCoverLetter ? (
-            <div className="bg-gray-50 rounded-md p-4">
-              <div className="prose max-w-none">
-                <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {generatedCoverLetter.content}
+            <>
+              <div className="bg-gray-50 rounded-md p-4">
+                <div className="prose max-w-none">
+                  <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {generatedCoverLetter.content}
+                  </div>
                 </div>
               </div>
-            </div>
+              <div className="flex justify-end items-center space-x-2 mt-4">
+                {generatedCoverLetter && (
+                  <button
+                    onClick={handleCopyCoverLetter}
+                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  >
+                    {copiedCoverLetter ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={handleGenerateCoverLetter}
+                  disabled={isGeneratingCoverLetter}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingCoverLetter ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4" />
+                      <span>{generatedCoverLetter ? 'Regenerate Cover Letter' : 'Generate Cover Letter'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
           ) : (
             <div className="text-center py-8 text-gray-500">
               <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -810,7 +878,23 @@ const ResumeGenerator: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => handleCopyAnswer(question.id)}
+                          className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                          {copiedAnswers[question.id] ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
                         <button
                           onClick={() => handleGenerateAnswer(question.id)}
                           disabled={isGeneratingAnswer === question.id}
