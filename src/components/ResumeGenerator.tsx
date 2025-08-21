@@ -395,6 +395,23 @@ const ResumeGenerator: React.FC = () => {
     }
   };
 
+  // Reset Function
+  const handleReset = () => {
+    setJobDescription('');
+    setJobDescriptionLink('');
+    setGeneratedResume(null);
+    setEditingResume(null);
+    setIsEditing(false);
+    setNewSkill('');
+    setGeneratedCoverLetter(null);
+    setApplicationQuestions([]);
+    setNewQuestion('');
+    setIsApplicationEligible(true);
+    setCopiedCoverLetter(false);
+    setCopiedAnswers({});
+    toast.success('Form reset successfully! You can now generate a new resume.');
+  };
+
   const currentResume = isEditing ? editingResume : generatedResume;
 
   if (profilesLoading) {
@@ -409,12 +426,24 @@ const ResumeGenerator: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <Sparkles className="w-8 h-8 text-primary-600" />
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">AI Resume Generator</h2>
-            <p className="text-gray-600">Generate tailored resumes using AI. Simply paste a job description and the AI will extract job details and create a customized resume.</p>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Sparkles className="w-8 h-8 text-primary-600" />
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">AI Resume Generator</h2>
+              <p className="text-gray-600">Generate tailored resumes using AI. Simply paste a job description and the AI will extract job details and create a customized resume.</p>
+            </div>
           </div>
+          {(generatedResume || jobDescription || jobDescriptionLink || applicationQuestions.length > 0) && (
+            <button
+              onClick={handleReset}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+              title="Reset form to start fresh"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -483,8 +512,8 @@ const ResumeGenerator: React.FC = () => {
             />
           </div>
 
-          {/* Generate Button */}
-          <div className="flex justify-center">
+          {/* Generate and Reset Buttons */}
+          <div className="flex justify-center space-x-4">
             <button
               onClick={handleGenerate}
               disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible}
@@ -502,6 +531,17 @@ const ResumeGenerator: React.FC = () => {
                 </>
               )}
             </button>
+            {(generatedResume || jobDescription || jobDescriptionLink || applicationQuestions.length > 0) && (
+              <button
+                onClick={handleReset}
+                disabled={loading}
+                className="flex items-center space-x-2 px-6 py-3 text-lg font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Clear form and start over"
+              >
+                <RefreshCw className="w-5 h-5" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
