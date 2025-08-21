@@ -373,6 +373,41 @@ const ResumeGenerator: React.FC = () => {
     }
   };
 
+  // Download Cover Letter Function
+  const handleDownloadCoverLetter = () => {
+    if (!generatedCoverLetter?.content) {
+      toast.error('No cover letter to download');
+      return;
+    }
+
+    try {
+      // Create filename with profile name, job title, and company
+      const fileName = `CoverLetter_${generatedCoverLetter.jobTitle || 'Job'}_${generatedCoverLetter.companyName || 'Company'}.txt`;
+
+      // Create blob with cover letter content
+      const blob = new Blob([generatedCoverLetter.content], { type: 'text/plain' });
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Cover letter downloaded successfully!');
+    } catch (error) {
+      console.error('Failed to download cover letter:', error);
+      toast.error('Failed to download cover letter');
+    }
+  };
+
   const handleCopyAnswer = async (questionId: string) => {
     const question = applicationQuestions.find(q => q.id === questionId);
     if (!question?.answer) {
@@ -821,22 +856,31 @@ const ResumeGenerator: React.FC = () => {
               </div>
               <div className="flex justify-end items-center space-x-2 mt-4">
                 {generatedCoverLetter && (
-                  <button
-                    onClick={handleCopyCoverLetter}
-                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                  >
-                    {copiedCoverLetter ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
+                  <>
+                    <button
+                      onClick={handleDownloadCoverLetter}
+                      className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download .txt</span>
+                    </button>
+                    <button
+                      onClick={handleCopyCoverLetter}
+                      className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    >
+                      {copiedCoverLetter ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
             </>
