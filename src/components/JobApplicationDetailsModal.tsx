@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
+import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Trash2, Copy, Check } from 'lucide-react';
 import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
@@ -26,11 +26,37 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedDescription, setCopiedDescription] = useState(false);
 
   const { profiles } = useProfiles();
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
+
+  const copyToClipboard = useCallback(async (text: string, setCopiedState: (value: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedState(true);
+      toast.success('Copied to clipboard!');
+      setTimeout(() => setCopiedState(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      toast.error('Failed to copy to clipboard');
+    }
+  }, []);
+
+  const handleCopyJobDescriptionLink = useCallback(() => {
+    if (application?.job_description_link) {
+      copyToClipboard(application.job_description_link, setCopiedLink);
+    }
+  }, [application?.job_description_link, copyToClipboard]);
+
+  const handleCopyJobDescription = useCallback(() => {
+    if (application?.job_description) {
+      copyToClipboard(application.job_description, setCopiedDescription);
+    }
+  }, [application?.job_description, copyToClipboard]);
 
   const handleRegenerateResume = useCallback(async () => {
     if (!application || !applicationProfile) return;
@@ -197,15 +223,34 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                   {application.job_description_link && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700">Job Description Link</label>
-                      <a
-                        href={application.job_description_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700 flex items-center"
-                      >
-                        <Link className="w-4 h-4 mr-1" />
-                        View Job Description
-                      </a>
+                      <div className="flex items-center space-x-2">
+                        <a
+                          href={application.job_description_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-600 hover:text-primary-700 flex items-center"
+                        >
+                          <Link className="w-4 h-4 mr-1" />
+                          View Job Description
+                        </a>
+                        <button
+                          onClick={handleCopyJobDescriptionLink}
+                          className="flex items-center space-x-1 p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                          title="Copy job description link"
+                        >
+                          {copiedLink ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span className="text-xs">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span className="text-xs">Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -226,6 +271,26 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyJobDescription();
+                            }}
+                            className="flex items-center space-x-1 p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                            title="Copy job description"
+                          >
+                            {copiedDescription ? (
+                              <>
+                                <Check className="w-4 h-4" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
                           <span className="text-sm text-gray-500">
                             {isJobDescriptionExpanded ? 'Hide' : 'Show'} details
                           </span>
@@ -244,10 +309,6 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                                 {application.job_description}
                               </div>
                             </div>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                            <span>{application.job_description.length} characters</span>
-                            <span>{application.job_description.split('\n').length} lines</span>
                           </div>
                         </div>
                       )}
