@@ -108,7 +108,9 @@ const ResumeGenerator: React.FC = () => {
       setGeneratedResume(generated);
       setEditingResume(generated);
       setIsEditing(false);
-      document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => {
+        document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
       toast.success('Resume generated successfully! You can now edit the content before downloading.');
     } catch (error: any) {
       console.error('Error generating resume:', error);
