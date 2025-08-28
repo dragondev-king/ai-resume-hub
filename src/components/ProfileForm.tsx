@@ -22,6 +22,7 @@ interface ProfileFormData {
     start_date: string;
     end_date: string;
     description: string;
+    address?: string;
   }[];
   education: {
     school: string;
@@ -69,6 +70,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
           start_date: '',
           end_date: '',
           description: '',
+          address: '',
         },
       ],
       education: profile?.education?.length ? profile.education : [
@@ -306,6 +308,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               start_date: '',
               end_date: '',
               description: '',
+              address: '',
             })}
             className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
           >
@@ -364,6 +367,15 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company Address</label>
+              <input
+                type="text"
+                {...register(`experience.${index}.address`)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="123 Main St, City, State, ZIP"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>

@@ -12,6 +12,7 @@ interface GeneratedResume {
     start_date: string;
     end_date: string;
     descriptions: string[]; // Array of bullet points
+    address?: string; // Company address
   }[];
   skills: string[];
   jobTitle?: string;
@@ -61,7 +62,8 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : []
+        descriptions: exp.description ? [exp.description] : [],
+        address: exp.address
       })),
       skills: profile.skills,
       jobTitle: 'Not specified',
@@ -85,6 +87,7 @@ Current Summary: ${profile.summary || 'Not provided'}
 EXPERIENCE:
 ${profile.experience.map(exp => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
+  Address: ${exp.address || 'Not provided'}
   Current Description: ${exp.description || 'No description provided'}
 `).join('\n')}
 
@@ -136,13 +139,13 @@ Please respond with ONLY valid JSON in this exact format:
   "jobTitle": "extracted or inferred job title from the job description",
   "companyName": "extracted or inferred company name from the job description",
   "summary": "Professional summary here...",
-  "experience": [
+        "experience": [
     {
       "position": "Job Title",
       "company": "Company Name", 
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",
-      "location": "City, State",
+      "address": "Company Address",
       "descriptions": [
         "First bullet point with specific achievement...",
         "Second bullet point with quantifiable result...",
@@ -182,7 +185,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : []
+        descriptions: exp.description ? [exp.description] : [],
+        address: exp.address
       })),
       skills: parsed.skills || originalProfile.skills,
       jobTitle: parsed.jobTitle || 'Not specified',
@@ -225,7 +229,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         
         return {
           ...exp,
-          descriptions: enhancedDescriptions.slice(0, targetCount)
+          descriptions: enhancedDescriptions.slice(0, targetCount),
+          address: exp.address
         };
       }
       return exp;
@@ -242,7 +247,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : []
+        descriptions: exp.description ? [exp.description] : [],
+        address: exp.address
       })),
       skills: originalProfile.skills,
     };

@@ -123,6 +123,9 @@ const ProfileDetails: React.FC<ProfileDetailsProps> = ({ profile, onClose, onAss
                         <div>
                           <h5 className="font-medium text-gray-900">{exp.position}</h5>
                           <p className="text-sm text-gray-600">{exp.company}</p>
+                          {exp.address && (
+                            <p className="text-sm text-gray-600">{exp.address}</p>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">

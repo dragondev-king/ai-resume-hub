@@ -400,6 +400,9 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                           </span>
                         </div>
                         <p className="text-gray-700 font-medium mb-2">{exp.company}</p>
+                        {exp.address && (
+                          <p className="text-gray-600 text-sm mb-2">{exp.address}</p>
+                        )}
                         {exp.descriptions && exp.descriptions.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1 text-gray-700">
                             {exp.descriptions.map((desc: string, descIndex: number) => (

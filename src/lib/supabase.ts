@@ -85,6 +85,7 @@ export interface Experience {
   description?: string; // Keep for backward compatibility
   descriptions?: string[]; // Array of bullet points (for AI-generated content)
   achievements?: string[]; // Legacy field, use descriptions instead
+  address?: string; // Company address
 }
 
 export interface Education {

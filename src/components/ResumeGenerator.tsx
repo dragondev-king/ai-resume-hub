@@ -779,6 +779,15 @@ const ResumeGenerator: React.FC = () => {
                             placeholder="End Date"
                           />
                         </div>
+                        <div>
+                          <input
+                            type="text"
+                            value={exp.address || ''}
+                            onChange={(e) => handleUpdateExperience(index, 'address', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Company Address (optional)"
+                          />
+                        </div>
 
                         {/* Bullet Points */}
                         <div className="space-y-2">
@@ -817,6 +826,9 @@ const ResumeGenerator: React.FC = () => {
                       <>
                         <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
                         <div className="text-sm text-gray-600">{formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}</div>
+                        {exp.address && (
+                          <div className="text-sm text-gray-500">{exp.address}</div>
+                        )}
                         <div className="text-gray-700 mt-2 space-y-1">
                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
                             <div key={descIndex} className="flex items-start">

@@ -236,18 +236,18 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
       })
     );
 
-    // Date range and location
-    const dateLocation = [];
+    // Date range and address
+    const dateAddress = [];
     const dateRange = formatDateRange(exp.start_date, exp.end_date);
-    if (dateRange) dateLocation.push(dateRange);
-    if (exp.location) dateLocation.push(exp.location);
+    if (dateRange) dateAddress.push(dateRange);
+    if (exp.address) dateAddress.push(exp.address);
     
-    if (dateLocation.length > 0) {
+    if (dateAddress.length > 0) {
       paragraphs.push(
         new Paragraph({
           children: [
             new TextRun({
-              text: dateLocation.join(' | '),
+              text: dateAddress.join(' | '),
               size: 20,
               italics: true,
               font: 'Cambria',
