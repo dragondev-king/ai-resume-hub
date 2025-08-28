@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Profile } from '../lib/supabase';
@@ -84,6 +84,11 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
       ],
       skills: profile?.skills || [''],
     },
+  });
+
+  const watchedExperience = useWatch({
+    control,
+    name: 'experience',
   });
 
   const {
@@ -378,10 +383,21 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <span className={`text-xs ${(watchedExperience?.[index]?.description?.length || 0) >= 350
+                  ? 'text-red-500'
+                  : (watchedExperience?.[index]?.description?.length || 0) >= 300
+                    ? 'text-yellow-500'
+                    : 'text-gray-500'
+                  }`}>
+                  {watchedExperience?.[index]?.description?.length || 0}/350
+                </span>
+              </div>
               <textarea
                 {...register(`experience.${index}.description`)}
                 rows={3}
+                maxLength={350}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Brief description of your role and responsibilities..."
               />
