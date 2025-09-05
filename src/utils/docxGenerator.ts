@@ -100,24 +100,6 @@ const createHeader = (profile?: Profile): Paragraph[] => {
     })
   ];
 
-  if (title) {
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: title,
-            size: 24,
-            font: 'Cambria',
-          }),
-        ],
-        alignment: AlignmentType.CENTER,
-        spacing: {
-          after: 200,
-        },
-      })
-    );
-  }
-
   return paragraphs;
 };
 
