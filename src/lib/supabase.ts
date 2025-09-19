@@ -45,6 +45,7 @@ export interface Profile {
   experience: Experience[];
   education: Education[];
   skills: string[];
+  resume_filename_format?: string;
   created_at: string;
   updated_at: string;
 }
@@ -195,6 +196,7 @@ export interface ProfileWithDetailsRPC {
   experience: Experience[];
   education: Education[];
   skills: string[];
+  resume_filename_format?: string;
   created_at: string;
   updated_at: string;
   owner_id: string;

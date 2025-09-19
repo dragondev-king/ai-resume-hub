@@ -32,6 +32,7 @@ interface ProfileFormData {
     end_date: string;
   }[];
   skills: string[];
+  resume_filename_format: string;
 }
 
 interface ProfileFormProps {
@@ -83,6 +84,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         },
       ],
       skills: profile?.skills || [''],
+      resume_filename_format: profile?.resume_filename_format || 'first_last',
     },
   });
 
@@ -137,6 +139,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         p_experience: data.experience,
         p_education: data.education,
         p_skills: skills,
+        p_resume_filename_format: data.resume_filename_format,
       });
 
       if (error) throw error;
@@ -525,6 +528,48 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Resume Filename Format */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-900">Resume Filename Format</h3>
+        <div className="space-y-3">
+          <label className="flex items-center">
+            <input
+              type="radio"
+              {...register('resume_filename_format')}
+              value="first_last"
+              className="mr-3"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-700">
+                Simple Format
+              </span>
+              <p className="text-xs text-gray-500">
+                {profile?.first_name || 'John'}_{profile?.last_name || 'Doe'}.docx
+              </p>
+            </div>
+          </label>
+          <label className="flex items-center">
+            <input
+              type="radio"
+              {...register('resume_filename_format')}
+              value="first_last_job_company"
+              className="mr-3"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-700">
+                Extended Format
+              </span>
+              <p className="text-xs text-gray-500">
+                {profile?.first_name || 'John'}_{profile?.last_name || 'Doe'}_jobTitle-companyName.docx
+              </p>
+            </div>
+          </label>
+        </div>
+        <p className="text-xs text-gray-500">
+          Choose how your resume files will be named when downloaded. The extended format includes job title and company name.
+        </p>
       </div>
 
       {/* Submit Button */}

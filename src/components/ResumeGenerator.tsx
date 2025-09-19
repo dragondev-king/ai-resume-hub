@@ -65,6 +65,17 @@ const ResumeGenerator: React.FC = () => {
     }
   }, [profiles, selectedProfile]);
 
+  // Helper function to generate filename based on profile settings
+  const generateFileName = (profile: any, jobTitle?: string, companyName?: string): string => {
+    const format = profile.resume_filename_format || 'first_last';
+    
+    if (format === 'first_last_job_company' && jobTitle && companyName) {
+      return `${profile.first_name}_${profile.last_name}_${jobTitle}-${companyName}.docx`;
+    }
+    
+    return `${profile.first_name}_${profile.last_name}.docx`;
+  };
+
   const handleGenerate = async () => {
     if (!selectedProfile || !jobDescription) {
       toast.error('Please select a profile and enter a job description');
@@ -231,7 +242,7 @@ const ResumeGenerator: React.FC = () => {
           p_job_description: jobDescription,
           p_company_name: generatedResume.companyName || 'Not specified',
           p_job_description_link: jobDescriptionLink,
-          p_resume_file_name: `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}-${generatedResume.companyName || ''}.docx`,
+          p_resume_file_name: generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName),
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
@@ -244,7 +255,7 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
-      const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}-${generatedResume.companyName || ''}.docx`;
+      const fileName = generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName);
       await generateDocx(generatedResume, fileName, profile);
       toast.success('Resume downloaded and job application saved!');
     } catch (error: any) {
@@ -266,7 +277,7 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      const fileName = `${profile.first_name}_${profile.last_name}_${generatedResume.jobTitle || ''}-${generatedResume.companyName || ''}.docx`;
+      const fileName = generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName);
       await generateDocx(generatedResume, fileName, profile);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {

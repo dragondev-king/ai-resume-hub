@@ -32,6 +32,7 @@ CREATE TABLE profiles (
   experience JSONB DEFAULT '[]',
   education JSONB DEFAULT '[]',
   skills TEXT[] DEFAULT '{}',
+  resume_filename_format TEXT DEFAULT 'first_last',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
