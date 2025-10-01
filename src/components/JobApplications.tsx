@@ -39,7 +39,7 @@ const JobApplications: React.FC = () => {
 
   // Pagination state - initialize from URL params
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
-  const [pageSize, setPageSize] = useState(parseInt(searchParams.get('pageSize') || '25'));
+  const [pageSize, setPageSize] = useState(parseInt(searchParams.get('pageSize') || '100'));
   const [totalApplications, setTotalApplications] = useState(0);
 
   // Function to update URL parameters
@@ -504,10 +504,10 @@ const JobApplications: React.FC = () => {
                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                 className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
                 <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
               </select>
               <span className="text-sm text-gray-600">per page</span>
             </div>
