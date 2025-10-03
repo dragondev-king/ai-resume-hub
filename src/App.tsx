@@ -7,6 +7,7 @@ import { ProfilesProvider } from './contexts/ProfilesContext';
 import AuthWrapper from './components/AuthWrapper';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import HomePage from './pages/HomePage';
 import ProfilesPage from './pages/ProfilesPage';
 import GeneratorPage from './pages/GeneratorPage';
 import ApplicationsPage from './pages/ApplicationsPage';
@@ -20,7 +21,8 @@ const AppContent: React.FC = () => {
         <ProfilesProvider>
           <Layout>
             <Routes>
-              <Route path="/" element={<Navigate to="/applications" replace />} />
+              <Route path="/" element={<Navigate to="/home" replace />} />
+              <Route path="/home" element={<HomePage />} />
               <Route path="/profiles" element={<ProfilesPage />} />
               <Route path="/generator" element={<GeneratorPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
@@ -40,7 +42,7 @@ const AppContent: React.FC = () => {
                   </ProtectedRoute>
                 }
               />
-              <Route path="*" element={<Navigate to="/applications" replace />} />
+              <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </Layout>
         </ProfilesProvider>
