@@ -96,7 +96,6 @@ Create a `.env` file in the root directory:
 ```env
 REACT_APP_SUPABASE_URL=your_supabase_project_url
 REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
-REACT_APP_OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### 4. Start Development Server
