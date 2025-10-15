@@ -1,5 +1,5 @@
 -- =====================================================
--- 17. ADD PROFILE ACTIVE FIELD
+-- 16. ADD PROFILE ACTIVE FIELD
 -- =====================================================
 -- This migration adds an active field to profiles table
 

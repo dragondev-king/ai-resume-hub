@@ -121,23 +121,55 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
 
     setIsSaving(true);
     try {
-      const skills = skillFields.map(field => field.value).filter(skill => skill.trim());
+      // Sanitize skills by trimming whitespace
+      const skills = skillFields.map(field => field.value.trim()).filter(skill => skill);
+
+      // Sanitize and validate experience entries
+      const sanitizedExperience = data.experience
+        .map(exp => ({
+          company: exp.company?.trim() || '',
+          position: exp.position?.trim() || '',
+          start_date: exp.start_date,
+          end_date: exp.end_date,
+          description: exp.description?.trim() || '',
+          address: exp.address?.trim() || '',
+        }))
+        .filter(exp => exp.company || exp.position); // Keep entries with at least company or position
+
+      // Validate that we have at least one valid experience entry with a company name
+      const hasValidExperience = sanitizedExperience.some(exp => exp.company);
+      if (!hasValidExperience) {
+        toast.error('Please add at least one work experience with a company name');
+        setIsSaving(false);
+        return;
+      }
+
+      // Sanitize education entries
+      const sanitizedEducation = data.education
+        .map(edu => ({
+          school: edu.school?.trim() || '',
+          degree: edu.degree?.trim() || '',
+          field: edu.field?.trim() || '',
+          start_date: edu.start_date,
+          end_date: edu.end_date,
+        }))
+        .filter(edu => edu.school || edu.degree); // Keep entries with at least school or degree
 
       // Use upsert_profile RPC function for both create and update
       const { error } = await supabase.rpc('upsert_profile', {
         p_user_id: user.id,
-        p_first_name: data.first_name,
-        p_last_name: data.last_name,
-        p_title: data.title,
-        p_email: data.email,
-        p_phone: data.phone,
-        p_location: data.location,
+        p_first_name: data.first_name.trim(),
+        p_last_name: data.last_name.trim(),
+        p_title: data.title?.trim(),
+        p_email: data.email.trim(),
+        p_phone: data.phone.trim(),
+        p_location: data.location.trim(),
         p_profile_id: profile?.id || null,
-        p_linkedin: data.linkedin,
-        p_portfolio: data.portfolio,
-        p_summary: data.summary,
-        p_experience: data.experience,
-        p_education: data.education,
+        p_linkedin: data.linkedin?.trim(),
+        p_portfolio: data.portfolio?.trim(),
+        p_summary: data.summary?.trim(),
+        p_experience: sanitizedExperience,
+        p_education: sanitizedEducation,
         p_skills: skills,
         p_resume_filename_format: data.resume_filename_format,
       });
