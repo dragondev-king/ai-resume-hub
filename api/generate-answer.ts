@@ -23,6 +23,15 @@ export default async function handler(
   }
 
   try {
+    // Check if API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not configured');
+      return res.status(500).json({ 
+        error: 'Server configuration error',
+        details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable in Vercel dashboard.'
+      });
+    }
+
     const { profile, question, jobDescription, resumeContent } = req.body as RequestBody;
 
     if (!profile || !question || !jobDescription || !resumeContent) {
@@ -62,7 +71,8 @@ export default async function handler(
     console.error('Error generating answer:', error);
     return res.status(500).json({
       error: 'Failed to generate answer',
-      details: error.message
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
