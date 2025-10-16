@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
@@ -66,13 +67,31 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
 
 const parseAIResponse = (originalProfile: Profile, aiResponse: string): GeneratedResume => {
   try {
-    // Try to extract JSON from the response
-    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
+    // Since we're using OpenAI's JSON mode, the response should be valid JSON
+    // Just trim whitespace and parse directly
+    let jsonString = aiResponse.trim();
+    
+    // If there's still markdown code block formatting, remove it
+    if (jsonString.startsWith('```json')) {
+      jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
+    
+    // Try to extract JSON if there's extra text (fallback)
+    if (!jsonString.startsWith('{')) {
+      const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonString = jsonMatch[0];
+      } else {
+        throw new Error('No JSON found in response');
+      }
+    }
+    
+    // Remove trailing commas (common JSON error)
+    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonString);
     
     // Validate and enhance the parsed data
     const enhancedData: GeneratedResume = {
@@ -136,17 +155,14 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
+    console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
+    console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
+    toast.error("An error occurred while parsing the AI response")
+    
     // Return original data if parsing fails
     return {
-      summary: originalProfile.summary || '',
-      experience: originalProfile.experience.map(exp => ({
-        position: exp.position,
-        company: exp.company,
-        start_date: exp.start_date,
-        end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : [],
-        address: exp.address
-      })),
+      summary: '',
+      experience: [],
       skills: originalProfile.skills,
     };
   }

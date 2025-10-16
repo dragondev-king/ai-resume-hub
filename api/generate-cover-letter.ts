@@ -146,7 +146,7 @@ const extractJobInfo = async (jobDescription: string): Promise<{ jobTitle: strin
       messages: [
         {
           role: 'system',
-          content: 'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context.'
+          content: 'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
         },
         {
           role: 'user',
@@ -161,6 +161,7 @@ Respond with ONLY valid JSON in this exact format:
 }`
         }
       ],
+      response_format: { type: "json_object" },
       temperature: 0.3,
       max_tokens: 200,
     });
