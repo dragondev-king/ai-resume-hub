@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
@@ -156,6 +157,7 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     console.error('Error parsing AI response:', error);
     console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
     console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
+    toast.error("An error occurred while parsing the AI response")
     
     // Return original data if parsing fails
     return {
