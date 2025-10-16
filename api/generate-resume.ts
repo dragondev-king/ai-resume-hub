@@ -36,13 +36,14 @@ export default async function handler(
       messages: [
         {
           role: 'system',
-          content: 'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged.'
+          content: 'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
         },
         {
           role: 'user',
           content: prompt
         }
       ],
+      response_format: { type: "json_object" },
       temperature: 0.7,
       max_tokens: 2000,
     });
@@ -139,7 +140,14 @@ If applying for "Ruby on Rails Developer" and original experience was in "Web De
 - Emphasize experience with similar frameworks (if any) or rapid learning abilities
 - Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
 
-Please respond with ONLY valid JSON in this exact format:
+IMPORTANT JSON FORMATTING RULES:
+- Respond with ONLY valid JSON - no markdown code blocks, no extra text
+- Do NOT use trailing commas in arrays or objects
+- Properly escape special characters in strings (newlines as \\n, quotes as \\", backslashes as \\\\)
+- Ensure all strings are properly quoted
+- Ensure all arrays and objects are properly closed
+
+Response format:
 {
   "jobTitle": "extracted or inferred job title from the job description",
   "companyName": "extracted or inferred company name from the job description",

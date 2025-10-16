@@ -67,12 +67,41 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
 const parseAIResponse = (originalProfile: Profile, aiResponse: string): GeneratedResume => {
   try {
     // Try to extract JSON from the response
-    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+    let jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('No JSON found in response');
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    let jsonString = jsonMatch[0];
+    
+    // Sanitize common JSON issues
+    // 1. Remove trailing commas before closing brackets/braces
+    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+    
+    // 2. Fix common escape sequence issues
+    jsonString = jsonString.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    
+    // 3. Try to find the last valid closing brace if there's extra content
+    const firstBrace = jsonString.indexOf('{');
+    let braceCount = 0;
+    let lastValidIndex = -1;
+    
+    for (let i = firstBrace; i < jsonString.length; i++) {
+      if (jsonString[i] === '{') braceCount++;
+      if (jsonString[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          lastValidIndex = i;
+          break;
+        }
+      }
+    }
+    
+    if (lastValidIndex > 0) {
+      jsonString = jsonString.substring(0, lastValidIndex + 1);
+    }
+
+    const parsed = JSON.parse(jsonString);
     
     // Validate and enhance the parsed data
     const enhancedData: GeneratedResume = {
@@ -136,17 +165,13 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
+    console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
+    console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
+    
     // Return original data if parsing fails
     return {
-      summary: originalProfile.summary || '',
-      experience: originalProfile.experience.map(exp => ({
-        position: exp.position,
-        company: exp.company,
-        start_date: exp.start_date,
-        end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : [],
-        address: exp.address
-      })),
+      summary: '',
+      experience: [],
       skills: originalProfile.skills,
     };
   }
