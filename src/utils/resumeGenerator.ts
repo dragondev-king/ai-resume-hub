@@ -66,40 +66,29 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
 
 const parseAIResponse = (originalProfile: Profile, aiResponse: string): GeneratedResume => {
   try {
-    // Try to extract JSON from the response
-    let jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
+    // Since we're using OpenAI's JSON mode, the response should be valid JSON
+    // Just trim whitespace and parse directly
+    let jsonString = aiResponse.trim();
+    
+    // If there's still markdown code block formatting, remove it
+    if (jsonString.startsWith('```json')) {
+      jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
-
-    let jsonString = jsonMatch[0];
     
-    // Sanitize common JSON issues
-    // 1. Remove trailing commas before closing brackets/braces
-    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
-    
-    // 2. Fix common escape sequence issues
-    jsonString = jsonString.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-    
-    // 3. Try to find the last valid closing brace if there's extra content
-    const firstBrace = jsonString.indexOf('{');
-    let braceCount = 0;
-    let lastValidIndex = -1;
-    
-    for (let i = firstBrace; i < jsonString.length; i++) {
-      if (jsonString[i] === '{') braceCount++;
-      if (jsonString[i] === '}') {
-        braceCount--;
-        if (braceCount === 0) {
-          lastValidIndex = i;
-          break;
-        }
+    // Try to extract JSON if there's extra text (fallback)
+    if (!jsonString.startsWith('{')) {
+      const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonString = jsonMatch[0];
+      } else {
+        throw new Error('No JSON found in response');
       }
     }
     
-    if (lastValidIndex > 0) {
-      jsonString = jsonString.substring(0, lastValidIndex + 1);
-    }
+    // Remove trailing commas (common JSON error)
+    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
 
     const parsed = JSON.parse(jsonString);
     
