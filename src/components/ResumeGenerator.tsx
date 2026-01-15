@@ -68,11 +68,11 @@ const ResumeGenerator: React.FC = () => {
   // Helper function to generate filename based on profile settings
   const generateFileName = (profile: any, jobTitle?: string, companyName?: string): string => {
     const format = profile.resume_filename_format || 'first_last';
-    
+
     if (format === 'first_last_job_company' && jobTitle && companyName) {
       return `${profile.first_name}_${profile.last_name}_${jobTitle}-${companyName}.docx`;
     }
-    
+
     return `${profile.first_name}_${profile.last_name}.docx`;
   };
 
@@ -94,7 +94,8 @@ const ResumeGenerator: React.FC = () => {
       const generated = await generateResume(profile, jobDescription);
 
       // Check if this profile can apply to this company before showing the resume
-      if (generated.companyName) {
+      // Only check if the profile has duplicate checking enabled (defaults to true)
+      if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
         const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
           p_profile_id: selectedProfile,
           p_company_name: generated.companyName
@@ -113,6 +114,9 @@ const ResumeGenerator: React.FC = () => {
           setLoading(false);
           return;
         }
+        setIsApplicationEligible(true);
+      } else {
+        // If duplicate checking is disabled, always allow
         setIsApplicationEligible(true);
       }
 
