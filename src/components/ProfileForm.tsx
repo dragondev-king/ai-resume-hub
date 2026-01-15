@@ -33,6 +33,7 @@ interface ProfileFormData {
   }[];
   skills: string[];
   resume_filename_format: string;
+  check_duplicate_applications: boolean;
 }
 
 interface ProfileFormProps {
@@ -85,6 +86,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
       ],
       skills: profile?.skills || [''],
       resume_filename_format: profile?.resume_filename_format || 'first_last',
+      check_duplicate_applications: profile?.check_duplicate_applications !== undefined ? profile.check_duplicate_applications : true,
     },
   });
 
@@ -172,6 +174,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         p_education: sanitizedEducation,
         p_skills: skills,
         p_resume_filename_format: data.resume_filename_format,
+        p_check_duplicate_applications: data.check_duplicate_applications,
       });
 
       if (error) throw error;
@@ -602,6 +605,29 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         <p className="text-xs text-gray-500">
           Choose how your resume files will be named when downloaded. The extended format includes job title and company name.
         </p>
+      </div>
+
+      {/* Application Settings */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-900">Application Settings</h3>
+        <div className="flex items-start">
+          <div className="flex items-center h-5">
+            <input
+              type="checkbox"
+              {...register('check_duplicate_applications')}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+          </div>
+          <div className="ml-3 text-sm">
+            <label htmlFor="check_duplicate_applications" className="font-medium text-gray-700">
+              Check for duplicate applications to companies
+            </label>
+            <p className="text-gray-500">
+              When enabled, the system will prevent submitting multiple applications to the same company for this profile.
+              When disabled, you can submit multiple applications to the same company.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Submit Button */}

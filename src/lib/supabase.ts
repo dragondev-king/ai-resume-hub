@@ -46,6 +46,7 @@ export interface Profile {
   education: Education[];
   skills: string[];
   resume_filename_format?: string;
+  check_duplicate_applications?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -197,6 +198,7 @@ export interface ProfileWithDetailsRPC {
   education: Education[];
   skills: string[];
   resume_filename_format?: string;
+  check_duplicate_applications?: boolean;
   created_at: string;
   updated_at: string;
   owner_id: string;
