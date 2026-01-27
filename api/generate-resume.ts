@@ -45,7 +45,7 @@ export default async function handler(
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
     });
 
     const aiResponse = completion.choices[0]?.message?.content || '';
