@@ -43,7 +43,7 @@ export default async function handler(
 
     // Call OpenAI API for answer
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
