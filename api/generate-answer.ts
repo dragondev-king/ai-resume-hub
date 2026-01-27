@@ -26,7 +26,7 @@ export default async function handler(
     // Check if API key is configured
     if (!process.env.OPENAI_API_KEY) {
       console.error('OPENAI_API_KEY is not configured');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Server configuration error',
         details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable in Vercel dashboard.'
       });
@@ -43,7 +43,7 @@ export default async function handler(
 
     // Call OpenAI API for answer
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages: [
         {
           role: 'system',

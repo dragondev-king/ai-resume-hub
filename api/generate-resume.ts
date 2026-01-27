@@ -32,7 +32,7 @@ export default async function handler(
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages: [
         {
           role: 'system',
@@ -51,16 +51,16 @@ export default async function handler(
     const aiResponse = completion.choices[0]?.message?.content || '';
 
     // Return the AI response
-    return res.status(200).json({ 
+    return res.status(200).json({
       success: true,
-      aiResponse 
+      aiResponse
     });
 
   } catch (error: any) {
     console.error('Error generating resume:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Failed to generate resume',
-      details: error.message 
+      details: error.message
     });
   }
 }

@@ -42,7 +42,7 @@ export default async function handler(
 
     // Call OpenAI API for cover letter
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages: [
         {
           role: 'system',
