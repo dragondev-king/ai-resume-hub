@@ -42,7 +42,7 @@ export default async function handler(
 
     // Call OpenAI API for cover letter
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4.1-mini',
       messages: [
         {
           role: 'system',
@@ -141,7 +141,7 @@ Please write the cover letter in a natural, conversational tone that sounds auth
 const extractJobInfo = async (jobDescription: string): Promise<{ jobTitle: string; companyName: string }> => {
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4.1-mini',
       messages: [
         {
           role: 'system',
