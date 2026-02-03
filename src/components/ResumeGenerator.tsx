@@ -1057,6 +1057,23 @@ const ResumeGenerator: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Bottom Reset Button */}
+      {generatedResume && (
+        <div className="flex justify-center pt-4 pb-8">
+          <button
+            onClick={() => {
+              handleReset();
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="flex items-center space-x-2 px-6 py-3 text-lg font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 shadow-sm transition-colors"
+            title="Clear form and start over"
+          >
+            <RefreshCw className="w-5 h-5" />
+            <span>Reset</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
