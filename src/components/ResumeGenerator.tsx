@@ -3,7 +3,7 @@ import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Pl
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
-import { generateDocx } from '../utils/docxGenerator';
+import { generateDocx, getUseAiEnhancedJobTitlePreference, getDisplayPositionForExperience } from '../utils/docxGenerator';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -463,6 +463,8 @@ const ResumeGenerator: React.FC = () => {
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
+  const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitlePreference();
 
   if (profilesLoading) {
     return (
@@ -839,7 +841,7 @@ const ResumeGenerator: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                        <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
+                        <div className="font-medium text-gray-900">{getDisplayPositionForExperience(profile?.experience ?? [], exp, useAiEnhancedJobTitle)} at {exp.company}</div>
                         <div className="text-sm text-gray-600">{formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}</div>
                         {exp.address && (
                           <div className="text-sm text-gray-500">{exp.address}</div>

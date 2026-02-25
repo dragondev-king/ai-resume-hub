@@ -4,7 +4,7 @@ import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
-import { generateDocx } from '../utils/docxGenerator';
+import { generateDocx, getUseAiEnhancedJobTitlePreference, getDisplayPositionForExperience } from '../utils/docxGenerator';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
 import ConfirmationModal from './ConfirmationModal';
@@ -33,6 +33,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitlePreference();
 
   const copyToClipboard = useCallback(async (text: string, setCopiedState: (value: boolean) => void) => {
     try {
@@ -394,7 +395,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                     {application.generated_experience.map((exp: any, index: number) => (
                       <div key={index} className="border-l-4 border-primary-500 pl-4">
                         <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-gray-900">{exp.position}</h4>
+                          <h4 className="font-semibold text-gray-900">{getDisplayPositionForExperience(applicationProfile?.experience ?? [], exp, useAiEnhancedJobTitle)}</h4>
                           <span className="text-sm text-gray-600">
                             {formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}
                           </span>

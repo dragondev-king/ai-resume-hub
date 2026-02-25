@@ -35,6 +35,22 @@ export function getUseAiEnhancedJobTitlePreference(): boolean {
   return window.localStorage.getItem(USE_AI_ENHANCED_JOB_TITLE_KEY) === 'true';
 }
 
+/**
+ * Resolve the job title to display for an experience entry, respecting the "use AI-enhanced job title" preference.
+ * Use this whenever displaying generated experience so the UI matches DOCX and the profile setting.
+ */
+export function getDisplayPositionForExperience(
+  originalExperience: { company?: string; position?: string }[],
+  aiExp: { company?: string; position?: string },
+  useAiEnhancedJobTitle: boolean
+): string {
+  if (useAiEnhancedJobTitle && aiExp.position) return aiExp.position;
+  const original = originalExperience.find(
+    (o) => o.company && aiExp.company && aiExp.company.toLowerCase().includes(o.company.toLowerCase())
+  );
+  return original?.position ?? aiExp.position ?? '';
+}
+
 export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile, options?: GenerateDocxOptions): Promise<void> => {
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options);
 
