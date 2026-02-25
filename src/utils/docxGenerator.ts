@@ -11,7 +11,33 @@ interface GeneratedResume {
 
 type Profile = ProfileWithDetailsRPC;
 
-export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile): Promise<void> => {
+/** localStorage key for "use AI-enhanced job titles in DOCX" (value: 'true' | 'false') */
+export const USE_AI_ENHANCED_JOB_TITLE_KEY = 'resume.useAiEnhancedJobTitle';
+
+export interface GenerateDocxOptions {
+  /** When true, use AI-enhanced position when available; when false, use original exp.position. Defaults to localStorage or true. */
+  useAiEnhancedJobTitle?: boolean;
+}
+
+// get the useAiEnhancedJobTitle preference from the options or localStorage
+function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions): boolean {
+  if (options?.useAiEnhancedJobTitle !== undefined) return options.useAiEnhancedJobTitle;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage.getItem(USE_AI_ENHANCED_JOB_TITLE_KEY) === 'true';
+  }
+  // default to false
+  return false;
+}
+
+/** Read current preference from localStorage (for UI). Defaults to false when not set. */
+export function getUseAiEnhancedJobTitlePreference(): boolean {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  return window.localStorage.getItem(USE_AI_ENHANCED_JOB_TITLE_KEY) === 'true';
+}
+
+export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile, options?: GenerateDocxOptions): Promise<void> => {
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options);
+
   const doc = new Document({
     sections: [
       {
@@ -28,13 +54,13 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
         children: [
           // Header with name and contact info
           ...createHeader(profile),
-          
+
           // Contact Information
           ...(profile ? [
             createSectionHeader('CONTACT'),
             ...createContactSection(profile)
           ] : []),
-          
+
           // Professional Summary
           ...(generatedResume.summary ? [
             createSectionHeader('SUMMARY'),
@@ -50,19 +76,19 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
               },
             }),
           ] : []),
-          
+
           // Professional Experience (combine original profile experience with AI enhancements)
           ...(profile?.experience && profile.experience.length > 0 ? [
             createSectionHeader('PROFESSIONAL EXPERIENCE'),
-            ...createProfessionalExperienceSection(profile.experience, generatedResume.experience),
+            ...createProfessionalExperienceSection(profile.experience, generatedResume.experience, useAiEnhancedJobTitle),
           ] : []),
-          
+
           // Education
           ...(profile?.education && profile.education.length > 0 ? [
             createSectionHeader('EDUCATION'),
             ...createEducationSection(profile.education),
           ] : []),
-          
+
           // Skills (combine original profile skills with AI enhancements)
           ...(generatedResume?.skills && generatedResume.skills.length > 0 ? [
             createSectionHeader('SKILLS'),
@@ -81,7 +107,7 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
 const createHeader = (profile?: Profile): Paragraph[] => {
   const name = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
   const title = profile?.title;
-  
+
   const paragraphs: Paragraph[] = [
     new Paragraph({
       children: [
@@ -105,14 +131,14 @@ const createHeader = (profile?: Profile): Paragraph[] => {
 
 const createContactSection = (profile: Profile): Paragraph[] => {
   const contactInfo = [];
-  
+
   if (profile.email) contactInfo.push({ label: 'Email', value: profile.email });
   if (profile.phone) contactInfo.push({ label: 'Phone', value: profile.phone });
   if (profile.location) contactInfo.push({ label: 'Location', value: profile.location });
   if (profile.linkedin) contactInfo.push({ label: 'LinkedIn', value: profile.linkedin });
   if (profile.portfolio) contactInfo.push({ label: 'Portfolio', value: profile.portfolio });
-  
-  return contactInfo.map(info => 
+
+  return contactInfo.map(info =>
     new Paragraph({
       children: [
         new TextRun({
@@ -165,19 +191,19 @@ const createSectionHeader = (title: string): Paragraph => {
   });
 };
 
-const createProfessionalExperienceSection = (originalExperience: any[], aiExperience: any[]): Paragraph[] => {
+const createProfessionalExperienceSection = (originalExperience: any[], aiExperience: any[], useAiEnhancedJobTitle: boolean): Paragraph[] => {
   const paragraphs: Paragraph[] = [];
-  
+
   // Use original experience data, but enhance with AI-generated descriptions if available
   originalExperience.forEach((exp, index) => {
     // Try to find matching AI-enhanced experience (only by company name)
-    const aiEnhanced = aiExperience.find(ai => 
+    const aiEnhanced = aiExperience.find(ai =>
       ai.company?.toLowerCase().includes(exp.company?.toLowerCase())
     );
-    
+
     // Use AI-enhanced descriptions array if available, otherwise convert original to array
     const descriptions = aiEnhanced?.descriptions || (exp.description ? [exp.description] : []);
-    
+
     // Add spacing before each experience entry
     if (index > 0) {
       paragraphs.push(
@@ -203,12 +229,13 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
       })
     );
 
-    // Job title
+    // Job title: use AI-enhanced position only when preference is on and available
+    const jobTitle = useAiEnhancedJobTitle && aiEnhanced?.position ? aiEnhanced.position : exp.position;
     paragraphs.push(
       new Paragraph({
         children: [
           new TextRun({
-            text: aiEnhanced?.position || exp.position,
+            text: jobTitle,
             size: 22,
             bold: true,
             font: 'Cambria',
@@ -223,7 +250,7 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
     const dateRange = formatDateRange(exp.start_date, exp.end_date);
     if (dateRange) dateAddress.push(dateRange);
     if (exp.address) dateAddress.push(exp.address);
-    
+
     if (dateAddress.length > 0) {
       paragraphs.push(
         new Paragraph({
@@ -254,13 +281,13 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
       })
     );
   });
-  
+
   return paragraphs;
 };
 
 const createEducationSection = (education: any[]): Paragraph[] => {
   const paragraphs: Paragraph[] = [];
-  
+
   education.forEach((edu, index) => {
     if (index > 0) {
       paragraphs.push(
@@ -292,7 +319,7 @@ const createEducationSection = (education: any[]): Paragraph[] => {
     if (edu.school) schoolInfo.push(edu.school);
     const dateRange = formatDateRange(edu.start_date, edu.end_date);
     if (dateRange) schoolInfo.push(`(${dateRange})`);
-    
+
     if (schoolInfo.length > 0) {
       paragraphs.push(
         new Paragraph({
@@ -308,14 +335,14 @@ const createEducationSection = (education: any[]): Paragraph[] => {
       );
     }
   });
-  
+
   return paragraphs;
 };
 
 const createExperienceBulletPoints = (descriptions: string[]): Paragraph[] => {
   if (!descriptions || descriptions.length === 0) return [];
 
-  return descriptions.map(description => 
+  return descriptions.map(description =>
     new Paragraph({
       children: [
         new TextRun({
@@ -341,15 +368,15 @@ const createExperienceBulletPoints = (descriptions: string[]): Paragraph[] => {
 
 const createSkillsSection = (skills: string[]): Paragraph[] => {
   // Group skills into categories for better presentation
-  const technicalSkills = skills.filter(skill => 
+  const technicalSkills = skills.filter(skill =>
     /(javascript|python|java|c\+\+|react|angular|vue|node|sql|aws|docker|kubernetes|git|agile|scrum|api|html|css|typescript|php|ruby|go|rust|swift|kotlin|flutter|react native|machine learning|ai|data|analytics|cloud|devops|testing|ci\/cd)/i.test(skill)
   );
-  
-  const softSkills = skills.filter(skill => 
+
+  const softSkills = skills.filter(skill =>
     /(leadership|communication|teamwork|problem solving|project management|collaboration|mentoring|presentation|negotiation|customer service|time management|organization|creativity|adaptability|critical thinking|decision making)/i.test(skill)
   );
 
-  const otherSkills = skills.filter(skill => 
+  const otherSkills = skills.filter(skill =>
     !technicalSkills.includes(skill) && !softSkills.includes(skill)
   );
 
@@ -377,7 +404,7 @@ const createSkillsSection = (skills: string[]): Paragraph[] => {
       })
     );
   }
-  
+
   if (softSkills.length > 0) {
     paragraphs.push(
       new Paragraph({
@@ -400,7 +427,7 @@ const createSkillsSection = (skills: string[]): Paragraph[] => {
       })
     );
   }
-  
+
   if (otherSkills.length > 0) {
     paragraphs.push(
       new Paragraph({
@@ -428,14 +455,14 @@ const createSkillsSection = (skills: string[]): Paragraph[] => {
 };
 
 const formatDateRange = (startDate: string, endDate: string): string => {
-  
-  
+
+
   const start = formatDate(startDate);
   const end = formatDate(endDate);
-  
+
   if (!start && !end) return '';
   if (!start) return `Until ${end}`;
   if (!end) return `${start} - Present`;
-  
+
   return `${start} – ${end}`;
 }; 

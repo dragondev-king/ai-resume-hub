@@ -3,7 +3,7 @@ import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Pl
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
-import { generateDocx } from '../utils/docxGenerator';
+import { generateDocx, getUseAiEnhancedJobTitlePreference, USE_AI_ENHANCED_JOB_TITLE_KEY } from '../utils/docxGenerator';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -55,6 +55,9 @@ const ResumeGenerator: React.FC = () => {
   // Copy State
   const [copiedCoverLetter, setCopiedCoverLetter] = useState(false);
   const [copiedAnswers, setCopiedAnswers] = useState<{ [key: string]: boolean }>({});
+
+  // DOCX option: use AI-enhanced job titles (stored in localStorage)
+  const [useAiEnhancedJobTitle, setUseAiEnhancedJobTitle] = useState(() => getUseAiEnhancedJobTitlePreference());
 
   const { user, role } = useUser();
 
@@ -643,6 +646,23 @@ const ResumeGenerator: React.FC = () => {
                 <span>Download Only</span>
               </button>
             </div>
+          </div>
+
+          {/* DOCX option: AI-enhanced job titles */}
+          <div className="flex items-center gap-2 mb-4">
+            <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={useAiEnhancedJobTitle}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setUseAiEnhancedJobTitle(checked);
+                  window.localStorage.setItem(USE_AI_ENHANCED_JOB_TITLE_KEY, checked ? 'true' : 'false');
+                }}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span>Use AI-enhanced job titles in DOCX</span>
+            </label>
           </div>
 
           {/* Extracted Job Information */}
