@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import { getUseAiEnhancedJobTitlePreference, USE_AI_ENHANCED_JOB_TITLE_KEY } from '../utils/docxGenerator';
 
 interface ProfileFormData {
   first_name: string;
@@ -45,6 +46,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
   const { role } = useUser();
   const { user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
+  const [useAiEnhancedJobTitle, setUseAiEnhancedJobTitle] = useState(() => getUseAiEnhancedJobTitlePreference());
   const [skillFields, setSkillFields] = useState(
     profile?.skills.length ? profile.skills.map((skill, index) => ({ id: index, value: skill })) : [{ id: 0, value: '' }]
   );
@@ -625,6 +627,29 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             <p className="text-gray-500">
               When enabled, the system will prevent submitting multiple applications to the same company for this profile.
               When disabled, you can submit multiple applications to the same company.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start pt-2">
+          <div className="flex items-center h-5">
+            <input
+              type="checkbox"
+              id="use_ai_enhanced_job_title"
+              checked={useAiEnhancedJobTitle}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setUseAiEnhancedJobTitle(checked);
+                window.localStorage.setItem(USE_AI_ENHANCED_JOB_TITLE_KEY, checked ? 'true' : 'false');
+              }}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+          </div>
+          <div className="ml-3 text-sm">
+            <label htmlFor="use_ai_enhanced_job_title" className="font-medium text-gray-700">
+              Use AI-enhanced job titles in DOCX
+            </label>
+            <p className="text-gray-500">
+              When enabled, generated resumes use AI-tailored job titles per experience when available. When disabled, your original job titles are used everywhere.
             </p>
           </div>
         </div>
