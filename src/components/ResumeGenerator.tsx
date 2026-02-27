@@ -316,20 +316,48 @@ const ResumeGenerator: React.FC = () => {
     }
   };
 
-  // Application Questions Management
-  const handleAddQuestion = () => {
-    if (newQuestion.trim()) {
-      const question: ApplicationQuestion = {
-        id: Date.now().toString(),
-        question: newQuestion.trim()
-      };
-      setApplicationQuestions([...applicationQuestions, question]);
-      setNewQuestion('');
+  // Application Questions Management — add question and generate answer immediately
+  const handleAddQuestion = async () => {
+    const trimmed = newQuestion.trim();
+    if (!trimmed) return;
+
+    if (!generatedResume || !selectedProfile) {
+      toast.error('Please generate a resume first');
+      return;
+    }
+
+    const profile = profiles.find(p => p.id === selectedProfile);
+    if (!profile) {
+      toast.error('Profile not found');
+      return;
+    }
+
+    const question: ApplicationQuestion = {
+      id: Date.now().toString(),
+      question: trimmed
+    };
+    setApplicationQuestions(prev => [...prev, question]);
+    setNewQuestion('');
+    setIsGeneratingAnswer(question.id);
+
+    try {
+      const result = await generateAnswer(profile, question.question, jobDescription, generatedResume);
+      setApplicationQuestions(prev =>
+        prev.map(q =>
+          q.id === question.id ? { ...q, answer: result.content } : q
+        )
+      );
+      toast.success('Answer generated');
+    } catch (error: any) {
+      console.error('Error generating answer:', error);
+      toast.error(error.message || 'Failed to generate answer');
+    } finally {
+      setIsGeneratingAnswer(null);
     }
   };
 
   const handleRemoveQuestion = (id: string) => {
-    setApplicationQuestions(applicationQuestions.filter(q => q.id !== id));
+    setApplicationQuestions(prev => prev.filter(q => q.id !== id));
   };
 
   const handleGenerateAnswer = async (questionId: string) => {
@@ -949,30 +977,45 @@ const ResumeGenerator: React.FC = () => {
             </h3>
           </div>
 
-          {/* Add Question Form */}
+          {/* Add Question Form — each new question gets an answer generated immediately */}
           <div className="mb-6">
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
               <input
                 type="text"
                 value={newQuestion}
                 onChange={(e) => setNewQuestion(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddQuestion())}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddQuestion())}
+                disabled={!!isGeneratingAnswer}
+                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
                 placeholder="Enter a job application question (e.g., 'Why are you interested in this position?')"
               />
               <button
                 onClick={handleAddQuestion}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                disabled={!!isGeneratingAnswer}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed shrink-0 w-full sm:w-auto"
               >
-                <Plus className="w-4 h-4" />
+                {isGeneratingAnswer ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Generate Answer</span>
+                  </>
+                )}
               </button>
             </div>
+            {isGeneratingAnswer && (
+              <p className="mt-2 text-sm text-gray-500">Generating answer…</p>
+            )}
           </div>
 
-          {/* Questions List */}
+          {/* Questions List — newest first so you see the result right away */}
           {applicationQuestions.length > 0 ? (
             <div className="space-y-4">
-              {applicationQuestions.map((question) => (
+              {[...applicationQuestions].reverse().map((question) => (
                 <div key={question.id} className="bg-gray-50 rounded-md p-4">
                   <div className="flex items-start justify-between mb-3">
                     <h4 className="font-medium text-gray-900">{question.question}</h4>
@@ -1029,25 +1072,12 @@ const ResumeGenerator: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => handleGenerateAnswer(question.id)}
-                      disabled={isGeneratingAnswer === question.id}
-                      className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-md hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isGeneratingAnswer === question.id ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <MessageSquare className="w-4 h-4" />
-                          <span>Generate Answer</span>
-                        </>
-                      )}
-                    </button>
-                  )}
+                  ) : isGeneratingAnswer === question.id ? (
+                    <div className="flex items-center space-x-2 py-3 text-primary-600">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Generating answer...</span>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
