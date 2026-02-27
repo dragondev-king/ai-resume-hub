@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Plus, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
