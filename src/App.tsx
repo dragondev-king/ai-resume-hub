@@ -1,6 +1,6 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { CustomToaster } from './components/CustomToastBar';
 import { AuthProvider } from './contexts/AuthContext';
 import UserProvider from './contexts/UserContext';
 import { ProfilesProvider } from './contexts/ProfilesContext';
@@ -56,7 +56,7 @@ const App: React.FC = () => {
     <Router>
       <AuthProvider>
         <AppContent />
-        <Toaster position="top-right" />
+        <CustomToaster />
       </AuthProvider>
     </Router>
   );
