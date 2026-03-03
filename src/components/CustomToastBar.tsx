@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster, ToastBar, toast } from 'react-hot-toast';
 import type { Toast } from 'react-hot-toast';
 
-const TOAST_DURATION_MS = 60 * 1000; // 1 min
+const ERROR_DURATION_MS = 60 * 1000; // 1 min for errors only
+const DEFAULT_DURATION_MS = 2000;    // 2s for success, loading, blank
 
 function ToastProgressBar({ toast: t, onComplete }: { toast: Toast; onComplete: () => void }) {
-  const duration = t.duration ?? TOAST_DURATION_MS;
+  const duration = t.duration ?? DEFAULT_DURATION_MS;
   const createdAt = t.createdAt ?? Date.now();
   const [remainingPercent, setRemainingPercent] = useState(100);
 
@@ -40,7 +41,7 @@ function ToastProgressBar({ toast: t, onComplete }: { toast: Toast; onComplete: 
 
 function SingleToastBar({ t }: { t: Toast }) {
   const handleDismiss = useCallback(() => {
-    toast.dismiss(t.id);
+    toast.remove(t.id);
   }, [t.id]);
 
   return (
@@ -49,7 +50,7 @@ function SingleToastBar({ t }: { t: Toast }) {
       tabIndex={0}
       onClick={handleDismiss}
       onKeyDown={(e) => e.key === 'Enter' && handleDismiss()}
-      className="relative overflow-hidden rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+      className="relative overflow-hidden rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
       style={{ minWidth: '280px' }}
     >
       <ToastBar toast={t}>
@@ -67,7 +68,7 @@ function SingleToastBar({ t }: { t: Toast }) {
                 e.stopPropagation();
                 handleDismiss();
               }}
-              className="absolute top-2 right-2 p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="absolute top-2 right-2 p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none"
               aria-label="Dismiss"
             >
               <span className="text-lg leading-none">×</span>
@@ -85,11 +86,12 @@ export function CustomToaster() {
     <Toaster
       position="top-right"
       toastOptions={{
-        duration: TOAST_DURATION_MS,
-        success: { duration: TOAST_DURATION_MS },
-        error: { duration: TOAST_DURATION_MS },
-        loading: { duration: TOAST_DURATION_MS },
-        blank: { duration: TOAST_DURATION_MS },
+        duration: DEFAULT_DURATION_MS,
+        removeDelay: 0,
+        success: { duration: DEFAULT_DURATION_MS },
+        error: { duration: ERROR_DURATION_MS },
+        loading: { duration: DEFAULT_DURATION_MS },
+        blank: { duration: DEFAULT_DURATION_MS },
       }}
     >
       {(t) => <SingleToastBar t={t} />}
