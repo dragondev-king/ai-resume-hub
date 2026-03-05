@@ -43,6 +43,8 @@ const ResumeGenerator: React.FC = () => {
   // Cover Letter State
   const [generatedCoverLetter, setGeneratedCoverLetter] = useState<GeneratedCoverLetter | null>(null);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [isEditingCoverLetter, setIsEditingCoverLetter] = useState(false);
+  const [editingCoverLetterContent, setEditingCoverLetterContent] = useState('');
 
   // Application Questions State
   const [applicationQuestions, setApplicationQuestions] = useState<ApplicationQuestion[]>([]);
@@ -449,6 +451,26 @@ const ResumeGenerator: React.FC = () => {
       console.error('Failed to download cover letter:', error);
       toast.error('Failed to download cover letter');
     }
+  };
+
+  const handleStartEditCoverLetter = () => {
+    if (generatedCoverLetter?.content) {
+      setEditingCoverLetterContent(generatedCoverLetter.content);
+      setIsEditingCoverLetter(true);
+    }
+  };
+
+  const handleSaveCoverLetterEdit = () => {
+    if (generatedCoverLetter) {
+      setGeneratedCoverLetter(prev => prev ? { ...prev, content: editingCoverLetterContent } : null);
+      setIsEditingCoverLetter(false);
+      toast.success('Cover letter updated');
+    }
+  };
+
+  const handleCancelCoverLetterEdit = () => {
+    setIsEditingCoverLetter(false);
+    setEditingCoverLetterContent('');
   };
 
   const handleCopyAnswer = async (questionId: string) => {
@@ -902,7 +924,58 @@ const ResumeGenerator: React.FC = () => {
             </h3>
           </div>
 
-          {generatedCoverLetter ? (
+          {!generatedCoverLetter ? (
+            <>
+              <div className="text-center py-8 text-gray-500">
+                <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>Generate a personalized cover letter based on your resume and the job description.</p>
+              </div>
+              <button
+                onClick={handleGenerateCoverLetter}
+                disabled={isGeneratingCoverLetter}
+                className="flex items-center justify-center space-x-2 w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGeneratingCoverLetter ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    <span>Generate Cover Letter</span>
+                  </>
+                )}
+              </button>
+            </>
+          ) : isEditingCoverLetter ? (
+            <>
+              <textarea
+                value={editingCoverLetterContent}
+                onChange={(e) => setEditingCoverLetterContent(e.target.value)}
+                className="w-full min-h-[280px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-700 leading-relaxed"
+                placeholder="Edit your cover letter..."
+              />
+              <div className="flex flex-wrap justify-end items-center gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={handleCancelCoverLetterEdit}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Cancel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCoverLetterEdit}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save</span>
+                </button>
+              </div>
+            </>
+          ) : (
             <>
               <div className="bg-gray-50 rounded-md p-4">
                 <div className="prose max-w-none">
@@ -911,59 +984,57 @@ const ResumeGenerator: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end items-center space-x-2 mt-4">
-                {generatedCoverLetter && (
-                  <>
-                    <button
-                      onClick={handleDownloadCoverLetter}
-                      className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Download .txt</span>
-                    </button>
-                    <button
-                      onClick={handleCopyCoverLetter}
-                      className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                    >
-                      {copiedCoverLetter ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </>
-                )}
+              <div className="flex flex-wrap justify-end items-center gap-2 mt-4">
+                <button
+                  onClick={handleGenerateCoverLetter}
+                  disabled={isGeneratingCoverLetter}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingCoverLetter ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Regenerating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Regenerate Cover Letter</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleStartEditCoverLetter}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={handleDownloadCoverLetter}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download .txt</span>
+                </button>
+                <button
+                  onClick={handleCopyCoverLetter}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  {copiedCoverLetter ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
               </div>
             </>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p>Generate a personalized cover letter based on your resume and the job description.</p>
-            </div>
           )}
-          <button
-            onClick={handleGenerateCoverLetter}
-            disabled={isGeneratingCoverLetter}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGeneratingCoverLetter ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Generating...</span>
-              </>
-            ) : (
-              <>
-                <FileText className="w-4 h-4" />
-                <span>{generatedCoverLetter ? 'Regenerate Cover Letter' : 'Generate Cover Letter'}</span>
-              </>
-            )}
-          </button>
         </div>
       )}
 
