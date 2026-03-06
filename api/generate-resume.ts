@@ -36,7 +36,7 @@ export default async function handler(
       messages: [
         {
           role: 'system',
-          content: 'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
+          content: 'You are an expert resume writer. Your goal is to present the candidate\'s real experience in a way that highlights relevance to the target role WITHOUT fabricating or inventing. Work experience must stay truthful: each company\'s industry and domain (e.g., Salesforce = CRM/sales tech) must be reflected in the bullet points. Never add job-specific industry context (e.g., satellites, GNSS, aerospace) to a company that is not in that industry—candidates will be asked about this in interviews. Only mention technologies, tools, and domains the candidate could plausibly have used at that company. Tailoring means: emphasizing transferable skills, choosing which parts of their real experience to highlight, and using clear action verbs—not inventing new responsibilities or technologies. Generate 7-12 bullet points per work experience. Extract job title and company name from the job description. Keep company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
         },
         {
           role: 'user',
@@ -67,7 +67,7 @@ export default async function handler(
 
 const createAIPrompt = (profile: any, jobDescription: string): string => {
   return `
-Please create a highly tailored resume for the following job description. The goal is to position the candidate as an ideal fit for this specific role, even if their original experience doesn't perfectly match.
+Create a resume that highlights the candidate's relevance to this role while staying truthful. Work experience must reflect what they actually did at each company—never invent industry domain or technologies (e.g., do not add satellite/GNSS experience for a non-space company; they will be asked about it in interviews).
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -91,54 +91,37 @@ ${profile.education.map((edu: any) => `
 CURRENT SKILLS:
 ${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
 
-CRITICAL INSTRUCTIONS FOR TAILORING:
-1. ANALYZE the job description thoroughly to identify:
-   - Job title and company name
-   - Required technical skills and technologies
-   - Key responsibilities and duties
-   - Industry-specific terminology
-   - Desired qualifications and experience level
-   - Company culture and values mentioned
+TRUTHFULNESS GUARDRAILS (MUST FOLLOW):
+- Each work experience must stay true to what the candidate actually did at THAT company. The company's real industry and domain must be consistent with every bullet (e.g., a Salesforce company = CRM, sales tech, enterprise software—never satellites, GNSS, or aerospace unless the company is in that industry).
+- Do NOT add job-specific industry context, technologies, or terminology to a company where it would not apply. Example: if the target role is "Spacecraft Software Engineer" at a satellite company but the candidate's last role was at a Salesforce/CRM company, do NOT write bullets about satellite data, GNSS, or payloads for that company—only highlight transferable skills (e.g., data pipelines, reliability, software engineering, collaboration) in the context of what they really did there.
+- Only mention technologies and tools the candidate could plausibly have used in that role and company. Do not invent use of job-required technologies (e.g., FPGA, GNSS) unless the original experience supports it.
+- Job titles may be slightly adjusted for clarity or progression but must remain believable for that company (e.g., "Software Engineer" at a known CRM company, not "Spacecraft Software Engineer" at that same company).
 
-2. TRANSFORM each work experience to align with the target role:
-   - Adjust job titles to show progression toward the target position
-   - Rewrite bullet points to emphasize relevant skills and achievements
-   - Include specific technologies, tools, and methodologies mentioned in the job description
-   - Focus on transferable skills that apply to the target role
-   - Use industry-specific language and terminology from the job description
-
-3. CREATIVE TAILORING APPROACH:
-   - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
-   - Emphasize similar frameworks, methodologies, or problem-solving approaches
-   - Highlight leadership, project management, and collaboration skills that are universally valuable
-   - Show how past experiences demonstrate the ability to learn and adapt to new technologies
-   - Create bullet points that showcase the candidate's potential to excel in the target role
-
-4. JOB TITLE STRATEGY:
-   - Most recent position: Make it closely match or be one step below the target job title
-   - Previous positions: Show clear career progression toward the target role
-   - Use industry-standard titles that align with the target position
-   - Keep company names exactly as provided
+TAILORING (SAFE—DO THIS):
+1. ANALYZE the job description for: job title and company name, required skills, responsibilities, and transferable themes (e.g., "data pipelines", "reliability", "collaboration with operations").
+2. For each work experience, REWRITE and EMPHASIZE based on the candidate's ORIGINAL description only:
+   - Highlight transferable skills and achievements that align with the target role (e.g., building data pipelines, ensuring data quality, cross-functional collaboration) without changing the domain or inventing technologies.
+   - Use action verbs and clearer wording; lead with the most relevant aspects of their real experience.
+   - Keep the company's actual industry and context in every bullet so the candidate can speak to it honestly in interviews.
+3. Job titles: Prefer the candidate's original position titles, or use industry-appropriate titles that still match the company (e.g., "Software Engineer", "Senior Developer"). Do not assign target-role-specific titles (e.g., "Spacecraft Software Engineer") to past roles at unrelated companies.
+4. Keep company names exactly as provided.
 
 Please provide the following in JSON format:
 
-1. Extract the job title and company name from the job description
-2. A compelling professional summary that positions the candidate for this specific role
-3. Enhanced work experience with 7-12 bullet points per position that:
-   - Are specifically tailored to the job description requirements
-   - Include relevant technologies, tools, and methodologies from the job description
-   - Show quantifiable achievements and measurable impact
-   - Demonstrate transferable skills and adaptability
-   - Use action verbs and industry-specific terminology from the job description
+1. Extract the job title and company name from the job description.
+2. A compelling professional summary that positions the candidate for this specific role (summary may be tailored; it is not company-specific).
+3. Work experience with 7-12 bullet points per position that:
+   - Are grounded in the candidate's ORIGINAL experience and the company's real industry
+   - Emphasize transferable skills and achievements relevant to the target role without inventing domain or technologies
+   - Use action verbs and quantifiable impact where possible
+   - Would be defensible in an interview (candidate can truthfully explain each bullet for that company)
    - Vary bullet point count based on role complexity and duration
-4. Enhanced skills list that includes both current skills and skills mentioned in the job description
+4. Skills list: include the candidate's current skills; only add skills from the job description if the candidate could plausibly have used them (do not list job-only technologies they have not used).
 
-EXAMPLE OF TAILORING:
-If applying for "Ruby on Rails Developer" and original experience was in "Web Development":
-- Adjust title to "Ruby on Rails Developer"
-- Include bullet points about web development, database management, API development
-- Emphasize experience with similar frameworks (if any) or rapid learning abilities
-- Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
+EXAMPLE OF SAFE TAILORING:
+- Target role: "Spacecraft Software Engineer" at Spire (satellite/GNSS). Candidate's last role: "Software Engineer" at a Salesforce/CRM company.
+- CORRECT: Bullets about building data pipelines, ensuring data quality, collaborating with operations, backend systems, Python/C++ if in their experience—all in the context of CRM/sales tech. Title at that company remains e.g. "Software Engineer".
+- WRONG: Any bullet mentioning satellites, GNSS, spacecraft, or payloads for that CRM company; or changing that company's title to "Spacecraft Software Engineer".
 
 IMPORTANT JSON FORMATTING RULES:
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
@@ -154,24 +137,16 @@ Response format:
   "summary": "Professional summary tailored to this specific role...",
   "experience": [
     {
-      "position": "Tailored Job Title",
+      "position": "Job title (use original or company-appropriate title, not target-role title)",
       "company": "Company Name", 
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Tailored bullet point emphasizing relevant skills for this specific role...",
-        "Bullet point highlighting transferable experience that applies to target position...",
-        "Achievement that demonstrates ability to excel in the target role...",
-        "Technical accomplishment using relevant technologies or methodologies...",
-        "Leadership or collaboration experience valuable for the target position...",
-        "Problem-solving or innovation that shows adaptability...",
-        "Project management or delivery experience relevant to target role...",
-        "Cross-functional collaboration demonstrating team skills...",
-        "Process improvement or optimization relevant to target position...",
-        "Strategic thinking or planning experience valuable for the role...",
-        "Measurable outcome that demonstrates impact and results...",
-        "Technical expertise or specialization relevant to target position..."
+        "Bullet grounded in actual experience at this company, emphasizing transferable skills...",
+        "Achievement or responsibility the candidate really had, worded for relevance to target role...",
+        "Technical work using technologies they actually used at this company...",
+        "Collaboration, ownership, or impact measurable and defensible in an interview..."
       ]
     }
   ],
