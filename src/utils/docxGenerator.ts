@@ -49,7 +49,7 @@ function companiesMatch(a?: string, b?: string): boolean {
   const x = a.trim().toLowerCase();
   const y = b.trim().toLowerCase();
   if (x === y) return true;
-  return x.includes(y) || y.includes(x);
+  return false;
 }
 
 /**
