@@ -35,19 +35,40 @@ export function getUseAiEnhancedJobTitlePreference(): boolean {
   return window.localStorage.getItem(USE_AI_ENHANCED_JOB_TITLE_KEY) === 'true';
 }
 
+/** Normalize date string for matching (trim, lowercase). */
+function normalizeDateForMatch(d?: string): string {
+  return (d ?? '').toString().trim().toLowerCase();
+}
+
+/**
+ * Match company names bidirectionally so we find profile entries even when AI shortens or rephrases
+ * (e.g. profile "Cerner Corporation" vs AI "Cerner", or profile "AIG" vs AI "American International Group").
+ */
+function companiesMatch(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  const x = a.trim().toLowerCase();
+  const y = b.trim().toLowerCase();
+  if (x === y) return true;
+  return x.includes(y) || y.includes(x);
+}
+
 /**
  * Resolve the job title to display for an experience entry, respecting the "use AI-enhanced job title" preference.
- * Use this whenever displaying generated experience so the UI matches DOCX and the profile setting.
+ * When using profile titles, matches by company (bidirectional) and start_date so the correct profile title
+ * is used even when company names differ slightly or the same company appears multiple times.
  */
 export function getDisplayPositionForExperience(
-  originalExperience: { company?: string; position?: string }[],
-  aiExp: { company?: string; position?: string },
+  originalExperience: { company?: string; position?: string; start_date?: string }[],
+  aiExp: { company?: string; position?: string; start_date?: string },
   useAiEnhancedJobTitle: boolean
 ): string {
   if (useAiEnhancedJobTitle && aiExp.position) return aiExp.position;
-  const original = originalExperience.find(
-    (o) => o.company && aiExp.company && aiExp.company.toLowerCase().includes(o.company.toLowerCase())
-  );
+  const companyMatch = (o: { company?: string }) => companiesMatch(o.company, aiExp.company);
+  const aiStart = normalizeDateForMatch(aiExp.start_date);
+  const original =
+    originalExperience.find(
+      (o) => companyMatch(o) && (!aiStart || normalizeDateForMatch(o.start_date) === aiStart)
+    ) ?? originalExperience.find((o) => companyMatch(o));
   return original?.position ?? aiExp.position ?? '';
 }
 
@@ -212,10 +233,12 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
 
   // Use original experience data, but enhance with AI-generated descriptions if available
   originalExperience.forEach((exp, index) => {
-    // Try to find matching AI-enhanced experience (only by company name)
-    const aiEnhanced = aiExperience.find(ai =>
-      ai.company?.toLowerCase().includes(exp.company?.toLowerCase())
-    );
+    const expStart = normalizeDateForMatch(exp.start_date);
+    const companyMatch = (ai: any) => companiesMatch(ai.company, exp.company);
+    const aiEnhanced =
+      aiExperience.find(
+        (ai) => companyMatch(ai) && (!expStart || normalizeDateForMatch(ai.start_date) === expStart)
+      ) ?? aiExperience.find((ai) => companyMatch(ai));
 
     // Use AI-enhanced descriptions array if available, otherwise convert original to array
     const descriptions = aiEnhanced?.descriptions || (exp.description ? [exp.description] : []);
