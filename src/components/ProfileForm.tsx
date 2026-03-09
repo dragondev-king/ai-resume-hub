@@ -343,24 +343,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
 
       {/* Experience */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Work Experience</h3>
-          <button
-            type="button"
-            onClick={() => appendExperience({
-              company: '',
-              position: '',
-              start_date: '',
-              end_date: '',
-              description: '',
-              address: '',
-            })}
-            className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Experience</span>
-          </button>
-        </div>
+        <h3 className="text-lg font-medium text-gray-900">Work Experience</h3>
         {experienceFields.map((field, index) => (
           <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
@@ -444,27 +427,28 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Education */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Education</h3>
+        <div className="flex justify-end">
           <button
             type="button"
-            onClick={() => appendEducation({
-              school: '',
-              degree: '',
-              field: '',
+            onClick={() => appendExperience({
+              company: '',
+              position: '',
               start_date: '',
               end_date: '',
+              description: '',
+              address: '',
             })}
             className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Education</span>
+            <span>Add Experience</span>
           </button>
         </div>
+      </div>
+
+      {/* Education */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-900">Education</h3>
         {educationFields.map((field, index) => (
           <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
@@ -528,21 +512,27 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             </div>
           </div>
         ))}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => appendEducation({
+              school: '',
+              degree: '',
+              field: '',
+              start_date: '',
+              end_date: '',
+            })}
+            className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Education</span>
+          </button>
+        </div>
       </div>
 
       {/* Skills */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Skills</h3>
-          <button
-            type="button"
-            onClick={addSkill}
-            className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Skill</span>
-          </button>
-        </div>
+        <h3 className="text-lg font-medium text-gray-900">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {skillFields.map((field, index) => (
             <div key={field.id} className="flex items-center space-x-2">
@@ -564,6 +554,16 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               )}
             </div>
           ))}
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={addSkill}
+            className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Skill</span>
+          </button>
         </div>
       </div>
 
