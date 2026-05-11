@@ -47,6 +47,8 @@ export interface Profile {
   skills: string[];
   resume_filename_format?: string;
   check_duplicate_applications?: boolean;
+  /** Arbitrary JSON (e.g. DOCX preferences). From profiles.metadata when loaded via RPC. */
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -199,6 +201,8 @@ export interface ProfileWithDetailsRPC {
   skills: string[];
   resume_filename_format?: string;
   check_duplicate_applications?: boolean;
+  /** From `profiles.metadata` (per-profile JSON, visible to assigned bidders). */
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   owner_id: string;

@@ -2,6 +2,7 @@ import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from
 import { saveAs } from 'file-saver';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { formatDate } from './helpers';
+import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
 
 interface GeneratedResume {
   summary: string;
@@ -11,28 +12,15 @@ interface GeneratedResume {
 
 type Profile = ProfileWithDetailsRPC;
 
-/** localStorage key for "use AI-enhanced job titles in DOCX" (value: 'true' | 'false') */
-export const USE_AI_ENHANCED_JOB_TITLE_KEY = 'resume.useAiEnhancedJobTitle';
-
 export interface GenerateDocxOptions {
-  /** When true, use AI-enhanced position when available; when false, use original exp.position. Defaults to localStorage or true. */
+  /** When set, overrides profile metadata and local fallback. */
   useAiEnhancedJobTitle?: boolean;
 }
 
-// get the useAiEnhancedJobTitle preference from the options or localStorage
-function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions): boolean {
+function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profile): boolean {
   if (options?.useAiEnhancedJobTitle !== undefined) return options.useAiEnhancedJobTitle;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage.getItem(USE_AI_ENHANCED_JOB_TITLE_KEY) === 'true';
-  }
-  // default to false
+  if (profile) return getUseAiEnhancedJobTitleForProfile(profile);
   return false;
-}
-
-/** Read current preference from localStorage (for UI). Defaults to false when not set. */
-export function getUseAiEnhancedJobTitlePreference(): boolean {
-  if (typeof window === 'undefined' || !window.localStorage) return false;
-  return window.localStorage.getItem(USE_AI_ENHANCED_JOB_TITLE_KEY) === 'true';
 }
 
 /** Normalize date string for matching (trim, lowercase). */
@@ -73,7 +61,7 @@ export function getDisplayPositionForExperience(
 }
 
 export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile, options?: GenerateDocxOptions): Promise<void> => {
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options);
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
 
   const doc = new Document({
     sections: [

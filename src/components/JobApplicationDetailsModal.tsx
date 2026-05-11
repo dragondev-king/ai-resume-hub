@@ -4,7 +4,8 @@ import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
-import { generateDocx, getUseAiEnhancedJobTitlePreference, getDisplayPositionForExperience } from '../utils/docxGenerator';
+import { generateDocx, getDisplayPositionForExperience } from '../utils/docxGenerator';
+import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
 import ConfirmationModal from './ConfirmationModal';
@@ -33,7 +34,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitlePreference();
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(applicationProfile);
 
   const copyToClipboard = useCallback(async (text: string, setCopiedState: (value: boolean) => void) => {
     try {
@@ -72,7 +73,9 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         skills: application.generated_skills || []
       }
 
-      await generateDocx(generatedResumeData, fileName, applicationProfile);
+      await generateDocx(generatedResumeData, fileName, applicationProfile, {
+        useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile),
+      });
 
       toast.success('Resume regenerated successfully!');
 
