@@ -3,7 +3,8 @@ import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Tr
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
-import { generateDocx, getUseAiEnhancedJobTitlePreference, getDisplayPositionForExperience } from '../utils/docxGenerator';
+import { generateDocx, getDisplayPositionForExperience } from '../utils/docxGenerator';
+import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -262,7 +263,9 @@ const ResumeGenerator: React.FC = () => {
       }
 
       const fileName = generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName);
-      await generateDocx(generatedResume, fileName, profile);
+      await generateDocx(generatedResume, fileName, profile, {
+        useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
+      });
       toast.success('Resume downloaded and job application saved!');
     } catch (error: any) {
       console.error('Error downloading resume:', error);
@@ -284,7 +287,9 @@ const ResumeGenerator: React.FC = () => {
 
     try {
       const fileName = generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName);
-      await generateDocx(generatedResume, fileName, profile);
+      await generateDocx(generatedResume, fileName, profile, {
+        useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
+      });
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
       console.error('Error downloading resume:', error);
@@ -514,7 +519,7 @@ const ResumeGenerator: React.FC = () => {
 
   const currentResume = isEditing ? editingResume : generatedResume;
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitlePreference();
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
 
   if (profilesLoading) {
     return (

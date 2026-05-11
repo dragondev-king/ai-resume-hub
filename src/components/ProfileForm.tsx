@@ -5,7 +5,6 @@ import { toast } from 'react-hot-toast';
 import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
-import { getUseAiEnhancedJobTitlePreference, USE_AI_ENHANCED_JOB_TITLE_KEY } from '../utils/docxGenerator';
 
 interface ProfileFormData {
   first_name: string;
@@ -42,11 +41,17 @@ interface ProfileFormProps {
   onSave?: () => void;
 }
 
+function initialUseAiEnhancedJobTitle(profile?: Profile): boolean {
+  const om = profile?.metadata as Record<string, unknown> | undefined;
+  if (om && typeof om.useAiEnhancedJobTitle === 'boolean') return om.useAiEnhancedJobTitle;
+  return false;
+}
+
 const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
   const { role } = useUser();
   const { user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
-  const [useAiEnhancedJobTitle, setUseAiEnhancedJobTitle] = useState(() => getUseAiEnhancedJobTitlePreference());
+  const [useAiEnhancedJobTitle, setUseAiEnhancedJobTitle] = useState(() => initialUseAiEnhancedJobTitle(profile));
   const [skillFields, setSkillFields] = useState(
     profile?.skills.length ? profile.skills.map((skill, index) => ({ id: index, value: skill })) : [{ id: 0, value: '' }]
   );
@@ -177,6 +182,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         p_skills: skills,
         p_resume_filename_format: data.resume_filename_format,
         p_check_duplicate_applications: data.check_duplicate_applications,
+        p_profile_metadata: { useAiEnhancedJobTitle },
       });
 
       if (error) throw error;
@@ -637,9 +643,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               id="use_ai_enhanced_job_title"
               checked={useAiEnhancedJobTitle}
               onChange={(e) => {
-                const checked = e.target.checked;
-                setUseAiEnhancedJobTitle(checked);
-                window.localStorage.setItem(USE_AI_ENHANCED_JOB_TITLE_KEY, checked ? 'true' : 'false');
+                setUseAiEnhancedJobTitle(e.target.checked);
               }}
               className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
             />
