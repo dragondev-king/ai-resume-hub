@@ -24,7 +24,7 @@ function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profi
 }
 
 /** Normalize date string for matching (trim, lowercase). */
-function normalizeDateForMatch(d?: string): string {
+export function normalizeDateForMatch(d?: string): string {
   return (d ?? '').toString().trim().toLowerCase();
 }
 
@@ -32,7 +32,7 @@ function normalizeDateForMatch(d?: string): string {
  * Match company names bidirectionally so we find profile entries even when AI shortens or rephrases
  * (e.g. profile "Cerner Corporation" vs AI "Cerner", or profile "AIG" vs AI "American International Group").
  */
-function companiesMatch(a?: string, b?: string): boolean {
+export function companiesMatch(a?: string, b?: string): boolean {
   if (!a || !b) return false;
   const x = a.trim().toLowerCase();
   const y = b.trim().toLowerCase();
@@ -481,7 +481,7 @@ const createSkillsSection = (skills: string[]): Paragraph[] => {
   return paragraphs;
 };
 
-const formatDateRange = (startDate: string, endDate: string): string => {
+export const formatDateRange = (startDate: string, endDate: string): string => {
 
 
   const start = formatDate(startDate);
