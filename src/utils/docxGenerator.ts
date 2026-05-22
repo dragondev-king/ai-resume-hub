@@ -40,24 +40,57 @@ export function companiesMatch(a?: string, b?: string): boolean {
   return false;
 }
 
+type ExperienceEntry = {
+  company?: string;
+  position?: string;
+  start_date?: string;
+  end_date?: string;
+  address?: string;
+  description?: string;
+  descriptions?: string[];
+};
+
+function findMatchingAiExperience(
+  originalExp: { company?: string; start_date?: string },
+  aiExperience: ExperienceEntry[]
+): ExperienceEntry | undefined {
+  const expStart = normalizeDateForMatch(originalExp.start_date);
+  const companyMatch = (ai: ExperienceEntry) => companiesMatch(ai.company, originalExp.company);
+  return (
+    aiExperience.find(
+      (ai) => companyMatch(ai) && (!expStart || normalizeDateForMatch(ai.start_date) === expStart)
+    ) ?? aiExperience.find(companyMatch)
+  );
+}
+
 /**
- * Resolve the job title to display for an experience entry, respecting the "use AI-enhanced job title" preference.
- * When using profile titles, matches by company (bidirectional) and start_date so the correct profile title
- * is used even when company names differ slightly or the same company appears multiple times.
+ * Resolve experience entries for resume display and DOCX export.
+ * When useAiEnhancedJobTitle is true, uses AI experience (company, title, dates, bullets).
+ * When false, uses profile experience for metadata and AI-matched bullet descriptions only.
  */
-export function getDisplayPositionForExperience(
-  originalExperience: { company?: string; position?: string; start_date?: string }[],
-  aiExp: { company?: string; position?: string; start_date?: string },
+export function resolveResumeExperience(
+  originalExperience: ExperienceEntry[],
+  aiExperience: ExperienceEntry[],
   useAiEnhancedJobTitle: boolean
-): string {
-  if (useAiEnhancedJobTitle && aiExp.position) return aiExp.position;
-  const companyMatch = (o: { company?: string }) => companiesMatch(o.company, aiExp.company);
-  const aiStart = normalizeDateForMatch(aiExp.start_date);
-  const original =
-    originalExperience.find(
-      (o) => companyMatch(o) && (!aiStart || normalizeDateForMatch(o.start_date) === aiStart)
-    ) ?? originalExperience.find((o) => companyMatch(o));
-  return original?.position ?? aiExp.position ?? '';
+): ExperienceEntry[] {
+  if (useAiEnhancedJobTitle && aiExperience.length > 0) {
+    return aiExperience.map((exp) => ({
+      ...exp,
+      descriptions: exp.descriptions ?? (exp.description ? [exp.description] : []),
+    }));
+  }
+
+  return originalExperience.map((exp) => {
+    const aiMatch = findMatchingAiExperience(exp, aiExperience);
+    return {
+      company: exp.company,
+      position: exp.position,
+      start_date: exp.start_date,
+      end_date: exp.end_date,
+      address: exp.address,
+      descriptions: aiMatch?.descriptions ?? (exp.description ? [exp.description] : []),
+    };
+  });
 }
 
 export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile, options?: GenerateDocxOptions): Promise<void> => {
@@ -218,18 +251,11 @@ const createSectionHeader = (title: string): Paragraph => {
 
 const createProfessionalExperienceSection = (originalExperience: any[], aiExperience: any[], useAiEnhancedJobTitle: boolean): Paragraph[] => {
   const paragraphs: Paragraph[] = [];
+  const entries = resolveResumeExperience(originalExperience, aiExperience, useAiEnhancedJobTitle);
 
-  // Use original experience data, but enhance with AI-generated descriptions if available
-  originalExperience.forEach((exp, index) => {
-    const expStart = normalizeDateForMatch(exp.start_date);
-    const companyMatch = (ai: any) => companiesMatch(ai.company, exp.company);
-    const aiEnhanced =
-      aiExperience.find(
-        (ai) => companyMatch(ai) && (!expStart || normalizeDateForMatch(ai.start_date) === expStart)
-      ) ?? aiExperience.find((ai) => companyMatch(ai));
-
-    // Use AI-enhanced descriptions array if available, otherwise convert original to array
-    const descriptions = aiEnhanced?.descriptions || (exp.description ? [exp.description] : []);
+  entries.forEach((exp, index) => {
+    const jobTitle = exp.position ?? '';
+    const descriptions = exp.descriptions ?? [];
 
     // Add spacing before each experience entry
     if (index > 0) {
@@ -256,8 +282,6 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
       })
     );
 
-    // Job title: use AI-enhanced position only when preference is on and available
-    const jobTitle = useAiEnhancedJobTitle && aiEnhanced?.position ? aiEnhanced.position : exp.position;
     paragraphs.push(
       new Paragraph({
         children: [
@@ -274,7 +298,7 @@ const createProfessionalExperienceSection = (originalExperience: any[], aiExperi
 
     // Date range and address
     const dateAddress = [];
-    const dateRange = formatDateRange(exp.start_date, exp.end_date);
+    const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
     if (dateRange) dateAddress.push(dateRange);
     if (exp.address) dateAddress.push(exp.address);
 

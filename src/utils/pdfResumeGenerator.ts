@@ -3,7 +3,7 @@ import { saveAs } from 'file-saver';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
 import type { GenerateDocxOptions } from './docxGenerator';
-import { companiesMatch, formatDateRange, normalizeDateForMatch } from './docxGenerator';
+import { formatDateRange, resolveResumeExperience } from './docxGenerator';
 
 interface GeneratedResume {
   summary: string;
@@ -100,35 +100,31 @@ export async function generateResumePdf(
     writeWrapped(generatedResume.summary, 11, 'normal', margin, maxW);
   }
 
-  if (profile?.experience?.length) {
+  const experienceEntries = resolveResumeExperience(
+    profile?.experience ?? [],
+    generatedResume.experience ?? [],
+    useAiEnhancedJobTitle
+  );
+
+  if (experienceEntries.length) {
     sectionHeader('Professional Experience');
-    profile.experience.forEach((exp, index) => {
-      const expStart = normalizeDateForMatch(exp.start_date);
-      const companyMatchFn = (ai: any) => companiesMatch(ai.company, exp.company);
-      const aiEnhanced =
-        generatedResume.experience.find(
-          (ai) => companyMatchFn(ai) && (!expStart || normalizeDateForMatch(ai.start_date) === expStart)
-        ) ?? generatedResume.experience.find((ai) => companyMatchFn(ai));
-
-      const descriptions = aiEnhanced?.descriptions || (exp.description ? [exp.description] : []);
-
+    experienceEntries.forEach((exp, index) => {
       if (index > 0) {
         y += 10;
       }
 
-      writeWrapped(exp.company, 12, 'bold', margin, maxW);
-      const jobTitle = useAiEnhancedJobTitle && aiEnhanced?.position ? aiEnhanced.position : exp.position;
-      writeWrapped(jobTitle, 11, 'bold', margin, maxW);
+      writeWrapped(exp.company ?? '', 12, 'bold', margin, maxW);
+      writeWrapped(exp.position ?? '', 11, 'bold', margin, maxW);
 
       const dateAddress: string[] = [];
-      const dr = formatDateRange(exp.start_date, exp.end_date);
+      const dr = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
       if (dr) dateAddress.push(dr);
       if (exp.address) dateAddress.push(exp.address);
       if (dateAddress.length) {
         writeWrapped(dateAddress.join(' | '), 10, 'italic', margin, maxW);
       }
 
-      for (const desc of descriptions) {
+      for (const desc of exp.descriptions ?? []) {
         const bullet = desc.endsWith('.') ? desc : `${desc}.`;
         writeWrapped(`• ${bullet}`, 11, 'normal', margin + 18, maxW - 18);
       }
