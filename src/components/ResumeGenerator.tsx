@@ -3,8 +3,8 @@ import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Tr
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
-import { generateDocx, getDisplayPositionForExperience } from '../utils/docxGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
+import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
@@ -847,7 +847,10 @@ const ResumeGenerator: React.FC = () => {
             <div>
               <h4 className="font-medium text-gray-900 mb-2">Experience</h4>
               <div className="space-y-3">
-                {currentResume.experience.map((exp, index) => (
+                {(isEditing
+                  ? currentResume.experience
+                  : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle)
+                ).map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
                     {isEditing ? (
                       <div className="space-y-2">
@@ -928,7 +931,7 @@ const ResumeGenerator: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                        <div className="font-medium text-gray-900">{getDisplayPositionForExperience(profile?.experience ?? [], exp, useAiEnhancedJobTitle)} at {exp.company}</div>
+                        <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
                         <div className="text-sm text-gray-600">{formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}</div>
                         {exp.address && (
                           <div className="text-sm text-gray-500">{exp.address}</div>

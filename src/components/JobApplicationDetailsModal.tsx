@@ -4,8 +4,8 @@ import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
-import { generateDocx, getDisplayPositionForExperience } from '../utils/docxGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
+import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { toast } from 'react-hot-toast';
@@ -408,10 +408,14 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                     AI Generated Experience
                   </h3>
                   <div className="space-y-4">
-                    {application.generated_experience.map((exp: any, index: number) => (
+                    {resolveResumeExperience(
+                      applicationProfile?.experience ?? [],
+                      application.generated_experience,
+                      useAiEnhancedJobTitle
+                    ).map((exp: any, index: number) => (
                       <div key={index} className="border-l-4 border-primary-500 pl-4">
                         <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-gray-900">{getDisplayPositionForExperience(applicationProfile?.experience ?? [], exp, useAiEnhancedJobTitle)}</h4>
+                          <h4 className="font-semibold text-gray-900">{exp.position}</h4>
                           <span className="text-sm text-gray-600">
                             {formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}
                           </span>
