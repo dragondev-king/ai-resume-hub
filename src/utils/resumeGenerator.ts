@@ -92,6 +92,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
 
     const parsed = JSON.parse(jsonString);
+
+    console.log(parsed, '=== parsed')
     
     // Validate and enhance the parsed data
     const enhancedData: GeneratedResume = {
@@ -108,6 +110,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
       jobTitle: parsed.jobTitle || 'Not specified',
       companyName: parsed.companyName || 'Not specified'
     };
+
+    console.log(enhancedData, '=== enhancedData')
 
     // Ensure each experience has 7-12 descriptions with varying counts
     enhancedData.experience = enhancedData.experience.map((exp, index) => {
@@ -149,6 +153,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
           address: exp.address
         };
       }
+
+      console.log(exp, '=== exp')
       return exp;
     });
 
