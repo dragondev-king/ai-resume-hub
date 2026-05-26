@@ -53,8 +53,6 @@ function findMatchingAiExperience(
   originalExp: { company?: string; start_date?: string },
   aiExperience: ExperienceEntry[]
 ): ExperienceEntry | undefined {
-  console.log(originalExp, '=== originalExp in findMatchingAiExperience')
-  console.log(aiExperience, '=== aiExperience in findMatchingAiExperience')
   return (
     aiExperience.find(
       (ai) => companiesMatch(ai.company, originalExp.company) && normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
@@ -79,7 +77,6 @@ export function resolveResumeExperience(
 
   return originalExperience.map((exp) => {
     const aiMatch = findMatchingAiExperience(exp, aiExperience);
-    console.log(aiMatch, '=== aiMatch in resolveResumeExperience')
     return {
       company: exp.company,
       position: exp.position,
