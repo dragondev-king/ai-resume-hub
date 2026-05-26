@@ -53,12 +53,10 @@ function findMatchingAiExperience(
   originalExp: { company?: string; start_date?: string },
   aiExperience: ExperienceEntry[]
 ): ExperienceEntry | undefined {
-  const expStart = normalizeDateForMatch(originalExp.start_date);
-  const companyMatch = (ai: ExperienceEntry) => companiesMatch(ai.company, originalExp.company);
   return (
     aiExperience.find(
-      (ai) => companyMatch(ai) && (!expStart || normalizeDateForMatch(ai.start_date) === expStart)
-    ) ?? aiExperience.find(companyMatch)
+      (ai) => companiesMatch(ai.company, originalExp.company) && normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date)
+    )
   );
 }
 
