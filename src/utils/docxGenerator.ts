@@ -46,7 +46,6 @@ type ExperienceEntry = {
   start_date?: string;
   end_date?: string;
   address?: string;
-  description?: string;
   descriptions?: string[];
 };
 
@@ -73,10 +72,11 @@ export function resolveResumeExperience(
   aiExperience: ExperienceEntry[],
   useAiEnhancedJobTitle: boolean
 ): ExperienceEntry[] {
+  console.log(aiExperience, '=== aiExperience in resolveResumeExperience')
   if (useAiEnhancedJobTitle && aiExperience.length > 0) {
     return aiExperience.map((exp) => ({
       ...exp,
-      descriptions: exp.descriptions ?? (exp.description ? [exp.description] : []),
+      descriptions: exp.descriptions ?? (exp.descriptions ? exp.descriptions : []),
     }));
   }
 
@@ -88,7 +88,7 @@ export function resolveResumeExperience(
       start_date: exp.start_date,
       end_date: exp.end_date,
       address: exp.address,
-      descriptions: aiMatch?.descriptions ?? (exp.description ? [exp.description] : []),
+      descriptions: aiMatch?.descriptions ?? (exp.descriptions ? exp.descriptions : []),
     };
   });
 }
