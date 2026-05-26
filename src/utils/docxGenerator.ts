@@ -46,7 +46,6 @@ type ExperienceEntry = {
   start_date?: string;
   end_date?: string;
   address?: string;
-  description?: string;
   descriptions?: string[];
 };
 
@@ -54,12 +53,10 @@ function findMatchingAiExperience(
   originalExp: { company?: string; start_date?: string },
   aiExperience: ExperienceEntry[]
 ): ExperienceEntry | undefined {
-  const expStart = normalizeDateForMatch(originalExp.start_date);
-  const companyMatch = (ai: ExperienceEntry) => companiesMatch(ai.company, originalExp.company);
   return (
     aiExperience.find(
-      (ai) => companyMatch(ai) && (!expStart || normalizeDateForMatch(ai.start_date) === expStart)
-    ) ?? aiExperience.find(companyMatch)
+      (ai) => companiesMatch(ai.company, originalExp.company) && normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
+    )
   );
 }
 
@@ -73,11 +70,9 @@ export function resolveResumeExperience(
   aiExperience: ExperienceEntry[],
   useAiEnhancedJobTitle: boolean
 ): ExperienceEntry[] {
+  console.log(aiExperience, '=== aiExperience in resolveResumeExperience')
   if (useAiEnhancedJobTitle && aiExperience.length > 0) {
-    return aiExperience.map((exp) => ({
-      ...exp,
-      descriptions: exp.descriptions ?? (exp.description ? [exp.description] : []),
-    }));
+    return aiExperience;
   }
 
   return originalExperience.map((exp) => {
@@ -88,7 +83,7 @@ export function resolveResumeExperience(
       start_date: exp.start_date,
       end_date: exp.end_date,
       address: exp.address,
-      descriptions: aiMatch?.descriptions ?? (exp.description ? [exp.description] : []),
+      descriptions: aiMatch?.descriptions ?? [],
     };
   });
 }

@@ -87,6 +87,8 @@ const ResumeGenerator: React.FC = () => {
       // Generate AI resume with job title and company name extraction
       const generated = await generateResume(profile, jobDescription);
 
+      console.log(generated, '=== generated')
+
       // Check if this profile can apply to this company before showing the resume
       // Only check if the profile has duplicate checking enabled (defaults to true)
       if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
@@ -526,6 +528,7 @@ const ResumeGenerator: React.FC = () => {
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
+  console.log(currentResume, '=== currentResume')
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
 
