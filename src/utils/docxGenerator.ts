@@ -57,7 +57,7 @@ function findMatchingAiExperience(
   console.log(aiExperience, '=== aiExperience in findMatchingAiExperience')
   return (
     aiExperience.find(
-      (ai) => companiesMatch(ai.company, originalExp.company) && normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date)
+      (ai) => companiesMatch(ai.company, originalExp.company) && normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
     )
   );
 }
