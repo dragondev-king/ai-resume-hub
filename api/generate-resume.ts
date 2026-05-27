@@ -124,7 +124,7 @@ Please provide the following in JSON format:
 
 1. Extract the job title and company name from the job description
 2. A compelling professional summary that positions the candidate for this specific role
-3. Enhanced work experience with 10-12 bullet points per position that:
+3. Enhanced work experience with 7-12 bullet points per position that:
    - Are specifically tailored to the job description requirements
    - Include relevant technologies, tools, and methodologies from the job description
    - Show quantifiable achievements and measurable impact
