@@ -124,7 +124,7 @@ Please provide the following in JSON format:
 
 1. Extract the job title and company name from the job description
 2. A compelling professional summary that positions the candidate for this specific role
-3. Enhanced work experience with 10-12 bullet points per position that:
+3. Enhanced work experience with 7-12 bullet points per position that:
    - Are specifically tailored to the job description requirements
    - Include relevant technologies, tools, and methodologies from the job description
    - Show quantifiable achievements and measurable impact
@@ -143,10 +143,7 @@ If applying for "Ruby on Rails Developer" and original experience was in "Web De
 IMPORTANT JSON FORMATTING RULES:
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
 - Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
-- Do NOT use trailing commas in arrays or objects
-- Properly escape special characters in strings (newlines as \\n, quotes as \\", backslashes as \\\\)
-- Ensure all strings are properly quoted
-- Ensure all arrays and objects are properly closed
+- Must follow the response format exactly.
 
 Response format:
 {
