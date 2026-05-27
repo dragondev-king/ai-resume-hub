@@ -141,8 +141,8 @@ If applying for "Ruby on Rails Developer" and original experience was in "Web De
 - Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
 
 IMPORTANT JSON FORMATTING RULES:
-- Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
+- Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
 - Do NOT use trailing commas in arrays or objects
 - Properly escape special characters in strings (newlines as \\n, quotes as \\", backslashes as \\\\)
 - Ensure all strings are properly quoted
