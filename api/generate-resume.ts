@@ -143,10 +143,7 @@ If applying for "Ruby on Rails Developer" and original experience was in "Web De
 IMPORTANT JSON FORMATTING RULES:
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
 - Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
-- Do NOT use trailing commas in arrays or objects
-- Properly escape special characters in strings (newlines as \\n, quotes as \\", backslashes as \\\\)
-- Ensure all strings are properly quoted
-- Ensure all arrays and objects are properly closed
+- Must follow the response format exactly.
 
 Response format:
 {
