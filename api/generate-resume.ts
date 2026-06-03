@@ -36,7 +36,7 @@ export default async function handler(
       messages: [
         {
           role: 'system',
-          content: 'You are an expert resume writer. Your goal is to present the candidate\'s real experience in a way that highlights relevance to the target role WITHOUT fabricating or inventing. Work experience must stay truthful: each company\'s industry and domain (e.g., Salesforce = CRM/sales tech) must be reflected in the bullet points. Never add job-specific industry context (e.g., satellites, GNSS, aerospace) to a company that is not in that industry—candidates will be asked about this in interviews. Only mention technologies, tools, and domains the candidate could plausibly have used at that company. Tailoring means: emphasizing transferable skills, choosing which parts of their real experience to highlight, and using clear action verbs—not inventing new responsibilities or technologies. Generate 7-12 bullet points per work experience. Extract job title and company name from the job description. Keep company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
+          content: 'You are an expert resume writer who tailors resumes for specific job applications while keeping them believable and human-written. Align the candidate with the target role through selective emphasis—not by rewriting every role to mirror the job posting. Use technologies and titles from the job description only where they fit the original experience, time period, and career progression. The summary and most recent role may emphasize the target stack most strongly; older roles should reflect what that job actually involved. Do not stuff the same job-posting keywords into every company or bullet. Keep all original company names and the same number of positions. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
         },
         {
           role: 'user',
@@ -44,7 +44,7 @@ export default async function handler(
         }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.5,
       max_tokens: 5000,
     });
 
@@ -67,7 +67,7 @@ export default async function handler(
 
 const createAIPrompt = (profile: any, jobDescription: string): string => {
   return `
-Create a resume that highlights the candidate's relevance to this role while staying truthful. Work experience must reflect what they actually did at each company—never invent industry domain or technologies (e.g., do not add satellite/GNSS experience for a non-space company; they will be asked about it in interviews).
+Please create a tailored but authentic resume for the following job description. The goal is to position the candidate as a strong fit for this role while the resume still reads like a real person's career history—not an AI keyword-stuffed version of the job ad.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -91,37 +91,41 @@ ${profile.education.map((edu: any) => `
 CURRENT SKILLS:
 ${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
 
-TRUTHFULNESS GUARDRAILS (MUST FOLLOW):
-- Each work experience must stay true to what the candidate actually did at THAT company. The company's real industry and domain must be consistent with every bullet (e.g., a Salesforce company = CRM, sales tech, enterprise software—never satellites, GNSS, or aerospace unless the company is in that industry).
-- Do NOT add job-specific industry context, technologies, or terminology to a company where it would not apply. Example: if the target role is "Spacecraft Software Engineer" at a satellite company but the candidate's last role was at a Salesforce/CRM company, do NOT write bullets about satellite data, GNSS, or payloads for that company—only highlight transferable skills (e.g., data pipelines, reliability, software engineering, collaboration) in the context of what they really did there.
-- Only mention technologies and tools the candidate could plausibly have used in that role and company. Do not invent use of job-required technologies (e.g., FPGA, GNSS) unless the original experience supports it.
-- Job titles may be slightly adjusted for clarity or progression but must remain believable for that company (e.g., "Software Engineer" at a known CRM company, not "Spacecraft Software Engineer" at that same company).
+CRITICAL INSTRUCTIONS FOR TAILORING (AUTHENTIC, HUMAN-LIKE):
+1. ANALYZE the job description to identify job title, company name, required skills, responsibilities, and terminology—but use them selectively, not in every bullet.
 
-TAILORING (SAFE—DO THIS):
-1. ANALYZE the job description for: job title and company name, required skills, responsibilities, and transferable themes (e.g., "data pipelines", "reliability", "collaboration with operations").
-2. For each work experience, REWRITE and EMPHASIZE based on the candidate's ORIGINAL description only:
-   - Highlight transferable skills and achievements that align with the target role (e.g., building data pipelines, ensuring data quality, cross-functional collaboration) without changing the domain or inventing technologies.
-   - Use action verbs and clearer wording; lead with the most relevant aspects of their real experience.
-   - Keep the company's actual industry and context in every bullet so the candidate can speak to it honestly in interviews.
-3. Job titles: Prefer the candidate's original position titles, or use industry-appropriate titles that still match the company (e.g., "Software Engineer", "Senior Developer"). Do not assign target-role-specific titles (e.g., "Spacecraft Software Engineer") to past roles at unrelated companies.
-4. Keep company names exactly as provided.
+2. SELECTIVE EMPHASIS (do not mirror the job ad in every role):
+   - Professional summary: Clearly connect the candidate to the target role; mention key stack/requirements where credible.
+   - Most recent 1–2 positions: Strongest alignment with the target role—emphasize overlapping skills, similar stacks, and relevant achievements from the ORIGINAL experience.
+   - Older positions: Keep bullets grounded in what that role likely involved per the original description and dates. Use period-appropriate tech from the original profile; do NOT claim the target job's exact stack (e.g. Angular + TypeScript) at every employer unless the original experience supports it.
+   - Never repeat the same job-posting phrase or technology name in every bullet across all companies.
+
+3. TECHNOLOGY AND CLAIMS:
+   - Only name a technology from the job description in a role if it appears in that role's original description, the candidate's skills, or a clearly similar stack (e.g. React experience → transferable to Angular) stated as transferability—not as years of fake Angular at every job.
+   - Prefer outcomes, scope, and responsibilities over keyword lists.
+   - Vary bullet wording; avoid copying sentences from the job description.
+
+4. JOB TITLES:
+   - Keep original position titles unless a small, honest reframing fits the original role (e.g. "Software Developer" → "Full Stack Developer" if the original work supports it).
+   - Do NOT rename every past job to the target title (e.g. do not make every role "Angular + TypeScript Developer").
+   - Keep company names exactly as provided.
 
 Please provide the following in JSON format:
 
-1. Extract the job title and company name from the job description.
-2. A compelling professional summary that positions the candidate for this specific role (summary may be tailored; it is not company-specific).
-3. Work experience with 7-12 bullet points per position that:
-   - Are grounded in the candidate's ORIGINAL experience and the company's real industry
-   - Emphasize transferable skills and achievements relevant to the target role without inventing domain or technologies
-   - Use action verbs and quantifiable impact where possible
-   - Would be defensible in an interview (candidate can truthfully explain each bullet for that company)
+1. Extract the job title and company name from the job description
+2. A compelling professional summary that positions the candidate for this specific role
+3. Enhanced work experience with 7-12 bullet points per position that:
+   - Reflect the original role's scope; tailor intensity by recency (strongest in latest roles)
+   - Use job-description technologies only where credible for that position and timeframe
+   - Show quantifiable achievements and measurable impact
+   - Mix technical, collaboration, and delivery bullets—not every bullet listing the target stack
    - Vary bullet point count based on role complexity and duration
-4. Skills list: include the candidate's current skills; only add skills from the job description if the candidate could plausibly have used them (do not list job-only technologies they have not used).
+4. Enhanced skills list: merge current skills with job-relevant skills the candidate can plausibly claim; do not invent skills with no basis in the profile or experience
 
-EXAMPLE OF SAFE TAILORING:
-- Target role: "Spacecraft Software Engineer" at Spire (satellite/GNSS). Candidate's last role: "Software Engineer" at a Salesforce/CRM company.
-- CORRECT: Bullets about building data pipelines, ensuring data quality, collaborating with operations, backend systems, Python/C++ if in their experience—all in the context of CRM/sales tech. Title at that company remains e.g. "Software Engineer".
-- WRONG: Any bullet mentioning satellites, GNSS, spacecraft, or payloads for that CRM company; or changing that company's title to "Spacecraft Software Engineer".
+EXAMPLE OF GOOD TAILORING (Angular + TypeScript Developer target, original mix of .NET and React):
+- Summary: Full stack developer with strong TypeScript and modern SPA experience; eager to deepen Angular in product-focused teams.
+- Latest role: Bullets mention TypeScript, component architecture, REST APIs—aligned with posting where original work supports it.
+- Older .NET-heavy role: Bullets stay .NET/C#/API-focused; at most one bullet notes transferable front-end or TypeScript exposure if in the original text—not five Angular bullets.
 
 IMPORTANT JSON FORMATTING RULES:
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
