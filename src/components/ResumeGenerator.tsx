@@ -3,7 +3,10 @@ import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Tr
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume } from '../utils/resumeGenerator';
-import { generateDocx, getUseAiEnhancedJobTitlePreference, getDisplayPositionForExperience } from '../utils/docxGenerator';
+import { generateResumePdf } from '../utils/pdfResumeGenerator';
+import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
+import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
+import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -67,17 +70,6 @@ const ResumeGenerator: React.FC = () => {
     }
   }, [profiles, selectedProfile]);
 
-  // Helper function to generate filename based on profile settings
-  const generateFileName = (profile: any, jobTitle?: string, companyName?: string): string => {
-    const format = profile.resume_filename_format || 'first_last';
-
-    if (format === 'first_last_job_company' && jobTitle && companyName) {
-      return `${profile.first_name}_${profile.last_name}_${jobTitle}-${companyName}.docx`;
-    }
-
-    return `${profile.first_name}_${profile.last_name}.docx`;
-  };
-
   const handleGenerate = async () => {
     if (!selectedProfile || !jobDescription) {
       toast.error('Please select a profile and enter a job description');
@@ -94,6 +86,8 @@ const ResumeGenerator: React.FC = () => {
     try {
       // Generate AI resume with job title and company name extraction
       const generated = await generateResume(profile, jobDescription);
+
+      console.log(generated, '=== generated')
 
       // Check if this profile can apply to this company before showing the resume
       // Only check if the profile has duplicate checking enabled (defaults to true)
@@ -226,7 +220,25 @@ const ResumeGenerator: React.FC = () => {
     }
   };
 
-  const handleDownload = async () => {
+  const exportResumeFile = async (
+    profile: (typeof profiles)[0],
+    format: ResumeDownloadFormat
+  ) => {
+    const opts = { useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile) };
+    const fileName = buildResumeFileName(
+      profile,
+      generatedResume!.jobTitle,
+      generatedResume!.companyName,
+      format
+    );
+    if (format === 'docx') {
+      await generateDocx(generatedResume!, fileName, profile, opts);
+    } else {
+      await generateResumePdf(generatedResume!, fileName, profile, opts);
+    }
+  };
+
+  const handleDownload = async (format: ResumeDownloadFormat) => {
     if (!generatedResume) {
       toast.error('No resume to download');
       return;
@@ -239,8 +251,13 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      // Save job application record
       if (user) {
+        const storedFileName = buildResumeFileName(
+          profile,
+          generatedResume.jobTitle,
+          generatedResume.companyName,
+          format
+        );
         const { error: saveError } = await supabase.rpc('create_job_application', {
           p_profile_id: selectedProfile,
           p_bidder_id: user.id,
@@ -248,7 +265,7 @@ const ResumeGenerator: React.FC = () => {
           p_job_description: jobDescription,
           p_company_name: generatedResume.companyName || 'Not specified',
           p_job_description_link: jobDescriptionLink,
-          p_resume_file_name: generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName),
+          p_resume_file_name: storedFileName,
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
@@ -261,8 +278,7 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
-      const fileName = generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName);
-      await generateDocx(generatedResume, fileName, profile);
+      await exportResumeFile(profile, format);
       toast.success('Resume downloaded and job application saved!');
     } catch (error: any) {
       console.error('Error downloading resume:', error);
@@ -270,7 +286,7 @@ const ResumeGenerator: React.FC = () => {
     }
   };
 
-  const handleDownloadOnly = async () => {
+  const handleDownloadOnly = async (format: ResumeDownloadFormat) => {
     if (!generatedResume) {
       toast.error('No resume to download');
       return;
@@ -283,8 +299,7 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      const fileName = generateFileName(profile, generatedResume.jobTitle, generatedResume.companyName);
-      await generateDocx(generatedResume, fileName, profile);
+      await exportResumeFile(profile, format);
       toast.success('Resume downloaded successfully!');
     } catch (error: any) {
       console.error('Error downloading resume:', error);
@@ -513,8 +528,9 @@ const ResumeGenerator: React.FC = () => {
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
+  console.log(currentResume, '=== currentResume')
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitlePreference();
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
 
   if (profilesLoading) {
     return (
@@ -680,20 +696,44 @@ const ResumeGenerator: React.FC = () => {
                   </button>
                 </>
               )}
-              <button
-                onClick={handleDownload}
-                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download & Save</span>
-              </button>
-              <button
-                onClick={handleDownloadOnly}
-                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Only</span>
-              </button>
+              <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload('docx')}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Save & Download Word (.docx)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload('pdf')}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Save & Download PDF (.pdf)</span>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadOnly('docx')}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Download Word (.docx) only</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadOnly('pdf')}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download PDF (.pdf) only</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -810,7 +850,10 @@ const ResumeGenerator: React.FC = () => {
             <div>
               <h4 className="font-medium text-gray-900 mb-2">Experience</h4>
               <div className="space-y-3">
-                {currentResume.experience.map((exp, index) => (
+                {(isEditing
+                  ? currentResume.experience
+                  : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle)
+                ).map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
                     {isEditing ? (
                       <div className="space-y-2">
@@ -891,7 +934,7 @@ const ResumeGenerator: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                        <div className="font-medium text-gray-900">{getDisplayPositionForExperience(profile?.experience ?? [], exp, useAiEnhancedJobTitle)} at {exp.company}</div>
+                        <div className="font-medium text-gray-900">{exp.position} at {exp.company}</div>
                         <div className="text-sm text-gray-600">{formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}</div>
                         {exp.address && (
                           <div className="text-sm text-gray-500">{exp.address}</div>

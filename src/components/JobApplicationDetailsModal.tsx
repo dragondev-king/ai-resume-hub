@@ -4,7 +4,10 @@ import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
-import { generateDocx, getUseAiEnhancedJobTitlePreference, getDisplayPositionForExperience } from '../utils/docxGenerator';
+import { generateResumePdf } from '../utils/pdfResumeGenerator';
+import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
+import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
+import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
 import ConfirmationModal from './ConfirmationModal';
@@ -33,7 +36,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitlePreference();
+  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(applicationProfile);
 
   const copyToClipboard = useCallback(async (text: string, setCopiedState: (value: boolean) => void) => {
     try {
@@ -59,29 +62,42 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
     }
   }, [application?.job_description, copyToClipboard]);
 
-  const handleRegenerateResume = useCallback(async () => {
-    if (!application || !applicationProfile) return;
+  const handleDownloadResume = useCallback(
+    async (format: ResumeDownloadFormat) => {
+      if (!application || !applicationProfile) return;
 
-    try {
-      setIsGenerating(true);
-      const fileName = `${applicationProfile?.first_name}_${applicationProfile?.last_name}_${application.job_title || ''}-${application.company_name || ''}.docx`;
+      try {
+        setIsGenerating(true);
+        const fileName = buildResumeFileName(
+          applicationProfile,
+          application.job_title || undefined,
+          application.company_name || undefined,
+          format
+        );
 
-      const generatedResumeData = {
-        summary: application.generated_summary || '',
-        experience: application.generated_experience || [],
-        skills: application.generated_skills || []
+        const generatedResumeData = {
+          summary: application.generated_summary || '',
+          experience: application.generated_experience || [],
+          skills: application.generated_skills || [],
+        };
+
+        const opts = { useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile) };
+        if (format === 'docx') {
+          await generateDocx(generatedResumeData, fileName, applicationProfile, opts);
+        } else {
+          await generateResumePdf(generatedResumeData, fileName, applicationProfile, opts);
+        }
+
+        toast.success(`Resume downloaded (${format === 'docx' ? 'Word' : 'PDF'})`);
+      } catch (error) {
+        console.error('Error downloading resume:', error);
+        toast.error('Failed to download resume');
+      } finally {
+        setIsGenerating(false);
       }
-
-      await generateDocx(generatedResumeData, fileName, applicationProfile);
-
-      toast.success('Resume regenerated successfully!');
-
-    } catch (error) {
-      console.error('Error regenerating resume:', error);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [application, applicationProfile]);
+    },
+    [application, applicationProfile]
+  );
 
   const handleRejectApplication = useCallback(async () => {
     if (!application) return;
@@ -392,10 +408,14 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                     AI Generated Experience
                   </h3>
                   <div className="space-y-4">
-                    {application.generated_experience.map((exp: any, index: number) => (
+                    {resolveResumeExperience(
+                      applicationProfile?.experience ?? [],
+                      application.generated_experience,
+                      useAiEnhancedJobTitle
+                    ).map((exp: any, index: number) => (
                       <div key={index} className="border-l-4 border-primary-500 pl-4">
                         <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-gray-900">{getDisplayPositionForExperience(applicationProfile?.experience ?? [], exp, useAiEnhancedJobTitle)}</h4>
+                          <h4 className="font-semibold text-gray-900">{exp.position}</h4>
                           <span className="text-sm text-gray-600">
                             {formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : 'Present'}
                           </span>
@@ -445,18 +465,32 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                   <Download className="w-5 h-5 mr-2" />
                   Resume Actions
                 </h3>
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={handleRegenerateResume}
+                    type="button"
+                    onClick={() => handleDownloadResume('docx')}
                     disabled={isGenerating}
                     className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isGenerating ? (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     ) : (
+                      <FileText className="w-4 h-4 mr-2" />
+                    )}
+                    {isGenerating ? 'Working…' : 'Download Word (.docx)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadResume('pdf')}
+                    disabled={isGenerating}
+                    className="flex items-center px-4 py-2 bg-slate-700 text-white rounded-md hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isGenerating ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    ) : (
                       <Download className="w-4 h-4 mr-2" />
                     )}
-                    {isGenerating ? 'Generating...' : 'Regenerate Resume'}
+                    {isGenerating ? 'Working…' : 'Download PDF (.pdf)'}
                   </button>
                   {application.resume_file_name && (
                     <div className="flex items-center text-gray-600">

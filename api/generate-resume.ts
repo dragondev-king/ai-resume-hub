@@ -45,7 +45,7 @@ export default async function handler(
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 5000,
     });
 
     const aiResponse = completion.choices[0]?.message?.content || '';
@@ -125,10 +125,8 @@ EXAMPLE OF SAFE TAILORING:
 
 IMPORTANT JSON FORMATTING RULES:
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
-- Do NOT use trailing commas in arrays or objects
-- Properly escape special characters in strings (newlines as \\n, quotes as \\", backslashes as \\\\)
-- Ensure all strings are properly quoted
-- Ensure all arrays and objects are properly closed
+- Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
+- Must follow the response format exactly.
 
 Response format:
 {
