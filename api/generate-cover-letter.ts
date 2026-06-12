@@ -88,19 +88,19 @@ ${jobDescription}
 
 CANDIDATE INFORMATION:
 Name: ${profile.first_name} ${profile.last_name}
-Current Title: ${profile.title || 'Not specified'}
+Current Title: ${profile.title || ''}
 Email: ${profile.email}
-Location: ${profile.location || 'Not specified'}
-LinkedIn: ${profile.linkedin || 'Not provided'}
-Portfolio: ${profile.portfolio || 'Not provided'}
+Location: ${profile.location || ''}
+LinkedIn: ${profile.linkedin || ''}
+Portfolio: ${profile.portfolio || ''}
 
 CANDIDATE'S BACKGROUND:
-Summary: ${profile.summary || 'Not provided'}
+Summary: ${profile.summary || ''}
 
 EXPERIENCE:
 ${profile.experience.map((exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
-  Description: ${exp.description || 'No description provided'}
+  Description: ${exp.description || ''}
 `).join('\n')}
 
 EDUCATION:
@@ -112,9 +112,9 @@ SKILLS:
 ${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
 
 AI-GENERATED RESUME CONTENT:
-Summary: ${resumeContent.summary || 'Not available'}
+Summary: ${resumeContent.summary || ''}
 Enhanced Experience: ${JSON.stringify(resumeContent.experience || [], null, 2)}
-Enhanced Skills: ${resumeContent.skills ? resumeContent.skills.join(', ') : 'Not available'}
+Enhanced Skills: ${resumeContent.skills ? resumeContent.skills.join(', ') : ''}
 
 Please write a professional cover letter that:
 1. Addresses the specific job requirements from the job description
@@ -176,14 +176,14 @@ Respond with ONLY valid JSON in this exact format:
     const parsed = JSON.parse(jsonMatch[0]);
 
     return {
-      jobTitle: parsed.jobTitle || 'Not specified',
-      companyName: parsed.companyName || 'Not specified'
+      jobTitle: parsed.jobTitle || '',
+      companyName: parsed.companyName || ''
     };
   } catch (error) {
     console.error('Error extracting job info:', error);
     return {
-      jobTitle: 'Not specified',
-      companyName: 'Not specified'
+      jobTitle: '',
+      companyName: ''
     };
   }
 };

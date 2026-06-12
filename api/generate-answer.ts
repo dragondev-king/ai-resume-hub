@@ -88,17 +88,17 @@ ${jobDescription}
 
 CANDIDATE INFORMATION:
 Name: ${profile.first_name} ${profile.last_name}
-Current Title: ${profile.title || 'Not specified'}
+Current Title: ${profile.title || ''}
 Email: ${profile.email}
-Location: ${profile.location || 'Not specified'}
+Location: ${profile.location || ''}
 
 CANDIDATE'S BACKGROUND:
-Summary: ${profile.summary || 'Not provided'}
+Summary: ${profile.summary || ''}
 
 EXPERIENCE:
 ${profile.experience.map((exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
-  Description: ${exp.description || 'No description provided'}
+  Description: ${exp.description || ''}
 `).join('\n')}
 
 EDUCATION:
@@ -110,9 +110,9 @@ SKILLS:
 ${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
 
 AI-GENERATED RESUME CONTENT:
-Summary: ${resumeContent.summary || 'Not available'}
+Summary: ${resumeContent.summary || ''}
 Enhanced Experience: ${JSON.stringify(resumeContent.experience || [], null, 2)}
-Enhanced Skills: ${resumeContent.skills ? resumeContent.skills.join(', ') : 'Not available'}
+Enhanced Skills: ${resumeContent.skills ? resumeContent.skills.join(', ') : ''}
 
 Please provide an answer that:
 1. Directly addresses the specific question asked
