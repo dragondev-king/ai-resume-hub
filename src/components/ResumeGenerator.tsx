@@ -261,9 +261,9 @@ const ResumeGenerator: React.FC = () => {
         const { error: saveError } = await supabase.rpc('create_job_application', {
           p_profile_id: selectedProfile,
           p_bidder_id: user.id,
-          p_job_title: generatedResume.jobTitle || 'Not specified',
+          p_job_title: generatedResume.jobTitle || '',
           p_job_description: jobDescription,
-          p_company_name: generatedResume.companyName || 'Not specified',
+          p_company_name: generatedResume.companyName || '',
           p_job_description_link: jobDescriptionLink,
           p_resume_file_name: storedFileName,
           p_generated_summary: generatedResume.summary,

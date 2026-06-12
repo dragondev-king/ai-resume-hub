@@ -74,13 +74,13 @@ ${jobDescription}
 
 CANDIDATE INFORMATION:
 Name: ${profile.first_name} ${profile.last_name}
-Current Summary: ${profile.summary || 'Not provided'}
+Current Summary: ${profile.summary || ''}
 
 ORIGINAL EXPERIENCE (Use as inspiration but don't be limited by it):
 ${profile.experience.map((exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
-  Address: ${exp.address || 'Not provided'}
-  Original Description: ${exp.description || 'No description provided'}
+  Address: ${exp.address || ''}
+  Original Description: ${exp.description || ''}
 `).join('\n')}
 
 EDUCATION:

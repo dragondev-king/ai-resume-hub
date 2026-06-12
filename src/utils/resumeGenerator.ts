@@ -59,8 +59,8 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
         address: exp.address
       })),
       skills: profile.skills,
-      jobTitle: 'Not specified',
-      companyName: 'Not specified'
+      jobTitle: '',
+      companyName: ''
     };
   }
 };
@@ -107,8 +107,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         address: exp.address
       })),
       skills: parsed.skills || originalProfile.skills,
-      jobTitle: parsed.jobTitle || 'Not specified',
-      companyName: parsed.companyName || 'Not specified'
+      jobTitle: parsed.jobTitle || '',
+      companyName: parsed.companyName || ''
     };
 
     console.log(enhancedData, '=== enhancedData')
