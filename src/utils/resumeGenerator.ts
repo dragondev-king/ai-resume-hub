@@ -19,9 +19,14 @@ interface GeneratedResume {
   companyName?: string;
 }
 
-export const generateResume = async (profile: Profile, jobDescription: string): Promise<GeneratedResume> => {
+export type AIProvider = 'openai' | 'claude';
+
+export const generateResume = async (
+  profile: Profile,
+  jobDescription: string,
+  provider: AIProvider = 'openai'
+): Promise<GeneratedResume> => {
   try {
-    // Call the Vercel serverless function instead of OpenAI directly
     const response = await fetch('/api/generate-resume', {
       method: 'POST',
       headers: {
@@ -30,6 +35,7 @@ export const generateResume = async (profile: Profile, jobDescription: string): 
       body: JSON.stringify({
         profile,
         jobDescription,
+        provider,
       }),
     });
 

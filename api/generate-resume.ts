@@ -1,68 +1,104 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
-// Initialize OpenAI client (server-side, safe to use API key)
+type AIProvider = 'openai' | 'claude';
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+const SYSTEM_PROMPT =
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.';
+
 interface RequestBody {
   profile: any;
   jobDescription: string;
+  provider?: AIProvider;
 }
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { profile, jobDescription } = req.body as RequestBody;
+    const { profile, jobDescription, provider = 'openai' } = req.body as RequestBody;
 
     if (!profile || !jobDescription) {
       return res.status(400).json({ error: 'Missing required fields: profile and jobDescription' });
     }
 
-    // Create the AI prompt
+    if (provider !== 'openai' && provider !== 'claude') {
+      return res.status(400).json({ error: 'Invalid provider. Must be "openai" or "claude".' });
+    }
+
+    if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        error: 'Server configuration error',
+        details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.',
+      });
+    }
+
+    if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({
+        error: 'Server configuration error',
+        details: 'Anthropic API key is not configured. Please set ANTHROPIC_API_KEY environment variable.',
+      });
+    }
+
     const prompt = createAIPrompt(profile, jobDescription);
+    const aiResponse =
+      provider === 'claude'
+        ? await generateWithClaude(prompt)
+        : await generateWithOpenAI(prompt);
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 5000,
-    });
-
-    const aiResponse = completion.choices[0]?.message?.content || '';
-
-    // Return the AI response
     return res.status(200).json({
       success: true,
-      aiResponse
+      aiResponse,
+      provider,
     });
-
   } catch (error: any) {
     console.error('Error generating resume:', error);
     return res.status(500).json({
       error: 'Failed to generate resume',
-      details: error.message
+      details: error.message,
     });
   }
+}
+
+async function generateWithOpenAI(prompt: string): Promise<string> {
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.7,
+    max_tokens: 5000,
+  });
+
+  return completion.choices[0]?.message?.content || '';
+}
+
+async function generateWithClaude(prompt: string): Promise<string> {
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 5000,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlock = message.content.find((block) => block.type === 'text');
+  return textBlock?.type === 'text' ? textBlock.text : '';
 }
 
 const createAIPrompt = (profile: any, jobDescription: string): string => {
@@ -177,4 +213,3 @@ Response format:
 }
 `;
 };
-
