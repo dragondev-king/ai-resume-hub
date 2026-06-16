@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { generateResume } from '../utils/resumeGenerator';
+import { generateResume, AIProvider } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
 import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
@@ -37,6 +37,7 @@ const ResumeGenerator: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
+  const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [loading, setLoading] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
   const [editingResume, setEditingResume] = useState<EditableResume | null>(null);
@@ -85,7 +86,7 @@ const ResumeGenerator: React.FC = () => {
     setLoading(true);
     try {
       // Generate AI resume with job title and company name extraction
-      const generated = await generateResume(profile, jobDescription);
+      const generated = await generateResume(profile, jobDescription, aiProvider);
 
       console.log(generated, '=== generated')
 
@@ -628,6 +629,40 @@ const ResumeGenerator: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Paste the job description here. The AI will extract the job title and company name, then tailor the resume accordingly..."
             />
+          </div>
+
+          {/* AI Provider Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              AI Provider
+            </label>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="aiProvider"
+                  value="openai"
+                  checked={aiProvider === 'openai'}
+                  onChange={() => setAiProvider('openai')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">OpenAI (GPT-4.1 Mini)</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="aiProvider"
+                  value="claude"
+                  checked={aiProvider === 'claude'}
+                  onChange={() => setAiProvider('claude')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Claude (Sonnet 4)</span>
+              </label>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              Choose which AI model to use for resume generation. Compare outputs to see which works best.
+            </p>
           </div>
 
           {/* Generate and Reset Buttons */}
