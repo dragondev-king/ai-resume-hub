@@ -91,7 +91,7 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
 
 async function generateWithClaude(prompt: string): Promise<string> {
   const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-opus-4-6',
     max_tokens: 5000,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: prompt }],
