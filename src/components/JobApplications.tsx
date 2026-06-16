@@ -29,13 +29,16 @@ const JobApplications: React.FC = () => {
     dateRange: searchParams.get('dateRange') || 'today',
     status: searchParams.get('status') || '',
     companyName: searchParams.get('companyName') || '',
+    jobTitle: searchParams.get('jobTitle') || '',
   });
 
   const [filters, setFilters] = useState(getInitialFilters);
 
-  // Separate state for company name search input and actual search value
+  // Separate state for search inputs and actual search values
   const [companyNameInput, setCompanyNameInput] = useState(filters.companyName);
   const [activeCompanyName, setActiveCompanyName] = useState(filters.companyName);
+  const [jobTitleInput, setJobTitleInput] = useState(filters.jobTitle);
+  const [activeJobTitle, setActiveJobTitle] = useState(filters.jobTitle);
 
   // Pagination state - initialize from URL params
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
@@ -54,6 +57,7 @@ const JobApplications: React.FC = () => {
     if (newFilters.dateRange && newFilters.dateRange !== 'today') params.set('dateRange', newFilters.dateRange);
     if (newFilters.status) params.set('status', newFilters.status);
     if (newFilters.companyName) params.set('companyName', newFilters.companyName);
+    if (newFilters.jobTitle) params.set('jobTitle', newFilters.jobTitle);
 
     // Add pagination params
     if (newPage > 1) params.set('page', newPage.toString());
@@ -98,6 +102,7 @@ const JobApplications: React.FC = () => {
         p_date_range: filters.dateRange,
         p_status: filters.status || null,
         p_company_name: activeCompanyName || null,
+        p_job_title: activeJobTitle || null,
         p_page_size: pageSize,
         p_page_number: currentPage
       });
@@ -117,7 +122,8 @@ const JobApplications: React.FC = () => {
         p_date_to: filters.dateTo ? new Date(filters.dateTo).toISOString() : null,
         p_date_range: filters.dateRange,
         p_status: filters.status || null,
-        p_company_name: activeCompanyName || null
+        p_company_name: activeCompanyName || null,
+        p_job_title: activeJobTitle || null
       });
 
       if (countError) {
@@ -137,7 +143,7 @@ const JobApplications: React.FC = () => {
       setLoading(false);
       setFilterLoading(false);
     }
-  }, [user, filters, role, pageSize, currentPage, activeCompanyName]);
+  }, [user, filters, role, pageSize, currentPage, activeCompanyName, activeJobTitle]);
 
 
 
@@ -176,6 +182,11 @@ const JobApplications: React.FC = () => {
     setFiltersAndUpdateURL({ ...filters, companyName: companyNameInput });
   };
 
+  const handleJobTitleSearch = () => {
+    setActiveJobTitle(jobTitleInput);
+    setFiltersAndUpdateURL({ ...filters, jobTitle: jobTitleInput });
+  };
+
   const clearFilters = () => {
     const clearedFilters = {
       profileId: '',
@@ -185,10 +196,13 @@ const JobApplications: React.FC = () => {
       dateRange: 'today', // Reset to today as default
       status: '', // Reset status filter
       companyName: '', // Reset company name search
+      jobTitle: '', // Reset job title search
     };
     setFiltersAndUpdateURL(clearedFilters);
     setCompanyNameInput(''); // Reset search input
     setActiveCompanyName(''); // Reset active search
+    setJobTitleInput(''); // Reset job title input
+    setActiveJobTitle(''); // Reset active job title search
     setCurrentPage(1); // Reset to first page
   };
 
@@ -427,6 +441,38 @@ const JobApplications: React.FC = () => {
               <option value="rejected">Rejected</option>
               <option value="withdrawn">Withdrawn</option>
             </select>
+          </div>
+
+          {/* Job Title Search - All roles */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Job Title
+            </label>
+            <div className="flex space-x-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={jobTitleInput}
+                  onChange={(e) => setJobTitleInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleJobTitleSearch();
+                    }
+                  }}
+                  placeholder="Search by job title..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleJobTitleSearch}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+              >
+                Search
+              </button>
+            </div>
           </div>
 
           {/* Company Name Search - All roles */}
