@@ -71,40 +71,19 @@ export const generateResume = async (
   }
 };
 
-const parseAIResponse = (originalProfile: Profile, aiResponse: string): GeneratedResume => {
+const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<string, unknown>): GeneratedResume => {
   try {
-    // Since we're using OpenAI's JSON mode, the response should be valid JSON
-    // Just trim whitespace and parse directly
-    let jsonString = aiResponse.trim();
-    
-    // If there's still markdown code block formatting, remove it
-    if (jsonString.startsWith('```json')) {
-      jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonString.startsWith('```')) {
-      jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-    
-    // Try to extract JSON if there's extra text (fallback)
-    if (!jsonString.startsWith('{')) {
-      const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        jsonString = jsonMatch[0];
-      } else {
-        throw new Error('No JSON found in response');
-      }
-    }
-    
-    // Remove trailing commas (common JSON error)
-    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
-
-    const parsed = JSON.parse(jsonString);
+    const parsed =
+      typeof aiResponse === 'string'
+        ? parseJsonResponse(aiResponse)
+        : aiResponse;
 
     console.log(parsed, '=== parsed')
     
     // Validate and enhance the parsed data
     const enhancedData: GeneratedResume = {
-      summary: parsed.summary || originalProfile.summary || '',
-      experience: parsed.experience || originalProfile.experience.map(exp => ({
+      summary: (parsed.summary as string) || originalProfile.summary || '',
+      experience: (parsed.experience as GeneratedResume['experience']) || originalProfile.experience.map(exp => ({
         position: exp.position,
         company: exp.company,
         start_date: exp.start_date,
@@ -112,9 +91,9 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
         descriptions: exp.description ? [exp.description] : [],
         address: exp.address
       })),
-      skills: parsed.skills || originalProfile.skills,
-      jobTitle: parsed.jobTitle || '',
-      companyName: parsed.companyName || ''
+      skills: (parsed.skills as string[]) || originalProfile.skills,
+      jobTitle: (parsed.jobTitle as string) || '',
+      companyName: (parsed.companyName as string) || ''
     };
 
     console.log(enhancedData, '=== enhancedData')
@@ -122,8 +101,12 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
     return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
-    console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
-    console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
+    if (typeof aiResponse === 'string') {
+      console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
+      console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
+    } else {
+      console.error('AI Response object:', aiResponse);
+    }
     toast.error("An error occurred while parsing the AI response")
     
     // Return original data if parsing fails
@@ -133,4 +116,27 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string): Generate
       skills: originalProfile.skills,
     };
   }
+};
+
+const parseJsonResponse = (aiResponse: string): Record<string, unknown> => {
+  let jsonString = aiResponse.trim();
+
+  if (jsonString.startsWith('```json')) {
+    jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  } else if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
+  }
+
+  if (!jsonString.startsWith('{')) {
+    const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonString = jsonMatch[0];
+    } else {
+      throw new Error('No JSON found in response');
+    }
+  }
+
+  jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+
+  return JSON.parse(jsonString);
 };

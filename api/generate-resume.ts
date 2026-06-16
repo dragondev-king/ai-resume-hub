@@ -13,7 +13,43 @@ const anthropic = new Anthropic({
 });
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.';
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged.';
+
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+const RESUME_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    jobTitle: { type: 'string' },
+    companyName: { type: 'string' },
+    summary: { type: 'string' },
+    experience: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          position: { type: 'string' },
+          company: { type: 'string' },
+          start_date: { type: 'string' },
+          end_date: { type: 'string' },
+          address: { type: 'string' },
+          descriptions: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+        required: ['position', 'company', 'start_date', 'end_date', 'address', 'descriptions'],
+        additionalProperties: false,
+      },
+    },
+    skills: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+  },
+  required: ['jobTitle', 'companyName', 'summary', 'experience', 'skills'],
+  additionalProperties: false,
+};
 
 interface RequestBody {
   profile: any;
@@ -91,14 +127,26 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
 
 async function generateWithClaude(prompt: string): Promise<string> {
   const message = await anthropic.messages.create({
-    model: 'claude-opus-4-6',
+    model: CLAUDE_MODEL,
     max_tokens: 5000,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: prompt }],
+    output_config: {
+      format: {
+        type: 'json_schema',
+        schema: RESUME_OUTPUT_SCHEMA,
+      },
+    },
   });
 
-  const textBlock = message.content.find((block) => block.type === 'text');
-  return textBlock?.type === 'text' ? textBlock.text : '';
+  return extractClaudeTextContent(message);
+}
+
+function extractClaudeTextContent(message: Anthropic.Message): string {
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
 }
 
 const createAIPrompt = (profile: any, jobDescription: string): string => {
