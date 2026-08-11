@@ -18,7 +18,8 @@ import {
   RESUME_COLORS,
   RESUME_FONTS,
   RESUME_SIZES,
-  categorizeSkills,
+  buildResumeSkillSections,
+  flattenSkillSections,
   extractRoleTechStack,
 } from './resumeLayout';
 
@@ -125,7 +126,8 @@ export const generateDocx = async (
 ): Promise<void> => {
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
-  const skills = Array.from(new Set([...(generatedResume.skills ?? [])]));
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const skills = flattenSkillSections(skillSections);
 
   const children: (Paragraph | Table)[] = [
     ...createHeader(profile, includeLinkedIn),
@@ -148,10 +150,8 @@ export const generateDocx = async (
     );
   }
 
-  if (skills.length > 0) {
-    children.push(createSectionHeader('SKILLS'));
-    children.push(...createSkillsSection(skills));
-  }
+  children.push(createSectionHeader('SKILLS'));
+  children.push(...createSkillsSection(skillSections));
 
   if (profile?.education && profile.education.length > 0) {
     children.push(createSectionHeader('EDUCATION'));
@@ -315,8 +315,8 @@ const createSectionHeader = (title: string): Paragraph => {
   });
 };
 
-const createSkillsSection = (skills: string[]): Paragraph[] => {
-  return categorizeSkills(skills).map(
+const createSkillsSection = (sections: { label: string; skills: string[] }[]): Paragraph[] => {
+  return sections.map(
     (cat) =>
       new Paragraph({
         children: [

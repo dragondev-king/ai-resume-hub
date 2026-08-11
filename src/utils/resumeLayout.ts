@@ -25,74 +25,105 @@ export const RESUME_SIZES = {
   techStack: 17,
 } as const;
 
-type SkillCategory = {
+export type CategorizedSkills = { label: string; skills: string[] }[];
+
+type SkillSectionDef = {
   label: string;
+  /** Always included on every resume. */
+  base: string[];
+  /** Match job-requirement / AI skills into this section. */
   pattern: RegExp;
 };
 
-const SKILL_CATEGORIES: SkillCategory[] = [
+/**
+ * Static skill baseline for all resumes.
+ * Job-specific skills are merged into these sections when they match.
+ */
+const STATIC_SKILL_SECTIONS: SkillSectionDef[] = [
   {
     label: 'Programming Languages',
+    base: ['JavaScript', 'TypeScript', 'Python', 'HTML', 'Go', 'Ruby'],
     pattern:
-      /^(javascript|typescript|python|java|c\+\+|c#|csharp|ruby|go|golang|swift|kotlin|php|rust|scala|r|dart|objective-?c|bash|shell|powershell|sql)$/i,
+      /^(javascript|typescript|python|html|go|golang|ruby|java|c\+\+|c#|csharp|swift|kotlin|php|rust|scala|css|sql)$/i,
   },
   {
     label: 'Frameworks & Libraries',
+    base: [
+      'React',
+      'Next.js',
+      'Vue.js',
+      'Angular.js',
+      'Nuxt',
+      'Django',
+      'Flask',
+      'FastAPI',
+      'Ruby on Rails',
+      'Node.js',
+      'Express.js',
+    ],
     pattern:
-      /(react|next\.?js|angular|vue|svelte|node\.?js|express|django|flask|fastapi|spring|rails|ruby on rails|laravel|nestjs|nuxt|gatsby|jquery|tailwind|bootstrap|hotwire|turbo|stimulus|ant design|\.net|asp\.net)/i,
+      /(react|next\.?js|vue(\.js)?|angular(\.js)?|nuxt|django|flask|fastapi|rails|ruby on rails|node\.?js|express(\.js)?|svelte|nestjs|spring|laravel|tailwind|bootstrap)/i,
   },
   {
     label: 'Databases',
+    base: ['PostgreSQL', 'MongoDB', 'MySQL', 'SQLite', 'Supabase', 'Firebase'],
     pattern:
-      /(postgresql|postgres|mysql|mongodb|sqlite|redis|cassandra|elasticsearch|oracle|dynamodb|mariadb|cosmos|firestore|neo4j|sql server|mssql)/i,
+      /(postgresql|postgres|mongodb|mysql|sqlite|supabase|firebase|firestore|redis|dynamodb|mariadb|oracle|sql server|mssql)/i,
   },
   {
     label: 'Cloud & DevOps',
+    base: ['AWS', 'GCP', 'Azure', 'Jenkins', 'CI/CD', 'CircleCI', 'Docker'],
     pattern:
-      /(aws|azure|gcp|google cloud|docker|kubernetes|k8s|terraform|jenkins|gitlab ci|github actions|ci\/?cd|cloud|devops|ansible|helm|lambda|ec2|s3|vercel|netlify)/i,
-  },
-  {
-    label: 'APIs & Integration',
-    pattern:
-      /(rest(ful)?(\s*apis?)?|graphql|soap|grpc|oauth|json|xml|websocket|api design|api integration|openapi|swagger)/i,
-  },
-  {
-    label: 'Tools & Platforms',
-    pattern:
-      /(git|jira|confluence|slack|figma|vscode|visual studio|eclipse|postman|notion|linear|datadog|sentry|new relic)/i,
-  },
-  {
-    label: 'Soft Skills',
-    pattern:
-      /(leadership|communication|teamwork|problem solving|project management|collaboration|mentoring|presentation|negotiation|customer service|time management|organization|creativity|adaptability|critical thinking|decision making|cross-functional)/i,
+      /(aws|gcp|google cloud|azure|jenkins|ci\/?cd|circleci|docker|kubernetes|k8s|terraform|github actions|gitlab ci|ansible|helm)/i,
   },
 ];
 
-export type CategorizedSkills = { label: string; skills: string[] }[];
+function normalizeSkillKey(skill: string): string {
+  return skill.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function mergeUnique(base: string[], extras: string[]): string[] {
+  const seen = new Set(base.map(normalizeSkillKey));
+  const result = [...base];
+  for (const skill of extras) {
+    const trimmed = skill.trim();
+    if (!trimmed) continue;
+    const key = normalizeSkillKey(trimmed);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
 
 /**
- * Group skills into recruiter-friendly categories (reference-resume style).
- * Unmatched skills land in "Other Technologies".
+ * Build skill sections: static baseline for every resume, plus extras from
+ * job-requirement / AI skills that fit each category.
  */
-export function categorizeSkills(skills: string[]): CategorizedSkills {
-  const unique = Array.from(new Set(skills.map((s) => s.trim()).filter(Boolean)));
+export function buildResumeSkillSections(jobSkills: string[] = []): CategorizedSkills {
+  const extras = jobSkills.map((s) => s.trim()).filter(Boolean);
   const used = new Set<string>();
-  const result: CategorizedSkills = [];
 
-  for (const { label, pattern } of SKILL_CATEGORIES) {
-    const matched = unique.filter((s) => !used.has(s.toLowerCase()) && pattern.test(s));
-    if (matched.length) {
-      matched.forEach((s) => used.add(s.toLowerCase()));
-      result.push({ label, skills: matched });
-    }
-  }
+  return STATIC_SKILL_SECTIONS.map(({ label, base, pattern }) => {
+    const matchedExtras = extras.filter((skill) => {
+      const key = normalizeSkillKey(skill);
+      if (used.has(key)) return false;
+      if (!pattern.test(skill)) return false;
+      used.add(key);
+      return true;
+    });
+    return { label, skills: mergeUnique(base, matchedExtras) };
+  });
+}
 
-  const other = unique.filter((s) => !used.has(s.toLowerCase()));
-  if (other.length) {
-    result.push({ label: 'Other Technologies', skills: other });
-  }
+/** Flat list of all skills shown on the resume (for tech-stack highlighting, etc.). */
+export function flattenSkillSections(sections: CategorizedSkills): string[] {
+  return sections.flatMap((s) => s.skills);
+}
 
-  return result;
+/** @deprecated Prefer buildResumeSkillSections — kept for any callers expecting the old name. */
+export function categorizeSkills(skills: string[]): CategorizedSkills {
+  return buildResumeSkillSections(skills);
 }
 
 /**
@@ -101,9 +132,11 @@ export function categorizeSkills(skills: string[]): CategorizedSkills {
 export function extractRoleTechStack(descriptions: string[], allSkills: string[]): string[] {
   if (!descriptions?.length || !allSkills?.length) return [];
   const blob = descriptions.join(' ').toLowerCase();
-  return allSkills.filter((skill) => {
-    const needle = skill.trim().toLowerCase();
-    if (needle.length < 2) return false;
-    return blob.includes(needle);
-  }).slice(0, 14);
+  return allSkills
+    .filter((skill) => {
+      const needle = skill.trim().toLowerCase();
+      if (needle.length < 2) return false;
+      return blob.includes(needle);
+    })
+    .slice(0, 14);
 }

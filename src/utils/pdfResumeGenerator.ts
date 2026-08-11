@@ -6,7 +6,8 @@ import type { GenerateDocxOptions } from './docxGenerator';
 import { formatDateRange, resolveResumeExperience } from './docxGenerator';
 import {
   RESUME_COLORS,
-  categorizeSkills,
+  buildResumeSkillSections,
+  flattenSkillSections,
   extractRoleTechStack,
 } from './resumeLayout';
 
@@ -99,7 +100,8 @@ export async function generateResumePdf(
     y += 12;
   };
 
-  const skills = Array.from(new Set([...(generatedResume.skills ?? [])]));
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const skills = flattenSkillSections(skillSections);
 
   // —— Header ——
   const name = profile
@@ -167,31 +169,29 @@ export async function generateResumePdf(
     writeWrapped(generatedResume.summary, 10, 'normal', margin, maxW, body);
   }
 
-  // —— Skills ——
-  if (skills.length) {
-    sectionHeader('Skills');
-    for (const cat of categorizeSkills(skills)) {
-      needSpace(lineHeight(10));
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      setColor(body);
-      const label = `${cat.label}: `;
-      doc.text(label, margin, y);
-      const labelW = doc.getTextWidth(label);
-      doc.setFont('helvetica', 'normal');
-      const lines = doc.splitTextToSize(cat.skills.join(', '), maxW - labelW) as string[];
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (i > 0) {
-          y += lineHeight(10);
-          needSpace(lineHeight(10));
-          doc.text(line, margin, y);
-        } else {
-          doc.text(line, margin + labelW, y);
-        }
+  // —— Skills (static baseline + job-requirement extras) ——
+  sectionHeader('Skills');
+  for (const cat of skillSections) {
+    needSpace(lineHeight(10));
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    setColor(body);
+    const label = `${cat.label}: `;
+    doc.text(label, margin, y);
+    const labelW = doc.getTextWidth(label);
+    doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(cat.skills.join(', '), maxW - labelW) as string[];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (i > 0) {
+        y += lineHeight(10);
+        needSpace(lineHeight(10));
+        doc.text(line, margin, y);
+      } else {
+        doc.text(line, margin + labelW, y);
       }
-      y += lineHeight(10);
     }
+    y += lineHeight(10);
   }
 
   // —— Education ——
