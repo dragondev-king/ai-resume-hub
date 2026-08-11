@@ -15,6 +15,8 @@ type Profile = ProfileWithDetailsRPC;
 export interface GenerateDocxOptions {
   /** When set, overrides profile metadata and local fallback. */
   useAiEnhancedJobTitle?: boolean;
+  /** When false, omit LinkedIn from the contact section. Defaults to true. */
+  includeLinkedIn?: boolean;
 }
 
 function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profile): boolean {
@@ -90,6 +92,7 @@ export function resolveResumeExperience(
 
 export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile, options?: GenerateDocxOptions): Promise<void> => {
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
+  const includeLinkedIn = options?.includeLinkedIn !== false;
 
   const doc = new Document({
     sections: [
@@ -111,7 +114,7 @@ export const generateDocx = async (generatedResume: GeneratedResume, fileName: s
           // Contact Information
           ...(profile ? [
             createSectionHeader('CONTACT'),
-            ...createContactSection(profile)
+            ...createContactSection(profile, includeLinkedIn)
           ] : []),
 
           // Professional Summary
@@ -182,13 +185,13 @@ const createHeader = (profile?: Profile): Paragraph[] => {
   return paragraphs;
 };
 
-const createContactSection = (profile: Profile): Paragraph[] => {
+const createContactSection = (profile: Profile, includeLinkedIn = true): Paragraph[] => {
   const contactInfo = [];
 
   if (profile.email) contactInfo.push({ label: 'Email', value: profile.email });
   if (profile.phone) contactInfo.push({ label: 'Phone', value: profile.phone });
   if (profile.location) contactInfo.push({ label: 'Location', value: profile.location });
-  if (profile.linkedin) contactInfo.push({ label: 'LinkedIn', value: profile.linkedin });
+  if (includeLinkedIn && profile.linkedin) contactInfo.push({ label: 'LinkedIn', value: profile.linkedin });
   if (profile.portfolio) contactInfo.push({ label: 'Portfolio', value: profile.portfolio });
 
   return contactInfo.map(info =>
