@@ -18,12 +18,26 @@ export const RESUME_FONTS = {
 export const RESUME_SIZES = {
   name: 48,
   title: 26,
-  contact: 18,
   section: 24,
-  body: 20,
-  bodySmall: 18,
-  /** Work experience bullet text — 8pt (16 half-points) */
+  /** Company name + job title in experience */
+  experienceHeading: 22,
+  /** Date ranges / periods */
+  experienceMeta: 18,
+  /** All other body content — 8pt */
+  body: 16,
+  bodySmall: 16,
+  contact: 16,
   experienceBullet: 16,
+} as const;
+
+/** Point sizes for PDF (jsPDF). */
+export const RESUME_PDF_SIZES = {
+  name: 22,
+  title: 12,
+  section: 12,
+  experienceHeading: 11,
+  experienceMeta: 9,
+  body: 8,
 } as const;
 
 export type CategorizedSkills = { label: string; skills: string[] }[];

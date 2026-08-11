@@ -389,7 +389,7 @@ const createProfessionalExperienceSection = (
         children: [
           new TextRun({
             text: exp.company ?? '',
-            size: 22,
+            size: RESUME_SIZES.experienceHeading,
             bold: true,
             font: FONT_BODY,
             color: RESUME_COLORS.primary,
@@ -406,7 +406,7 @@ const createProfessionalExperienceSection = (
           children: [
             new TextRun({
               text: dateRange,
-              size: RESUME_SIZES.bodySmall,
+              size: RESUME_SIZES.experienceMeta,
               bold: true,
               font: FONT_BODY,
               color: RESUME_COLORS.primary,
@@ -422,7 +422,7 @@ const createProfessionalExperienceSection = (
           children: [
             new TextRun({
               text: exp.address,
-              size: RESUME_SIZES.bodySmall,
+              size: RESUME_SIZES.body,
               font: FONT_BODY,
               color: RESUME_COLORS.muted,
             }),
@@ -436,7 +436,7 @@ const createProfessionalExperienceSection = (
         children: [
           new TextRun({
             text: jobTitle,
-            size: 22,
+            size: RESUME_SIZES.experienceHeading,
             bold: true,
             font: FONT_BODY,
             color: RESUME_COLORS.body,

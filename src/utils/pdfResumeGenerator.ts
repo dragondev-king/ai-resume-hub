@@ -6,6 +6,7 @@ import type { GenerateDocxOptions } from './docxGenerator';
 import { formatDateRange, resolveResumeExperience } from './docxGenerator';
 import {
   RESUME_COLORS,
+  RESUME_PDF_SIZES,
   buildResumeSkillSections,
 } from './resumeLayout';
 
@@ -86,9 +87,9 @@ export async function generateResumePdf(
 
   const sectionHeader = (title: string) => {
     y += 10;
-    needSpace(lineHeight(12) + 10);
+    needSpace(lineHeight(RESUME_PDF_SIZES.section) + 10);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(RESUME_PDF_SIZES.section);
     setColor(primary);
     doc.text(title.toUpperCase(), margin, y);
     y += 4;
@@ -98,6 +99,9 @@ export async function generateResumePdf(
     y += 12;
   };
 
+  const bodySize = RESUME_PDF_SIZES.body;
+  const bodyLh = lineHeight(bodySize);
+
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
 
   // —— Header ——
@@ -106,7 +110,7 @@ export async function generateResumePdf(
     : 'PROFESSIONAL RESUME';
   needSpace(28);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
+  doc.setFontSize(RESUME_PDF_SIZES.name);
   setColor(primary);
   doc.text(name, margin, y);
   y += 20;
@@ -114,7 +118,7 @@ export async function generateResumePdf(
   if (profile?.title) {
     needSpace(16);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(RESUME_PDF_SIZES.title);
     setColor(accent);
     doc.text(profile.title, margin, y);
     // Space between role and contact details
@@ -131,7 +135,7 @@ export async function generateResumePdf(
 
     if (contactParts.length) {
       needSpace(14);
-      doc.setFontSize(9);
+      doc.setFontSize(bodySize);
       let x = margin;
       for (let i = 0; i < contactParts.length; i++) {
         const part = contactParts[i];
@@ -163,15 +167,15 @@ export async function generateResumePdf(
   // —— Summary ——
   if (generatedResume.summary) {
     sectionHeader('Summary');
-    writeWrapped(generatedResume.summary, 10, 'normal', margin, maxW, body);
+    writeWrapped(generatedResume.summary, bodySize, 'normal', margin, maxW, body);
   }
 
   // —— Skills (static baseline + job-requirement extras) ——
   sectionHeader('Skills');
   for (const cat of skillSections) {
-    needSpace(lineHeight(10));
+    needSpace(bodyLh);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(bodySize);
     setColor(body);
     const label = `${cat.label}: `;
     doc.text(label, margin, y);
@@ -181,14 +185,14 @@ export async function generateResumePdf(
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (i > 0) {
-        y += lineHeight(10);
-        needSpace(lineHeight(10));
+        y += bodyLh;
+        needSpace(bodyLh);
         doc.text(line, margin, y);
       } else {
         doc.text(line, margin + labelW, y);
       }
     }
-    y += lineHeight(10);
+    y += bodyLh;
   }
 
   // —— Education ——
@@ -201,38 +205,38 @@ export async function generateResumePdf(
       const degreeText = [edu.degree, edu.field].filter(Boolean).join(' in ');
       const edr = formatDateRange(edu.start_date, edu.end_date);
 
-      needSpace(lineHeight(10) * 2);
+      needSpace(bodyLh * 2);
       const startY = y;
       let leftY = startY;
       let rightY = startY;
 
       if (edr) {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
+        doc.setFontSize(bodySize);
         setColor(primary);
         const dateLines = doc.splitTextToSize(edr, leftColW) as string[];
         for (const line of dateLines) {
           doc.text(line, margin, leftY);
-          leftY += lineHeight(9);
+          leftY += bodyLh;
         }
       }
 
       if (degreeText) {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
+        doc.setFontSize(bodySize);
         setColor(primary);
         const lines = doc.splitTextToSize(degreeText, rightColW) as string[];
         for (const line of lines) {
           doc.text(line, rightColX, rightY);
-          rightY += lineHeight(10);
+          rightY += bodyLh;
         }
       }
       if (edu.school) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
+        doc.setFontSize(bodySize);
         setColor(accent);
         doc.text(edu.school, rightColX, rightY);
-        rightY += lineHeight(9);
+        rightY += bodyLh;
       }
 
       y = Math.max(leftY, rightY);
@@ -255,44 +259,46 @@ export async function generateResumePdf(
       // Keep company + title + first bullet together when possible
       needSpace(52);
 
-      writeWrapped(exp.company ?? '', 11, 'bold', margin, maxW, primary);
+      writeWrapped(exp.company ?? '', RESUME_PDF_SIZES.experienceHeading, 'bold', margin, maxW, primary);
 
       const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
       const metaStartY = y;
       let leftY = metaStartY;
       let rightY = metaStartY;
+      const metaLh = lineHeight(RESUME_PDF_SIZES.experienceMeta);
+      const headingLh = lineHeight(RESUME_PDF_SIZES.experienceHeading);
 
       // Left: dates + location (independent column — must not push bullets down)
       if (dateRange) {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
+        doc.setFontSize(RESUME_PDF_SIZES.experienceMeta);
         setColor(primary);
         const dateLines = doc.splitTextToSize(dateRange, leftColW) as string[];
         for (const line of dateLines) {
           doc.text(line, margin, leftY);
-          leftY += lineHeight(9);
+          leftY += metaLh;
         }
       }
       if (exp.address) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(bodySize);
         setColor(muted);
         const addrLines = doc.splitTextToSize(exp.address, leftColW) as string[];
         for (const line of addrLines) {
           doc.text(line, margin, leftY);
-          leftY += lineHeight(8);
+          leftY += bodyLh;
         }
       }
 
       // Right: title, then bullets immediately below
       if (exp.position) {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
+        doc.setFontSize(RESUME_PDF_SIZES.experienceHeading);
         setColor(body);
         const titleLines = doc.splitTextToSize(exp.position, rightColW) as string[];
         for (const line of titleLines) {
           doc.text(line, rightColX, rightY);
-          rightY += lineHeight(10);
+          rightY += headingLh;
         }
       }
 
@@ -303,14 +309,13 @@ export async function generateResumePdf(
         const bullet = desc.endsWith('.') ? desc : `${desc}.`;
         const full = `• ${bullet}`;
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(bodySize);
         setColor(body);
         const lines = doc.splitTextToSize(full, rightColW) as string[];
-        const lh = lineHeight(8);
         for (const line of lines) {
-          needSpace(lh);
+          needSpace(bodyLh);
           doc.text(line, rightColX, y);
-          y += lh;
+          y += bodyLh;
         }
       }
 
