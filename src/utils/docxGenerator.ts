@@ -22,6 +22,9 @@ import {
   extractRoleTechStack,
 } from './resumeLayout';
 
+const FONT_HEADING = RESUME_FONTS.heading;
+const FONT_BODY = RESUME_FONTS.body;
+
 interface GeneratedResume {
   summary: string;
   experience: any[];
@@ -107,7 +110,6 @@ export function resolveResumeExperience(
   });
 }
 
-const FONT = RESUME_FONTS.primary;
 const noBorder = {
   top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
   bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
@@ -137,7 +139,7 @@ export const generateDocx = async (
           new TextRun({
             text: generatedResume.summary,
             size: RESUME_SIZES.body,
-            font: FONT,
+            font: FONT_BODY,
             color: RESUME_COLORS.body,
           }),
         ],
@@ -200,11 +202,11 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
           text: name,
           size: RESUME_SIZES.name,
           bold: true,
-          font: FONT,
+          font: FONT_HEADING,
           color: RESUME_COLORS.primary,
         }),
       ],
-      spacing: { after: title ? 60 : 120 },
+      spacing: { after: title ? 60 : 200 },
     }),
   ];
 
@@ -216,11 +218,12 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
             text: title,
             size: RESUME_SIZES.title,
             bold: true,
-            font: FONT,
+            font: FONT_BODY,
             color: RESUME_COLORS.accent,
           }),
         ],
-        spacing: { after: 120 },
+        // Space between role and contact details
+        spacing: { after: 280 },
       })
     );
   }
@@ -241,7 +244,7 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
             new TextRun({
               text: '      ',
               size: RESUME_SIZES.contact,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.body,
             })
           );
@@ -250,14 +253,14 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
           new TextRun({
             text: `${part.label}: `,
             size: RESUME_SIZES.contact,
-            font: FONT,
+            font: FONT_BODY,
             bold: true,
             color: RESUME_COLORS.accent,
           }),
           new TextRun({
             text: part.value,
             size: RESUME_SIZES.contact,
-            font: FONT,
+            font: FONT_BODY,
             color: RESUME_COLORS.body,
           })
         );
@@ -266,15 +269,20 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
       paragraphs.push(
         new Paragraph({
           children: runs,
-          spacing: { after: 200 },
+          // Large gap before Summary / first content section
+          spacing: { after: 480 },
           border: {
             bottom: {
               style: BorderStyle.SINGLE,
               size: 12,
               color: RESUME_COLORS.primary,
-              space: 8,
+              space: 12,
             },
           },
+        }),
+        new Paragraph({
+          children: [],
+          spacing: { after: 200 },
         })
       );
     }
@@ -290,12 +298,12 @@ const createSectionHeader = (title: string): Paragraph => {
         text: title,
         size: RESUME_SIZES.section,
         bold: true,
-        font: FONT,
+        font: FONT_HEADING,
         color: RESUME_COLORS.primary,
         allCaps: true,
       }),
     ],
-    spacing: { before: 280, after: 120 },
+    spacing: { before: 240, after: 120 },
     border: {
       bottom: {
         style: BorderStyle.SINGLE,
@@ -315,14 +323,14 @@ const createSkillsSection = (skills: string[]): Paragraph[] => {
           new TextRun({
             text: `${cat.label}: `,
             size: RESUME_SIZES.body,
-            font: FONT,
+            font: FONT_BODY,
             bold: true,
             color: RESUME_COLORS.body,
           }),
           new TextRun({
             text: cat.skills.join(', '),
             size: RESUME_SIZES.body,
-            font: FONT,
+            font: FONT_BODY,
             color: RESUME_COLORS.body,
           }),
         ],
@@ -389,7 +397,7 @@ const createProfessionalExperienceSection = (
             text: exp.company ?? '',
             size: 22,
             bold: true,
-            font: FONT,
+            font: FONT_BODY,
             color: RESUME_COLORS.primary,
           }),
         ],
@@ -406,7 +414,7 @@ const createProfessionalExperienceSection = (
               text: dateRange,
               size: RESUME_SIZES.bodySmall,
               bold: true,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.primary,
             }),
           ],
@@ -421,7 +429,7 @@ const createProfessionalExperienceSection = (
             new TextRun({
               text: exp.address,
               size: RESUME_SIZES.bodySmall,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.muted,
             }),
           ],
@@ -436,7 +444,7 @@ const createProfessionalExperienceSection = (
             text: jobTitle,
             size: 22,
             bold: true,
-            font: FONT,
+            font: FONT_BODY,
             color: RESUME_COLORS.body,
           }),
         ],
@@ -452,7 +460,7 @@ const createProfessionalExperienceSection = (
               text: techStack.join(', '),
               size: RESUME_SIZES.techStack,
               italics: true,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.accent,
             }),
           ],
@@ -469,13 +477,13 @@ const createProfessionalExperienceSection = (
             new TextRun({
               text: '• ',
               size: RESUME_SIZES.body,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.body,
             }),
             new TextRun({
               text,
               size: RESUME_SIZES.body,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.body,
             }),
           ],
@@ -510,7 +518,7 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
               text: dateRange,
               size: RESUME_SIZES.bodySmall,
               bold: true,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.primary,
             }),
           ],
@@ -528,7 +536,7 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
               text: degreeText,
               size: RESUME_SIZES.body,
               bold: true,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.primary,
             }),
           ],
@@ -543,7 +551,7 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
             new TextRun({
               text: edu.school,
               size: RESUME_SIZES.bodySmall,
-              font: FONT,
+              font: FONT_BODY,
               color: RESUME_COLORS.accent,
             }),
           ],

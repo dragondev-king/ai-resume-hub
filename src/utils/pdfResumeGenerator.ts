@@ -118,7 +118,8 @@ export async function generateResumePdf(
     doc.setFontSize(12);
     setColor(accent);
     doc.text(profile.title, margin, y);
-    y += 16;
+    // Space between role and contact details
+    y += 28;
   }
 
   if (profile) {
@@ -151,11 +152,12 @@ export async function generateResumePdf(
         doc.text(part.value, x, y);
         x += doc.getTextWidth(part.value);
       }
-      y += 8;
+      y += 10;
       doc.setDrawColor(primary[0], primary[1], primary[2]);
       doc.setLineWidth(1.2);
       doc.line(margin, y, pageWidth - margin, y);
-      y += 10;
+      // Large gap before Summary / first content section
+      y += 36;
     }
   }
 

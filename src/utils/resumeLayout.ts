@@ -8,8 +8,10 @@ export const RESUME_COLORS = {
 } as const;
 
 export const RESUME_FONTS = {
-  primary: 'Calibri',
-  fallback: 'Arial',
+  /** Full name + section headers */
+  heading: 'Verdana',
+  /** Body content (summary, skills, experience, contact, etc.) */
+  body: 'Lucida Sans',
 } as const;
 
 /** Half-points for DOCX TextRun size (e.g. 48 = 24pt). */
