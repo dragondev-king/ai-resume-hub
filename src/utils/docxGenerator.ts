@@ -19,6 +19,7 @@ import {
   RESUME_FONTS,
   RESUME_SIZES,
   RESUME_SPACING,
+  RESUME_PAGE_MARGIN_PT,
   buildResumeSkillSections,
   ensureTrailingPeriod,
   parseBoldMarkup,
@@ -188,16 +189,17 @@ export const generateDocx = async (
     );
   }
 
+  const marginTwips = RESUME_PAGE_MARGIN_PT * 20; // pt → twips
   const doc = new Document({
     sections: [
       {
         properties: {
           page: {
             margin: {
-              top: 540,
-              right: 720,
-              bottom: 540,
-              left: 720,
+              top: marginTwips,
+              right: marginTwips,
+              bottom: marginTwips,
+              left: marginTwips,
             },
           },
         },
@@ -277,20 +279,19 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
       paragraphs.push(
         new Paragraph({
           children: runs,
-          // Large gap before Summary / first content section
-          spacing: { after: 480 },
+          spacing: bodyParagraphSpacing(200),
           border: {
             bottom: {
               style: BorderStyle.SINGLE,
               size: 12,
               color: RESUME_COLORS.primary,
-              space: 12,
+              space: 4,
             },
           },
         }),
         new Paragraph({
           children: [],
-          spacing: { after: 200 },
+          spacing: { after: 120 },
         })
       );
     }

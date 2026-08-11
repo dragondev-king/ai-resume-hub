@@ -30,26 +30,29 @@ export const RESUME_SIZES = {
   experienceBullet: 16,
 } as const;
 
-/** Point sizes for PDF (jsPDF). */
+/** Point sizes for PDF (jsPDF) — kept in sync with RESUME_SIZES (half-points / 2). */
 export const RESUME_PDF_SIZES = {
-  name: 22,
-  title: 12,
+  name: 24,
+  title: 13,
   section: 12,
   experienceHeading: 11,
   experienceMeta: 9,
   body: 8,
 } as const;
 
+/** Page margins in points (1 inch = 72pt). Shared by PDF; DOCX uses twips (×20). */
+export const RESUME_PAGE_MARGIN_PT = 36; // 0.5"
+
 /** Spacing tokens shared by DOCX + PDF generators. */
 export const RESUME_SPACING = {
   /** DOCX character spacing in twentieths of a point (20 ≈ 1pt). */
-  charSpacing: 18,
+  charSpacing: 12,
   /** DOCX paragraph line spacing (240 = single spacing). */
-  line: 336, // 1.4×
+  line: 276, // ~1.15×
   /** PDF extra space between characters (pt). */
-  pdfCharSpace: 0.45,
+  pdfCharSpace: 0.25,
   /** PDF line-height multiplier. */
-  pdfLineHeight: 1.55,
+  pdfLineHeight: 1.25,
 } as const;
 
 export type CategorizedSkills = { label: string; skills: string[] }[];
