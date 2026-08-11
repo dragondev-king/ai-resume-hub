@@ -10,6 +10,7 @@ import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
+import { parseBoldMarkup } from '../utils/resumeLayout';
 import ConfirmationModal from './ConfirmationModal';
 
 interface JobApplicationDetailsModalProps {
@@ -17,6 +18,16 @@ interface JobApplicationDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDelete?: (applicationId: string) => void;
+}
+
+function BoldMarkupText({ text }: { text: string }) {
+  return (
+    <>
+      {parseBoldMarkup(text).map((seg, i) =>
+        seg.bold ? <strong key={i}>{seg.text}</strong> : <React.Fragment key={i}>{seg.text}</React.Fragment>
+      )}
+    </>
+  );
 }
 
 const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
@@ -427,7 +438,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                         {exp.descriptions && exp.descriptions.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1 text-gray-700">
                             {exp.descriptions.map((desc: string, descIndex: number) => (
-                              <li key={descIndex}>{desc}</li>
+                              <li key={descIndex}><BoldMarkupText text={desc} /></li>
                             ))}
                           </ul>
                         ) : exp.description && (

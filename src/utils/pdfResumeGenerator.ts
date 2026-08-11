@@ -8,6 +8,9 @@ import {
   RESUME_COLORS,
   RESUME_PDF_SIZES,
   buildResumeSkillSections,
+  ensureTrailingPeriod,
+  parseBoldMarkup,
+  type BoldTextSegment,
 } from './resumeLayout';
 
 interface GeneratedResume {
@@ -83,6 +86,54 @@ export async function generateResumePdf(
       doc.text(line, x, y);
       y += lh;
     }
+  };
+
+  const writeMixedWrapped = (
+    segments: BoldTextSegment[],
+    fontSize: number,
+    x: number,
+    maxWidth: number,
+    color: [number, number, number] = body
+  ) => {
+    const lh = lineHeight(fontSize);
+    const tokens: { text: string; bold: boolean }[] = [];
+
+    for (const seg of segments) {
+      const parts = seg.text.split(/(\s+)/);
+      for (const part of parts) {
+        if (!part) continue;
+        tokens.push({ text: part, bold: seg.bold });
+      }
+    }
+
+    let xCursor = x;
+    const measure = (text: string, bold: boolean) => {
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      return doc.getTextWidth(text);
+    };
+
+    needSpace(lh);
+    setColor(color);
+
+    for (const token of tokens) {
+      const isSpace = /^\s+$/.test(token.text);
+      const width = measure(token.text, token.bold);
+
+      if (!isSpace && xCursor > x && xCursor + width > x + maxWidth) {
+        y += lh;
+        needSpace(lh);
+        xCursor = x;
+      }
+
+      doc.setFont('helvetica', token.bold ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      setColor(color);
+      doc.text(token.text, xCursor, y);
+      xCursor += width;
+    }
+
+    y += lh;
   };
 
   const sectionHeader = (title: string) => {
@@ -306,17 +357,9 @@ export async function generateResumePdf(
       y = rightY;
 
       for (const desc of exp.descriptions ?? []) {
-        const bullet = desc.endsWith('.') ? desc : `${desc}.`;
-        const full = `• ${bullet}`;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(bodySize);
-        setColor(body);
-        const lines = doc.splitTextToSize(full, rightColW) as string[];
-        for (const line of lines) {
-          needSpace(bodyLh);
-          doc.text(line, rightColX, y);
-          y += bodyLh;
-        }
+        const text = ensureTrailingPeriod(desc);
+        const segments = parseBoldMarkup(`• ${text}`);
+        writeMixedWrapped(segments, bodySize, rightColX, rightColW, body);
       }
 
       // Advance past left column only when still on the same page as this job started

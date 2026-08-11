@@ -19,6 +19,8 @@ import {
   RESUME_FONTS,
   RESUME_SIZES,
   buildResumeSkillSections,
+  ensureTrailingPeriod,
+  parseBoldMarkup,
 } from './resumeLayout';
 
 const FONT_HEADING = RESUME_FONTS.heading;
@@ -447,7 +449,8 @@ const createProfessionalExperienceSection = (
     ];
 
     for (const description of descriptions) {
-      const text = description.endsWith('.') ? description : `${description}.`;
+      const text = ensureTrailingPeriod(description);
+      const segments = parseBoldMarkup(text);
       rightParas.push(
         new Paragraph({
           children: [
@@ -457,12 +460,16 @@ const createProfessionalExperienceSection = (
               font: FONT_BODY,
               color: RESUME_COLORS.body,
             }),
-            new TextRun({
-              text,
-              size: RESUME_SIZES.experienceBullet,
-              font: FONT_BODY,
-              color: RESUME_COLORS.body,
-            }),
+            ...segments.map(
+              (seg) =>
+                new TextRun({
+                  text: seg.text,
+                  size: RESUME_SIZES.experienceBullet,
+                  font: FONT_BODY,
+                  bold: seg.bold,
+                  color: RESUME_COLORS.body,
+                })
+            ),
           ],
           spacing: { after: 40 },
         })

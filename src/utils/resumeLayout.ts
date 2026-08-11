@@ -140,3 +140,48 @@ export function flattenSkillSections(sections: CategorizedSkills): string[] {
 export function categorizeSkills(skills: string[]): CategorizedSkills {
   return buildResumeSkillSections(skills);
 }
+
+export type BoldTextSegment = { text: string; bold: boolean };
+
+/**
+ * Parse AI markup that wraps tech skills: <b>React</b> or **React**.
+ * Used when rendering experience bullets in DOCX/PDF/UI.
+ */
+export function parseBoldMarkup(input: string): BoldTextSegment[] {
+  if (!input) return [];
+  const segments: BoldTextSegment[] = [];
+  const re = /<b>([\s\S]*?)<\/b>|\*\*([\s\S]*?)\*\*/gi;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(input)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: input.slice(lastIndex, match.index), bold: false });
+    }
+    const boldText = match[1] ?? match[2] ?? '';
+    if (boldText) {
+      segments.push({ text: boldText, bold: true });
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < input.length) {
+    segments.push({ text: input.slice(lastIndex), bold: false });
+  }
+
+  return segments.filter((s) => s.text.length > 0);
+}
+
+/** Plain text with bold markers removed (for length checks / fallbacks). */
+export function stripBoldMarkup(input: string): string {
+  return parseBoldMarkup(input)
+    .map((s) => s.text)
+    .join('');
+}
+
+/** Ensure a trailing period without disturbing markup near the end. */
+export function ensureTrailingPeriod(input: string): string {
+  const plain = stripBoldMarkup(input).trimEnd();
+  if (!plain || plain.endsWith('.')) return input;
+  return `${input.trimEnd()}.`;
+}
