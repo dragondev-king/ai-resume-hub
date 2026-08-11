@@ -26,6 +26,7 @@ export async function generateResumePdf(
   options?: GenerateDocxOptions
 ): Promise<void> {
   const useAiEnhancedJobTitle = resolveUseAiEnhancedJobTitle(options, profile);
+  const includeLinkedIn = options?.includeLinkedIn !== false;
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -88,7 +89,7 @@ export async function generateResumePdf(
     if (profile.email) items.push({ label: 'Email', value: profile.email });
     if (profile.phone) items.push({ label: 'Phone', value: profile.phone });
     if (profile.location) items.push({ label: 'Location', value: profile.location });
-    if (profile.linkedin) items.push({ label: 'LinkedIn', value: profile.linkedin });
+    if (includeLinkedIn && profile.linkedin) items.push({ label: 'LinkedIn', value: profile.linkedin });
     if (profile.portfolio) items.push({ label: 'Portfolio', value: profile.portfolio });
     for (const { label, value } of items) {
       writeWrapped(`${label}: ${value}`, 11, 'normal', margin, maxW);

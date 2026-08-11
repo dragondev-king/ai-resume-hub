@@ -58,6 +58,9 @@ const ResumeGenerator: React.FC = () => {
   // Application Eligibility State
   const [isApplicationEligible, setIsApplicationEligible] = useState(true);
 
+  // Per-application download options (local only; not persisted)
+  const [includeLinkedIn, setIncludeLinkedIn] = useState(true);
+
   // Copy State
   const [copiedCoverLetter, setCopiedCoverLetter] = useState(false);
   const [copiedAnswers, setCopiedAnswers] = useState<{ [key: string]: boolean }>({});
@@ -225,7 +228,10 @@ const ResumeGenerator: React.FC = () => {
     profile: (typeof profiles)[0],
     format: ResumeDownloadFormat
   ) => {
-    const opts = { useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile) };
+    const opts = {
+      useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
+      includeLinkedIn,
+    };
     const fileName = buildResumeFileName(
       profile,
       generatedResume!.jobTitle,
@@ -525,6 +531,7 @@ const ResumeGenerator: React.FC = () => {
     setIsApplicationEligible(true);
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
+    setIncludeLinkedIn(true);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };
 
@@ -732,6 +739,15 @@ const ResumeGenerator: React.FC = () => {
                 </>
               )}
               <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeLinkedIn}
+                    onChange={(e) => setIncludeLinkedIn(e.target.checked)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span>Include LinkedIn link</span>
+                </label>
                 <div className="flex flex-wrap gap-2 justify-end">
                   <button
                     type="button"
