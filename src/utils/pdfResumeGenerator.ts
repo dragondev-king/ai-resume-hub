@@ -178,7 +178,8 @@ export async function generateResumePdf(
       const labelW = doc.getTextWidth(label);
       doc.setFont('helvetica', 'normal');
       const lines = doc.splitTextToSize(cat.skills.join(', '), maxW - labelW) as string[];
-      lines.forEach((line, i) => {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         if (i > 0) {
           y += lineHeight(10);
           needSpace(lineHeight(10));
@@ -186,7 +187,7 @@ export async function generateResumePdf(
         } else {
           doc.text(line, margin + labelW, y);
         }
-      });
+      }
       y += lineHeight(10);
     }
   }
