@@ -197,28 +197,35 @@ export async function generateResumePdf(
   // —— Education ——
   if (profile?.education?.length) {
     sectionHeader('Education');
-    profile.education.forEach((edu, index) => {
-      if (index > 0) y += 8;
+    for (let index = 0; index < profile.education.length; index++) {
+      const edu = profile.education[index];
+      if (index > 0) y += 6;
+
       const degreeText = [edu.degree, edu.field].filter(Boolean).join(' in ');
       const edr = formatDateRange(edu.start_date, edu.end_date);
+
+      needSpace(lineHeight(10) * 2);
       const startY = y;
+      let leftY = startY;
+      let rightY = startY;
 
       if (edr) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         setColor(primary);
-        needSpace(12);
-        doc.text(edr, margin, y);
+        const dateLines = doc.splitTextToSize(edr, leftColW) as string[];
+        for (const line of dateLines) {
+          doc.text(line, margin, leftY);
+          leftY += lineHeight(9);
+        }
       }
 
-      let rightY = startY;
       if (degreeText) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         setColor(primary);
         const lines = doc.splitTextToSize(degreeText, rightColW) as string[];
         for (const line of lines) {
-          needSpace(lineHeight(10));
           doc.text(line, rightColX, rightY);
           rightY += lineHeight(10);
         }
@@ -227,12 +234,12 @@ export async function generateResumePdf(
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         setColor(accent);
-        needSpace(lineHeight(9));
         doc.text(edu.school, rightColX, rightY);
         rightY += lineHeight(9);
       }
-      y = Math.max(y + 12, rightY);
-    });
+
+      y = Math.max(leftY, rightY);
+    }
   }
 
   // —— Experience ——
@@ -244,26 +251,28 @@ export async function generateResumePdf(
 
   if (experienceEntries.length) {
     sectionHeader('Experience');
-    experienceEntries.forEach((exp, index) => {
-      if (index > 0) y += 10;
+    for (let index = 0; index < experienceEntries.length; index++) {
+      const exp = experienceEntries[index];
+      if (index > 0) y += 8;
 
-      // Company
+      // Keep company + title + first bullet together when possible
+      needSpace(52);
+
       writeWrapped(exp.company ?? '', 11, 'bold', margin, maxW, primary);
-      y += 2;
 
       const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
       const techStack = extractRoleTechStack(exp.descriptions ?? [], skills);
       const metaStartY = y;
-
-      // Left column: dates + location
       let leftY = metaStartY;
+      let rightY = metaStartY;
+
+      // Left: dates + location (independent column — must not push bullets down)
       if (dateRange) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         setColor(primary);
         const dateLines = doc.splitTextToSize(dateRange, leftColW) as string[];
         for (const line of dateLines) {
-          needSpace(lineHeight(9));
           doc.text(line, margin, leftY);
           leftY += lineHeight(9);
         }
@@ -274,21 +283,18 @@ export async function generateResumePdf(
         setColor(muted);
         const addrLines = doc.splitTextToSize(exp.address, leftColW) as string[];
         for (const line of addrLines) {
-          needSpace(lineHeight(8));
           doc.text(line, margin, leftY);
           leftY += lineHeight(8);
         }
       }
 
-      // Right column: title, tech, bullets
-      let rightY = metaStartY;
+      // Right: title + tech stack, then bullets immediately below
       if (exp.position) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         setColor(body);
         const titleLines = doc.splitTextToSize(exp.position, rightColW) as string[];
         for (const line of titleLines) {
-          needSpace(lineHeight(10));
           doc.text(line, rightColX, rightY);
           rightY += lineHeight(10);
         }
@@ -299,14 +305,13 @@ export async function generateResumePdf(
         setColor(accent);
         const techLines = doc.splitTextToSize(techStack.join(', '), rightColW) as string[];
         for (const line of techLines) {
-          needSpace(lineHeight(8));
           doc.text(line, rightColX, rightY);
           rightY += lineHeight(8);
         }
-        rightY += 2;
       }
 
-      y = Math.max(leftY, rightY);
+      // Bullets follow the title/tech — never wait for the left column height
+      y = rightY;
 
       for (const desc of exp.descriptions ?? []) {
         const bullet = desc.endsWith('.') ? desc : `${desc}.`;
@@ -322,7 +327,12 @@ export async function generateResumePdf(
           y += lh;
         }
       }
-    });
+
+      // Advance past left column only when still on the same page as this job started
+      if (y >= metaStartY) {
+        y = Math.max(y, leftY);
+      }
+    }
   }
 
   const blob = doc.output('blob');
