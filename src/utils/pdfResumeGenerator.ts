@@ -303,10 +303,10 @@ export async function generateResumePdf(
         const bullet = desc.endsWith('.') ? desc : `${desc}.`;
         const full = `• ${bullet}`;
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
+        doc.setFontSize(8);
         setColor(body);
         const lines = doc.splitTextToSize(full, rightColW) as string[];
-        const lh = lineHeight(10);
+        const lh = lineHeight(8);
         for (const line of lines) {
           needSpace(lh);
           doc.text(line, rightColX, y);

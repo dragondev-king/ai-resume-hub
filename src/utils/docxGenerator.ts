@@ -453,18 +453,18 @@ const createProfessionalExperienceSection = (
           children: [
             new TextRun({
               text: '• ',
-              size: RESUME_SIZES.body,
+              size: RESUME_SIZES.experienceBullet,
               font: FONT_BODY,
               color: RESUME_COLORS.body,
             }),
             new TextRun({
               text,
-              size: RESUME_SIZES.body,
+              size: RESUME_SIZES.experienceBullet,
               font: FONT_BODY,
               color: RESUME_COLORS.body,
             }),
           ],
-          spacing: { after: 60 },
+          spacing: { after: 40 },
         })
       );
     }

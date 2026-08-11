@@ -22,6 +22,8 @@ export const RESUME_SIZES = {
   section: 24,
   body: 20,
   bodySmall: 18,
+  /** Work experience bullet text — 8pt (16 half-points) */
+  experienceBullet: 16,
 } as const;
 
 export type CategorizedSkills = { label: string; skills: string[] }[];
