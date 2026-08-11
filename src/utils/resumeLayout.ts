@@ -40,6 +40,18 @@ export const RESUME_PDF_SIZES = {
   body: 8,
 } as const;
 
+/** Spacing tokens shared by DOCX + PDF generators. */
+export const RESUME_SPACING = {
+  /** DOCX character spacing in twentieths of a point (20 ≈ 1pt). */
+  charSpacing: 18,
+  /** DOCX paragraph line spacing (240 = single spacing). */
+  line: 336, // 1.4×
+  /** PDF extra space between characters (pt). */
+  pdfCharSpace: 0.45,
+  /** PDF line-height multiplier. */
+  pdfLineHeight: 1.55,
+} as const;
+
 export type CategorizedSkills = { label: string; skills: string[] }[];
 
 type SkillSectionDef = {
@@ -144,13 +156,13 @@ export function categorizeSkills(skills: string[]): CategorizedSkills {
 export type BoldTextSegment = { text: string; bold: boolean };
 
 /**
- * Parse AI markup that wraps tech skills: <b>React</b> or **React**.
- * Used when rendering experience bullets in DOCX/PDF/UI.
+ * Parse AI markup that wraps tech skills: <b>React</b>, <bold>React</bold>, or **React**.
+ * Used when rendering summary / experience bullets in DOCX/PDF/UI.
  */
 export function parseBoldMarkup(input: string): BoldTextSegment[] {
   if (!input) return [];
   const segments: BoldTextSegment[] = [];
-  const re = /<b>([\s\S]*?)<\/b>|\*\*([\s\S]*?)\*\*/gi;
+  const re = /<(?:b|bold)>([\s\S]*?)<\/(?:b|bold)>|\*\*([\s\S]*?)\*\*/gi;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 

@@ -406,7 +406,9 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                     AI Generated Summary
                   </h3>
                   <div className="prose max-w-none">
-                    <p className="text-gray-700 leading-relaxed">{application.generated_summary}</p>
+                    <p className="text-gray-700 leading-relaxed tracking-wide">
+                      <BoldMarkupText text={application.generated_summary} />
+                    </p>
                   </div>
                 </div>
               )}

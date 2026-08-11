@@ -18,6 +18,7 @@ import {
   RESUME_COLORS,
   RESUME_FONTS,
   RESUME_SIZES,
+  RESUME_SPACING,
   buildResumeSkillSections,
   ensureTrailingPeriod,
   parseBoldMarkup,
@@ -25,6 +26,30 @@ import {
 
 const FONT_HEADING = RESUME_FONTS.heading;
 const FONT_BODY = RESUME_FONTS.body;
+
+const bodyParagraphSpacing = (after = 120) => ({
+  after,
+  line: RESUME_SPACING.line,
+  lineRule: 'auto' as const,
+});
+
+const bodyRun = (opts: {
+  text: string;
+  bold?: boolean;
+  italics?: boolean;
+  size?: number;
+  color?: string;
+  font?: string;
+}) =>
+  new TextRun({
+    text: opts.text,
+    bold: opts.bold,
+    italics: opts.italics,
+    size: opts.size ?? RESUME_SIZES.body,
+    font: opts.font ?? FONT_BODY,
+    color: opts.color ?? RESUME_COLORS.body,
+    characterSpacing: RESUME_SPACING.charSpacing,
+  });
 
 interface GeneratedResume {
   summary: string;
@@ -136,15 +161,10 @@ export const generateDocx = async (
     children.push(createSectionHeader('SUMMARY'));
     children.push(
       new Paragraph({
-        children: [
-          new TextRun({
-            text: generatedResume.summary,
-            size: RESUME_SIZES.body,
-            font: FONT_BODY,
-            color: RESUME_COLORS.body,
-          }),
-        ],
-        spacing: { after: 200 },
+        children: parseBoldMarkup(generatedResume.summary).map((seg) =>
+          bodyRun({ text: seg.text, bold: seg.bold, size: RESUME_SIZES.body })
+        ),
+        spacing: bodyParagraphSpacing(200),
       })
     );
   }
@@ -238,28 +258,18 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
       const runs: TextRun[] = [];
       contactParts.forEach((part, i) => {
         if (i > 0) {
-          runs.push(
-            new TextRun({
-              text: '      ',
-              size: RESUME_SIZES.contact,
-              font: FONT_BODY,
-              color: RESUME_COLORS.body,
-            })
-          );
+          runs.push(bodyRun({ text: '      ', size: RESUME_SIZES.contact }));
         }
         runs.push(
-          new TextRun({
+          bodyRun({
             text: `${part.label}: `,
             size: RESUME_SIZES.contact,
-            font: FONT_BODY,
             bold: true,
             color: RESUME_COLORS.accent,
           }),
-          new TextRun({
+          bodyRun({
             text: part.value,
             size: RESUME_SIZES.contact,
-            font: FONT_BODY,
-            color: RESUME_COLORS.body,
           })
         );
       });
@@ -318,21 +328,10 @@ const createSkillsSection = (sections: { label: string; skills: string[] }[]): P
     (cat) =>
       new Paragraph({
         children: [
-          new TextRun({
-            text: `${cat.label}: `,
-            size: RESUME_SIZES.body,
-            font: FONT_BODY,
-            bold: true,
-            color: RESUME_COLORS.body,
-          }),
-          new TextRun({
-            text: cat.skills.join(', '),
-            size: RESUME_SIZES.body,
-            font: FONT_BODY,
-            color: RESUME_COLORS.body,
-          }),
+          bodyRun({ text: `${cat.label}: `, bold: true }),
+          bodyRun({ text: cat.skills.join(', ') }),
         ],
-        spacing: { after: 80 },
+        spacing: bodyParagraphSpacing(80),
       })
   );
 };
@@ -389,15 +388,14 @@ const createProfessionalExperienceSection = (
     blocks.push(
       new Paragraph({
         children: [
-          new TextRun({
+          bodyRun({
             text: exp.company ?? '',
             size: RESUME_SIZES.experienceHeading,
             bold: true,
-            font: FONT_BODY,
             color: RESUME_COLORS.primary,
           }),
         ],
-        spacing: { after: 40 },
+        spacing: bodyParagraphSpacing(40),
       })
     );
 
@@ -406,15 +404,14 @@ const createProfessionalExperienceSection = (
       leftParas.push(
         new Paragraph({
           children: [
-            new TextRun({
+            bodyRun({
               text: dateRange,
               size: RESUME_SIZES.experienceMeta,
               bold: true,
-              font: FONT_BODY,
               color: RESUME_COLORS.primary,
             }),
           ],
-          spacing: { after: 20 },
+          spacing: bodyParagraphSpacing(20),
         })
       );
     }
@@ -422,13 +419,12 @@ const createProfessionalExperienceSection = (
       leftParas.push(
         new Paragraph({
           children: [
-            new TextRun({
+            bodyRun({
               text: exp.address,
-              size: RESUME_SIZES.body,
-              font: FONT_BODY,
               color: RESUME_COLORS.muted,
             }),
           ],
+          spacing: bodyParagraphSpacing(0),
         })
       );
     }
@@ -436,15 +432,13 @@ const createProfessionalExperienceSection = (
     const rightParas: Paragraph[] = [
       new Paragraph({
         children: [
-          new TextRun({
+          bodyRun({
             text: jobTitle,
             size: RESUME_SIZES.experienceHeading,
             bold: true,
-            font: FONT_BODY,
-            color: RESUME_COLORS.body,
           }),
         ],
-        spacing: { after: 80 },
+        spacing: bodyParagraphSpacing(80),
       }),
     ];
 
@@ -454,24 +448,16 @@ const createProfessionalExperienceSection = (
       rightParas.push(
         new Paragraph({
           children: [
-            new TextRun({
-              text: '• ',
-              size: RESUME_SIZES.experienceBullet,
-              font: FONT_BODY,
-              color: RESUME_COLORS.body,
-            }),
-            ...segments.map(
-              (seg) =>
-                new TextRun({
-                  text: seg.text,
-                  size: RESUME_SIZES.experienceBullet,
-                  font: FONT_BODY,
-                  bold: seg.bold,
-                  color: RESUME_COLORS.body,
-                })
+            bodyRun({ text: '• ', size: RESUME_SIZES.experienceBullet }),
+            ...segments.map((seg) =>
+              bodyRun({
+                text: seg.text,
+                size: RESUME_SIZES.experienceBullet,
+                bold: seg.bold,
+              })
             ),
           ],
-          spacing: { after: 40 },
+          spacing: bodyParagraphSpacing(60),
         })
       );
     }
@@ -498,15 +484,13 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
       leftParas.push(
         new Paragraph({
           children: [
-            new TextRun({
+            bodyRun({
               text: dateRange,
-              size: RESUME_SIZES.bodySmall,
               bold: true,
-              font: FONT_BODY,
               color: RESUME_COLORS.primary,
             }),
           ],
-          spacing: { after: 20 },
+          spacing: bodyParagraphSpacing(20),
         })
       );
     }
@@ -516,15 +500,13 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
       rightParas.push(
         new Paragraph({
           children: [
-            new TextRun({
+            bodyRun({
               text: degreeText,
-              size: RESUME_SIZES.body,
               bold: true,
-              font: FONT_BODY,
               color: RESUME_COLORS.primary,
             }),
           ],
-          spacing: { after: 20 },
+          spacing: bodyParagraphSpacing(20),
         })
       );
     }
@@ -532,13 +514,12 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
       rightParas.push(
         new Paragraph({
           children: [
-            new TextRun({
+            bodyRun({
               text: edu.school,
-              size: RESUME_SIZES.bodySmall,
-              font: FONT_BODY,
               color: RESUME_COLORS.accent,
             }),
           ],
+          spacing: bodyParagraphSpacing(0),
         })
       );
     }

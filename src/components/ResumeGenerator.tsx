@@ -849,9 +849,9 @@ const ResumeGenerator: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               ) : (
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-md">
-                  {currentResume.summary}
-                </p>
+                  <p className="text-gray-700 bg-gray-50 p-3 rounded-md leading-relaxed tracking-wide">
+                    <BoldMarkupText text={currentResume.summary} />
+                  </p>
               )}
             </div>
 

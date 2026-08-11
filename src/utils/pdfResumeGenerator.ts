@@ -7,6 +7,7 @@ import { formatDateRange, resolveResumeExperience } from './docxGenerator';
 import {
   RESUME_COLORS,
   RESUME_PDF_SIZES,
+  RESUME_SPACING,
   buildResumeSkillSections,
   ensureTrailingPeriod,
   parseBoldMarkup,
@@ -55,7 +56,8 @@ export async function generateResumePdf(
   const body = hexToRgb(RESUME_COLORS.body);
   const muted = hexToRgb(RESUME_COLORS.muted);
 
-  const lineHeight = (pt: number) => pt * 1.3;
+  const lineHeight = (pt: number) => pt * RESUME_SPACING.pdfLineHeight;
+  const charSpace = RESUME_SPACING.pdfCharSpace;
 
   const needSpace = (h: number) => {
     if (y + h > pageHeight - margin) {
@@ -68,6 +70,15 @@ export async function generateResumePdf(
     doc.setTextColor(rgb[0], rgb[1], rgb[2]);
   };
 
+  const measureText = (text: string, fontSize: number, bold: boolean) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setFontSize(fontSize);
+    const base = doc.getTextWidth(text);
+    // Approximate extra width from character spacing
+    const extras = Math.max(0, text.length - 1) * charSpace;
+    return base + extras;
+  };
+
   const writeWrapped = (
     text: string,
     fontSize: number,
@@ -76,14 +87,16 @@ export async function generateResumePdf(
     maxWidth: number,
     color: [number, number, number] = body
   ) => {
+    // Account for letter-spacing so wrap width stays accurate
+    const effectiveMax = Math.max(40, maxWidth - charSpace * 8);
     doc.setFont('helvetica', style);
     doc.setFontSize(fontSize);
     setColor(color);
-    const lines = doc.splitTextToSize(text, maxWidth) as string[];
+    const lines = doc.splitTextToSize(text, effectiveMax) as string[];
     const lh = lineHeight(fontSize);
     for (const line of lines) {
       needSpace(lh);
-      doc.text(line, x, y);
+      doc.text(line, x, y, { charSpace });
       y += lh;
     }
   };
@@ -107,18 +120,12 @@ export async function generateResumePdf(
     }
 
     let xCursor = x;
-    const measure = (text: string, bold: boolean) => {
-      doc.setFont('helvetica', bold ? 'bold' : 'normal');
-      doc.setFontSize(fontSize);
-      return doc.getTextWidth(text);
-    };
-
     needSpace(lh);
     setColor(color);
 
     for (const token of tokens) {
       const isSpace = /^\s+$/.test(token.text);
-      const width = measure(token.text, token.bold);
+      const width = measureText(token.text, fontSize, token.bold);
 
       if (!isSpace && xCursor > x && xCursor + width > x + maxWidth) {
         y += lh;
@@ -129,7 +136,7 @@ export async function generateResumePdf(
       doc.setFont('helvetica', token.bold ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
       setColor(color);
-      doc.text(token.text, xCursor, y);
+      doc.text(token.text, xCursor, y, { charSpace });
       xCursor += width;
     }
 
@@ -191,20 +198,21 @@ export async function generateResumePdf(
       for (let i = 0; i < contactParts.length; i++) {
         const part = contactParts[i];
         if (i > 0) {
+          const gap = '   ';
           doc.setFont('helvetica', 'normal');
           setColor(body);
-          doc.text('   ', x, y);
-          x += doc.getTextWidth('   ');
+          doc.text(gap, x, y, { charSpace });
+          x += measureText(gap, bodySize, false);
         }
         doc.setFont('helvetica', 'bold');
         setColor(accent);
         const label = `${part.label}: `;
-        doc.text(label, x, y);
-        x += doc.getTextWidth(label);
+        doc.text(label, x, y, { charSpace });
+        x += measureText(label, bodySize, true);
         doc.setFont('helvetica', 'normal');
         setColor(body);
-        doc.text(part.value, x, y);
-        x += doc.getTextWidth(part.value);
+        doc.text(part.value, x, y, { charSpace });
+        x += measureText(part.value, bodySize, false);
       }
       y += 10;
       doc.setDrawColor(primary[0], primary[1], primary[2]);
@@ -218,32 +226,22 @@ export async function generateResumePdf(
   // —— Summary ——
   if (generatedResume.summary) {
     sectionHeader('Summary');
-    writeWrapped(generatedResume.summary, bodySize, 'normal', margin, maxW, body);
+    writeMixedWrapped(parseBoldMarkup(generatedResume.summary), bodySize, margin, maxW, body);
   }
 
   // —— Skills (static baseline + job-requirement extras) ——
   sectionHeader('Skills');
   for (const cat of skillSections) {
-    needSpace(bodyLh);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(bodySize);
-    setColor(body);
-    const label = `${cat.label}: `;
-    doc.text(label, margin, y);
-    const labelW = doc.getTextWidth(label);
-    doc.setFont('helvetica', 'normal');
-    const lines = doc.splitTextToSize(cat.skills.join(', '), maxW - labelW) as string[];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (i > 0) {
-        y += bodyLh;
-        needSpace(bodyLh);
-        doc.text(line, margin, y);
-      } else {
-        doc.text(line, margin + labelW, y);
-      }
-    }
-    y += bodyLh;
+    writeMixedWrapped(
+      [
+        { text: `${cat.label}: `, bold: true },
+        { text: cat.skills.join(', '), bold: false },
+      ],
+      bodySize,
+      margin,
+      maxW,
+      body
+    );
   }
 
   // —— Education ——
@@ -267,7 +265,7 @@ export async function generateResumePdf(
         setColor(primary);
         const dateLines = doc.splitTextToSize(edr, leftColW) as string[];
         for (const line of dateLines) {
-          doc.text(line, margin, leftY);
+          doc.text(line, margin, leftY, { charSpace });
           leftY += bodyLh;
         }
       }
@@ -278,7 +276,7 @@ export async function generateResumePdf(
         setColor(primary);
         const lines = doc.splitTextToSize(degreeText, rightColW) as string[];
         for (const line of lines) {
-          doc.text(line, rightColX, rightY);
+          doc.text(line, rightColX, rightY, { charSpace });
           rightY += bodyLh;
         }
       }
@@ -286,7 +284,7 @@ export async function generateResumePdf(
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(bodySize);
         setColor(accent);
-        doc.text(edu.school, rightColX, rightY);
+        doc.text(edu.school, rightColX, rightY, { charSpace });
         rightY += bodyLh;
       }
 
@@ -326,7 +324,7 @@ export async function generateResumePdf(
         setColor(primary);
         const dateLines = doc.splitTextToSize(dateRange, leftColW) as string[];
         for (const line of dateLines) {
-          doc.text(line, margin, leftY);
+          doc.text(line, margin, leftY, { charSpace });
           leftY += metaLh;
         }
       }
@@ -336,7 +334,7 @@ export async function generateResumePdf(
         setColor(muted);
         const addrLines = doc.splitTextToSize(exp.address, leftColW) as string[];
         for (const line of addrLines) {
-          doc.text(line, margin, leftY);
+          doc.text(line, margin, leftY, { charSpace });
           leftY += bodyLh;
         }
       }
@@ -348,7 +346,7 @@ export async function generateResumePdf(
         setColor(body);
         const titleLines = doc.splitTextToSize(exp.position, rightColW) as string[];
         for (const line of titleLines) {
-          doc.text(line, rightColX, rightY);
+          doc.text(line, rightColX, rightY, { charSpace });
           rightY += headingLh;
         }
       }
