@@ -7,8 +7,6 @@ import { formatDateRange, resolveResumeExperience } from './docxGenerator';
 import {
   RESUME_COLORS,
   buildResumeSkillSections,
-  flattenSkillSections,
-  extractRoleTechStack,
 } from './resumeLayout';
 
 interface GeneratedResume {
@@ -101,7 +99,6 @@ export async function generateResumePdf(
   };
 
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
-  const skills = flattenSkillSections(skillSections);
 
   // —— Header ——
   const name = profile
@@ -261,7 +258,6 @@ export async function generateResumePdf(
       writeWrapped(exp.company ?? '', 11, 'bold', margin, maxW, primary);
 
       const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
-      const techStack = extractRoleTechStack(exp.descriptions ?? [], skills);
       const metaStartY = y;
       let leftY = metaStartY;
       let rightY = metaStartY;
@@ -288,7 +284,7 @@ export async function generateResumePdf(
         }
       }
 
-      // Right: title + tech stack, then bullets immediately below
+      // Right: title, then bullets immediately below
       if (exp.position) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
@@ -299,18 +295,8 @@ export async function generateResumePdf(
           rightY += lineHeight(10);
         }
       }
-      if (techStack.length) {
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(8);
-        setColor(accent);
-        const techLines = doc.splitTextToSize(techStack.join(', '), rightColW) as string[];
-        for (const line of techLines) {
-          doc.text(line, rightColX, rightY);
-          rightY += lineHeight(8);
-        }
-      }
 
-      // Bullets follow the title/tech — never wait for the left column height
+      // Bullets follow the title — never wait for the left column height
       y = rightY;
 
       for (const desc of exp.descriptions ?? []) {

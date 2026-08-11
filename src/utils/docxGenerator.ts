@@ -19,8 +19,6 @@ import {
   RESUME_FONTS,
   RESUME_SIZES,
   buildResumeSkillSections,
-  flattenSkillSections,
-  extractRoleTechStack,
 } from './resumeLayout';
 
 const FONT_HEADING = RESUME_FONTS.heading;
@@ -127,7 +125,6 @@ export const generateDocx = async (
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
-  const skills = flattenSkillSections(skillSections);
 
   const children: (Paragraph | Table)[] = [
     ...createHeader(profile, includeLinkedIn),
@@ -164,8 +161,7 @@ export const generateDocx = async (
       ...createProfessionalExperienceSection(
         profile.experience,
         generatedResume.experience,
-        useAiEnhancedJobTitle,
-        skills
+        useAiEnhancedJobTitle
       )
     );
   }
@@ -373,8 +369,7 @@ const createTwoColumnRow = (leftParas: Paragraph[], rightParas: Paragraph[]): Ta
 const createProfessionalExperienceSection = (
   originalExperience: any[],
   aiExperience: any[],
-  useAiEnhancedJobTitle: boolean,
-  allSkills: string[]
+  useAiEnhancedJobTitle: boolean
 ): (Paragraph | Table)[] => {
   const blocks: (Paragraph | Table)[] = [];
   const entries = resolveResumeExperience(originalExperience, aiExperience, useAiEnhancedJobTitle);
@@ -383,7 +378,6 @@ const createProfessionalExperienceSection = (
     const jobTitle = exp.position ?? '';
     const descriptions = exp.descriptions ?? [];
     const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
-    const techStack = extractRoleTechStack(descriptions, allSkills);
 
     if (index > 0) {
       blocks.push(new Paragraph({ children: [], spacing: { before: 160 } }));
@@ -448,26 +442,9 @@ const createProfessionalExperienceSection = (
             color: RESUME_COLORS.body,
           }),
         ],
-        spacing: { after: techStack.length ? 40 : 80 },
+        spacing: { after: 80 },
       }),
     ];
-
-    if (techStack.length) {
-      rightParas.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: techStack.join(', '),
-              size: RESUME_SIZES.techStack,
-              italics: true,
-              font: FONT_BODY,
-              color: RESUME_COLORS.accent,
-            }),
-          ],
-          spacing: { after: 80 },
-        })
-      );
-    }
 
     for (const description of descriptions) {
       const text = description.endsWith('.') ? description : `${description}.`;

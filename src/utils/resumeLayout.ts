@@ -22,7 +22,6 @@ export const RESUME_SIZES = {
   section: 24,
   body: 20,
   bodySmall: 18,
-  techStack: 17,
 } as const;
 
 export type CategorizedSkills = { label: string; skills: string[] }[];
@@ -116,7 +115,7 @@ export function buildResumeSkillSections(jobSkills: string[] = []): CategorizedS
   });
 }
 
-/** Flat list of all skills shown on the resume (for tech-stack highlighting, etc.). */
+/** Flat list of all skills shown on the resume. */
 export function flattenSkillSections(sections: CategorizedSkills): string[] {
   return sections.flatMap((s) => s.skills);
 }
@@ -124,19 +123,4 @@ export function flattenSkillSections(sections: CategorizedSkills): string[] {
 /** @deprecated Prefer buildResumeSkillSections — kept for any callers expecting the old name. */
 export function categorizeSkills(skills: string[]): CategorizedSkills {
   return buildResumeSkillSections(skills);
-}
-
-/**
- * Pull tech keywords for a role from its bullet text, preferring skills already on the resume.
- */
-export function extractRoleTechStack(descriptions: string[], allSkills: string[]): string[] {
-  if (!descriptions?.length || !allSkills?.length) return [];
-  const blob = descriptions.join(' ').toLowerCase();
-  return allSkills
-    .filter((skill) => {
-      const needle = skill.trim().toLowerCase();
-      if (needle.length < 2) return false;
-      return blob.includes(needle);
-    })
-    .slice(0, 14);
 }
