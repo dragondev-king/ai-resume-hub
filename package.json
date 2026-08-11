@@ -17,6 +17,7 @@
     "@types/react-router-dom": "^5.3.3",
     "autoprefixer": "^10.4.16",
     "dayjs": "^1.11.13",
+    "dejavu-fonts-ttf": "^2.37.3",
     "docx": "^8.5.0",
     "file-saver": "^2.0.5",
     "jspdf": "^2.5.2",
@@ -35,9 +36,11 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "node scripts/copy-pdf-fonts.js && react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "postinstall": "node scripts/copy-pdf-fonts.js",
+    "copy-pdf-fonts": "node scripts/copy-pdf-fonts.js"
   },
   "eslintConfig": {
     "extends": [

@@ -22,3 +22,7 @@ yarn-debug.log*
 yarn-error.log*
 
 .env
+
+# Optional local copies of proprietary Windows fonts (not used for deploy)
+/public/fonts/Verdana*.ttf
+/public/fonts/LucidaSans*.ttf
