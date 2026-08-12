@@ -52,7 +52,7 @@ export function normalizeDescriptions(exp: any): string[] {
     const text = exp.description.trim();
     const lines = text
       .split(/\n+/)
-      .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
+      .map((line: string) => line.replace(/^\s*[-•*]\s*/, '').trim())
       .filter(Boolean);
     return lines.length > 1 ? lines : [text];
   }
