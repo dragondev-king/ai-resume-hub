@@ -55,7 +55,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
 
   useEffect(() => {
     setSessionTemplateId(getResumeTemplateIdForApplication(application ?? undefined));
-  }, [application?.id, application?.metadata]);
+  }, [application]);
 
   const copyToClipboard = useCallback(async (text: string, setCopiedState: (value: boolean) => void) => {
     try {
