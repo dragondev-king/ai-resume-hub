@@ -13,6 +13,7 @@ import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
+import ResumeTemplatePreview from './ResumeTemplatePreview';
 
 function BoldMarkupText({ text }: { text: string }) {
   return (
@@ -771,25 +772,41 @@ const ResumeGenerator: React.FC = () => {
             </div>
           </div>
 
-          <div className="mb-6 flex flex-col items-stretch gap-3 sm:items-end">
-            <fieldset className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-3 sm:max-w-xl">
+          <div className="mb-6 flex flex-col items-stretch gap-3">
+            <fieldset className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
               <legend className="px-1 text-sm font-medium text-gray-900">Resume template</legend>
-              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-2">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <label
+                  className={`relative flex cursor-pointer flex-col gap-2 rounded-md border bg-white p-2 transition-colors ${
+                    selectedTemplateId === ''
+                      ? 'border-primary-500 ring-2 ring-primary-200'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
                   <input
                     type="radio"
                     name="resume-template"
                     value=""
                     checked={selectedTemplateId === ''}
                     onChange={() => setSelectedTemplateId('')}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                    className="sr-only"
                   />
-                  <span>Random</span>
+                  <div
+                    className="flex aspect-[8.5/11] w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-center"
+                    aria-hidden
+                  >
+                    <span className="px-2 text-xs font-medium text-gray-600">Random</span>
+                  </div>
+                  <span className="text-center text-sm font-medium text-gray-900">Random</span>
                 </label>
                 {resumeTemplates.map((template) => (
                   <label
                     key={template.id}
-                    className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none"
+                    className={`relative flex cursor-pointer flex-col gap-2 rounded-md border bg-white p-2 transition-colors ${
+                      selectedTemplateId === template.id
+                        ? 'border-primary-500 ring-2 ring-primary-200'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
                   >
                     <input
                       type="radio"
@@ -797,62 +814,60 @@ const ResumeGenerator: React.FC = () => {
                       value={template.id}
                       checked={selectedTemplateId === template.id}
                       onChange={() => setSelectedTemplateId(template.id)}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                      className="sr-only"
                     />
-                    <span
-                      className="inline-block h-3 w-3 rounded-full border border-gray-300 shrink-0"
-                      style={{ backgroundColor: `#${template.colors.primary}` }}
-                      aria-hidden
-                    />
-                    <span>{template.name}</span>
+                    <ResumeTemplatePreview template={template} className="w-full" />
+                    <span className="text-center text-sm font-medium text-gray-900">{template.name}</span>
                   </label>
                 ))}
               </div>
             </fieldset>
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeLinkedIn}
-                onChange={(e) => setIncludeLinkedIn(e.target.checked)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <span>Include LinkedIn link</span>
-            </label>
-            <div className="flex flex-wrap gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => handleDownload('docx')}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              >
-                <FileText className="w-4 h-4" />
-                <span>Save & Download Word (.docx)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDownload('pdf')}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Save & Download PDF (.pdf)</span>
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => handleDownloadOnly('docx')}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                <FileText className="w-4 h-4" />
-                <span>Download Word (.docx) only</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDownloadOnly('pdf')}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download PDF (.pdf) only</span>
-              </button>
+            <div className="flex flex-col items-stretch gap-3 sm:items-end">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeLinkedIn}
+                  onChange={(e) => setIncludeLinkedIn(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <span>Include LinkedIn link</span>
+              </label>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('docx')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Save & Download Word (.docx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('pdf')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Save & Download PDF (.pdf)</span>
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadOnly('docx')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Download Word (.docx) only</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadOnly('pdf')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF (.pdf) only</span>
+                </button>
+              </div>
             </div>
           </div>
 

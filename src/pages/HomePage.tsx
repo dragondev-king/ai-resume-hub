@@ -8,6 +8,8 @@ import {
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import OwnerProfileModal from '../components/OwnerProfileModal';
+import ResumeTemplatePreview from '../components/ResumeTemplatePreview';
+import { listResumeTemplates } from '../resumeTemplates';
 
 interface OwnerSummary {
   owner_id: string;
@@ -26,6 +28,7 @@ const HomePage: React.FC = () => {
   const [ownerSummaries, setOwnerSummaries] = useState<OwnerSummary[]>([]);
   const [selectedOwner, setSelectedOwner] = useState<{ id: string; name: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const resumeTemplates = listResumeTemplates();
 
   const loadOwnerSummaries = useCallback(async () => {
     try {
@@ -86,8 +89,40 @@ const HomePage: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">
-            Welcome back, {user?.first_name}! Here's a summary of applications.
+            Welcome back, {user?.first_name}!
           </p>
+        </div>
+      </div>
+
+      {/* Resume template previews */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-medium text-gray-900">Resume templates</h2>
+          <p className="text-sm text-gray-600">
+            Layout previews of the templates available when generating a resume.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {resumeTemplates.map((template) => (
+            <div key={template.id} className="flex flex-col gap-2">
+              <ResumeTemplatePreview template={template} className="w-full" />
+              <div className="text-center">
+                <div className="text-sm font-medium text-gray-900">{template.name}</div>
+                <div className="mt-1 flex items-center justify-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-gray-200"
+                    style={{ backgroundColor: `#${template.colors.primary}` }}
+                    aria-hidden
+                  />
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-gray-200"
+                    style={{ backgroundColor: `#${template.colors.accent}` }}
+                    aria-hidden
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
