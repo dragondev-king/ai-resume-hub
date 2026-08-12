@@ -1,6 +1,6 @@
 {
   "id": "slate-coral",
-  "name": "Slate Coral",
+  "name": "SMILE",
   "colors": {
     "primary": "334155",
     "accent": "E07A5F",
@@ -36,7 +36,12 @@
   "contact": {
     "layout": "stacked"
   },
-  "sectionOrder": ["skills", "summary", "experience", "education"],
+  "sectionOrder": [
+    "skills",
+    "summary",
+    "experience",
+    "education"
+  ],
   "experience": {
     "layout": "stacked",
     "showAddress": true

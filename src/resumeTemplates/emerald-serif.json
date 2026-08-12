@@ -1,6 +1,6 @@
 {
   "id": "emerald-serif",
-  "name": "Emerald Serif",
+  "name": "PANDA",
   "colors": {
     "primary": "065F46",
     "accent": "059669",
@@ -36,7 +36,12 @@
   "contact": {
     "layout": "inline"
   },
-  "sectionOrder": ["summary", "education", "experience", "skills"],
+  "sectionOrder": [
+    "summary",
+    "education",
+    "experience",
+    "skills"
+  ],
   "experience": {
     "layout": "twoColumn",
     "showAddress": false

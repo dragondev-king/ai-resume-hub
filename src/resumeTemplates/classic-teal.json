@@ -1,6 +1,6 @@
 {
   "id": "classic-teal",
-  "name": "Classic Teal",
+  "name": "DRAGON",
   "colors": {
     "primary": "124E44",
     "accent": "3CB370",
@@ -36,7 +36,12 @@
   "contact": {
     "layout": "stacked"
   },
-  "sectionOrder": ["summary", "skills", "education", "experience"],
+  "sectionOrder": [
+    "summary",
+    "skills",
+    "education",
+    "experience"
+  ],
   "experience": {
     "layout": "twoColumn",
     "showAddress": true

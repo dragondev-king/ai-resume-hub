@@ -1,6 +1,6 @@
 {
   "id": "modern-navy",
-  "name": "Modern Navy",
+  "name": "MAX",
   "colors": {
     "primary": "1B3A4B",
     "accent": "3D7EA6",
@@ -36,7 +36,12 @@
   "contact": {
     "layout": "inline"
   },
-  "sectionOrder": ["summary", "experience", "skills", "education"],
+  "sectionOrder": [
+    "summary",
+    "experience",
+    "skills",
+    "education"
+  ],
   "experience": {
     "layout": "stacked",
     "showAddress": false
