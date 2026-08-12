@@ -159,8 +159,7 @@ export const generateDocx = async (
             bodyRun({ text: seg.text, bold: seg.bold, size: theme.docxSizes.body })
           ),
           spacing: bodyParagraphSpacing(theme, 200),
-          alignment:
-            t.header.nameAlign === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
+          alignment: AlignmentType.LEFT,
         }),
       ];
     },
