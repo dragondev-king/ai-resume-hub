@@ -133,6 +133,8 @@ The answer should be:
 - Approximately 30-50 words (keep it brief and to the point)
 
 Please write the answer in the candidate's voice, using their actual experience and background. Be direct and avoid unnecessary elaboration.
+Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write.
+Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
 `;
 };
 

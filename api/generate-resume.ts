@@ -188,12 +188,14 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Adjust job titles to show progression toward the target position
    - Rewrite bullet points to emphasize relevant skills and achievements
    - Include specific technologies, tools, and methodologies mentioned in the job description
+   - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
    - Focus on transferable skills that apply to the target role
    - Use industry-specific language and terminology from the job description
 
 3. CREATIVE TAILORING APPROACH:
    - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
    - Emphasize similar frameworks, methodologies, or problem-solving approaches
+   - Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
    - Highlight leadership, project management, and collaboration skills that are universally valuable
    - Show how past experiences demonstrate the ability to learn and adapt to new technologies
    - Create bullet points that showcase the candidate's potential to excel in the target role
