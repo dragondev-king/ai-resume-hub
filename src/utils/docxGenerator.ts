@@ -257,38 +257,40 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
     if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
     if (contactParts.length) {
-      const runs: TextRun[] = [];
       contactParts.forEach((part, i) => {
-        if (i > 0) {
-          runs.push(bodyRun({ text: '      ', size: RESUME_SIZES.contact }));
-        }
-        runs.push(
-          bodyRun({
-            text: `${part.label}: `,
-            size: RESUME_SIZES.contact,
-            bold: true,
-            color: RESUME_COLORS.accent,
-          }),
-          bodyRun({
-            text: part.value,
-            size: RESUME_SIZES.contact,
+        const isLast = i === contactParts.length - 1;
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: `${part.label}: `,
+                size: RESUME_SIZES.contact,
+                bold: true,
+                color: RESUME_COLORS.accent,
+              }),
+              bodyRun({
+                text: part.value,
+                size: RESUME_SIZES.contact,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(isLast ? 120 : 40),
+            ...(isLast
+              ? {
+                  border: {
+                    bottom: {
+                      style: BorderStyle.SINGLE,
+                      size: 12,
+                      color: RESUME_COLORS.primary,
+                      space: 4,
+                    },
+                  },
+                }
+              : {}),
           })
         );
       });
 
       paragraphs.push(
-        new Paragraph({
-          children: runs,
-          spacing: bodyParagraphSpacing(200),
-          border: {
-            bottom: {
-              style: BorderStyle.SINGLE,
-              size: 12,
-              color: RESUME_COLORS.primary,
-              space: 4,
-            },
-          },
-        }),
         new Paragraph({
           children: [],
           spacing: { after: 120 },

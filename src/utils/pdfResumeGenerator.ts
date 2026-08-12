@@ -234,14 +234,18 @@ export async function generateResumePdf(
     if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
     if (contactParts.length) {
-      const tokens: StyledToken[] = [];
-      contactParts.forEach((part, i) => {
-        if (i > 0) tokens.push({ text: '   ', bold: false, color: body });
-        tokens.push({ text: `${part.label}: `, bold: true, color: accent });
-        tokens.push({ text: part.value, bold: false, color: body });
-      });
-
-      writeStyledFlow(tokens, bodySize, margin, maxW, fontBody);
+      for (const part of contactParts) {
+        writeStyledFlow(
+          [
+            { text: `${part.label}: `, bold: true, color: accent },
+            { text: part.value, bold: false, color: body },
+          ],
+          bodySize,
+          margin,
+          maxW,
+          fontBody
+        );
+      }
 
       y += 2;
       doc.setDrawColor(primary[0], primary[1], primary[2]);
