@@ -8,10 +8,20 @@ import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
+import { parseBoldMarkup } from '../utils/resumeLayout';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
 
+function BoldMarkupText({ text }: { text: string }) {
+  return (
+    <>
+      {parseBoldMarkup(text).map((seg, i) =>
+        seg.bold ? <strong key={i}>{seg.text}</strong> : <React.Fragment key={i}>{seg.text}</React.Fragment>
+      )}
+    </>
+  );
+}
 interface EditableResume {
   summary: string;
   skills: string[];
@@ -839,9 +849,9 @@ const ResumeGenerator: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               ) : (
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-md">
-                  {currentResume.summary}
-                </p>
+                  <p className="text-gray-700 bg-gray-50 p-3 rounded-md leading-relaxed tracking-wide">
+                    <BoldMarkupText text={currentResume.summary} />
+                  </p>
               )}
             </div>
 
@@ -994,7 +1004,7 @@ const ResumeGenerator: React.FC = () => {
                           {(exp.descriptions || []).map((desc: string, descIndex: number) => (
                             <div key={descIndex} className="flex items-start">
                               <span className="text-primary-600 mr-2 mt-1">•</span>
-                              <span>{desc}</span>
+                              <span><BoldMarkupText text={desc} /></span>
                             </div>
                           ))}
                         </div>

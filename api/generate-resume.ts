@@ -13,7 +13,7 @@ const anthropic = new Anthropic({
 });
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged.';
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).';
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
@@ -188,12 +188,14 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Adjust job titles to show progression toward the target position
    - Rewrite bullet points to emphasize relevant skills and achievements
    - Include specific technologies, tools, and methodologies mentioned in the job description
+   - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
    - Focus on transferable skills that apply to the target role
    - Use industry-specific language and terminology from the job description
 
 3. CREATIVE TAILORING APPROACH:
    - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
    - Emphasize similar frameworks, methodologies, or problem-solving approaches
+   - Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
    - Highlight leadership, project management, and collaboration skills that are universally valuable
    - Show how past experiences demonstrate the ability to learn and adapt to new technologies
    - Create bullet points that showcase the candidate's potential to excel in the target role
@@ -216,6 +218,13 @@ Please provide the following in JSON format:
    - Use action verbs and industry-specific terminology from the job description
    - Vary bullet point count based on role complexity and duration
 4. Enhanced skills list that includes both current skills and skills mentioned in the job description
+
+5. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
+   - In every experience bullet point, wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b> tags
+   - Examples: <b>React</b>, <b>Node.js</b>, <b>PostgreSQL</b>, <b>AWS</b>, <b>Docker</b>, <b>CI/CD</b>, <b>TypeScript</b>
+   - Only wrap the skill/technology token itself — not entire sentences
+   - Do not bold soft skills or generic words
+   - Keep the <b> tags inside the JSON string values (valid JSON)
 
 EXAMPLE OF TAILORING:
 If applying for "Ruby on Rails Developer" and original experience was in "Web Development":
@@ -242,9 +251,9 @@ Response format:
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Tailored bullet point emphasizing relevant skills for this specific role...",
-        "Bullet point highlighting transferable experience that applies to target position...",
-        "Achievement that demonstrates ability to excel in the target role...",
+        "Built scalable APIs with <b>Node.js</b> and <b>TypeScript</b> on <b>AWS</b>...",
+        "Led frontend delivery using <b>React</b> and <b>Next.js</b>...",
+        "Optimized <b>PostgreSQL</b> queries and improved system reliability...",
         "Technical accomplishment using relevant technologies or methodologies...",
         "Leadership or collaboration experience valuable for the target position...",
         "Problem-solving or innovation that shows adaptability...",

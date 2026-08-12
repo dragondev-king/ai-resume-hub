@@ -135,6 +135,8 @@ The cover letter should be well-structured with:
 - Professional sign-off
 
 Please write the cover letter in a natural, conversational tone that sounds authentic to the candidate. Be concise and avoid unnecessary verbosity.
+Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
+Avoid examples that are too close to the job's tech stack because it'll be obvious the cover letter was AI generated.
 `;
 };
 

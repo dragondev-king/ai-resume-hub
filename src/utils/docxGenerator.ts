@@ -1,8 +1,56 @@
-import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  BorderStyle,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  VerticalAlign,
+} from 'docx';
 import { saveAs } from 'file-saver';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { formatDate } from './helpers';
 import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
+import {
+  RESUME_COLORS,
+  RESUME_FONTS,
+  RESUME_SIZES,
+  RESUME_SPACING,
+  RESUME_PAGE_MARGIN_PT,
+  buildResumeSkillSections,
+  ensureTrailingPeriod,
+  parseBoldMarkup,
+} from './resumeLayout';
+
+const FONT_HEADING = RESUME_FONTS.heading;
+const FONT_BODY = RESUME_FONTS.body;
+
+const bodyParagraphSpacing = (after = 120) => ({
+  after,
+  line: RESUME_SPACING.line,
+  lineRule: 'auto' as const,
+});
+
+const bodyRun = (opts: {
+  text: string;
+  bold?: boolean;
+  italics?: boolean;
+  size?: number;
+  color?: string;
+  font?: string;
+}) =>
+  new TextRun({
+    text: opts.text,
+    bold: opts.bold,
+    italics: opts.italics,
+    size: opts.size ?? RESUME_SIZES.body,
+    font: opts.font ?? FONT_BODY,
+    color: opts.color ?? RESUME_COLORS.body,
+    characterSpacing: RESUME_SPACING.charSpacing,
+  });
 
 interface GeneratedResume {
   summary: string;
@@ -55,10 +103,10 @@ function findMatchingAiExperience(
   originalExp: { company?: string; start_date?: string },
   aiExperience: ExperienceEntry[]
 ): ExperienceEntry | undefined {
-  return (
-    aiExperience.find(
-      (ai) => companiesMatch(ai.company, originalExp.company) && normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
-    )
+  return aiExperience.find(
+    (ai) =>
+      companiesMatch(ai.company, originalExp.company) &&
+      normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
   );
 }
 
@@ -72,7 +120,6 @@ export function resolveResumeExperience(
   aiExperience: ExperienceEntry[],
   useAiEnhancedJobTitle: boolean
 ): ExperienceEntry[] {
-  console.log(aiExperience, '=== aiExperience in resolveResumeExperience')
   if (useAiEnhancedJobTitle && aiExperience.length > 0) {
     return aiExperience;
   }
@@ -90,136 +137,169 @@ export function resolveResumeExperience(
   });
 }
 
-export const generateDocx = async (generatedResume: GeneratedResume, fileName: string, profile?: Profile, options?: GenerateDocxOptions): Promise<void> => {
+const noBorder = {
+  top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+};
+
+export const generateDocx = async (
+  generatedResume: GeneratedResume,
+  fileName: string,
+  profile?: Profile,
+  options?: GenerateDocxOptions
+): Promise<void> => {
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
 
+  const children: (Paragraph | Table)[] = [
+    ...createHeader(profile, includeLinkedIn),
+  ];
+
+  if (generatedResume.summary) {
+    children.push(createSectionHeader('SUMMARY'));
+    children.push(
+      new Paragraph({
+        children: parseBoldMarkup(generatedResume.summary).map((seg) =>
+          bodyRun({ text: seg.text, bold: seg.bold, size: RESUME_SIZES.body })
+        ),
+        spacing: bodyParagraphSpacing(200),
+      })
+    );
+  }
+
+  children.push(createSectionHeader('SKILLS'));
+  children.push(...createSkillsSection(skillSections));
+
+  if (profile?.education && profile.education.length > 0) {
+    children.push(createSectionHeader('EDUCATION'));
+    children.push(...createEducationSection(profile.education));
+  }
+
+  if (profile?.experience && profile.experience.length > 0) {
+    children.push(createSectionHeader('EXPERIENCE'));
+    children.push(
+      ...createProfessionalExperienceSection(
+        profile.experience,
+        generatedResume.experience,
+        useAiEnhancedJobTitle
+      )
+    );
+  }
+
+  const marginTwips = RESUME_PAGE_MARGIN_PT * 20; // pt → twips
   const doc = new Document({
     sections: [
       {
         properties: {
           page: {
             margin: {
-              top: 1440, // 1 inch
-              right: 1440,
-              bottom: 1440,
-              left: 1440,
+              top: marginTwips,
+              right: marginTwips,
+              bottom: marginTwips,
+              left: marginTwips,
             },
           },
         },
-        children: [
-          // Header with name and contact info
-          ...createHeader(profile),
-
-          // Contact Information
-          ...(profile ? [
-            createSectionHeader('CONTACT'),
-            ...createContactSection(profile, includeLinkedIn)
-          ] : []),
-
-          // Professional Summary
-          ...(generatedResume.summary ? [
-            createSectionHeader('SUMMARY'),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: generatedResume.summary,
-                  size: 22,
-                }),
-              ],
-              spacing: {
-                after: 400,
-              },
-            }),
-          ] : []),
-
-          // Professional Experience (combine original profile experience with AI enhancements)
-          ...(profile?.experience && profile.experience.length > 0 ? [
-            createSectionHeader('PROFESSIONAL EXPERIENCE'),
-            ...createProfessionalExperienceSection(profile.experience, generatedResume.experience, useAiEnhancedJobTitle),
-          ] : []),
-
-          // Education
-          ...(profile?.education && profile.education.length > 0 ? [
-            createSectionHeader('EDUCATION'),
-            ...createEducationSection(profile.education),
-          ] : []),
-
-          // Skills (combine original profile skills with AI enhancements)
-          ...(generatedResume?.skills && generatedResume.skills.length > 0 ? [
-            createSectionHeader('SKILLS'),
-            ...createSkillsSection(Array.from(new Set([...generatedResume.skills]))),
-          ] : []),
-        ],
+        children,
       },
     ],
   });
 
-  // Generate and download the document
   const blob = await Packer.toBlob(doc);
   saveAs(blob, fileName);
 };
 
-const createHeader = (profile?: Profile): Paragraph[] => {
-  const name = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
+const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] => {
+  const name = profile ? `${profile.first_name} ${profile.last_name}`.toUpperCase() : 'PROFESSIONAL RESUME';
   const title = profile?.title;
-
   const paragraphs: Paragraph[] = [
     new Paragraph({
       children: [
         new TextRun({
           text: name,
-          size: 36,
+          size: RESUME_SIZES.name,
           bold: true,
-          font: 'Cambria',
+          font: FONT_HEADING,
+          color: RESUME_COLORS.primary,
         }),
       ],
-      alignment: AlignmentType.CENTER,
-      spacing: {
-        before: 200,
-        after: title ? 100 : 200,
-      },
-    })
+      spacing: { after: title ? 60 : 200 },
+    }),
   ];
 
+  if (title) {
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: title,
+            size: RESUME_SIZES.title,
+            bold: true,
+            font: FONT_BODY,
+            color: RESUME_COLORS.accent,
+          }),
+        ],
+        // Space between role and contact details
+        spacing: { after: 280 },
+      })
+    );
+  }
+
+  if (profile) {
+    const contactParts: { label: string; value: string }[] = [];
+    if (profile.phone) contactParts.push({ label: 'Phone', value: profile.phone });
+    if (profile.email) contactParts.push({ label: 'Email', value: profile.email });
+    if (profile.location) contactParts.push({ label: 'Location', value: profile.location });
+    if (includeLinkedIn && profile.linkedin) contactParts.push({ label: 'LinkedIn', value: profile.linkedin });
+    if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
+
+    if (contactParts.length) {
+      contactParts.forEach((part, i) => {
+        const isLast = i === contactParts.length - 1;
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: `${part.label}: `,
+                size: RESUME_SIZES.contact,
+                bold: true,
+                color: RESUME_COLORS.accent,
+              }),
+              bodyRun({
+                text: part.value,
+                size: RESUME_SIZES.contact,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(isLast ? 120 : 40),
+            ...(isLast
+              ? {
+                  border: {
+                    bottom: {
+                      style: BorderStyle.SINGLE,
+                      size: 12,
+                      color: RESUME_COLORS.primary,
+                      space: 4,
+                    },
+                  },
+                }
+              : {}),
+          })
+        );
+      });
+
+      paragraphs.push(
+        new Paragraph({
+          children: [],
+          spacing: { after: 120 },
+        })
+      );
+    }
+  }
+
   return paragraphs;
-};
-
-const createContactSection = (profile: Profile, includeLinkedIn = true): Paragraph[] => {
-  const contactInfo = [];
-
-  if (profile.email) contactInfo.push({ label: 'Email', value: profile.email });
-  if (profile.phone) contactInfo.push({ label: 'Phone', value: profile.phone });
-  if (profile.location) contactInfo.push({ label: 'Location', value: profile.location });
-  if (includeLinkedIn && profile.linkedin) contactInfo.push({ label: 'LinkedIn', value: profile.linkedin });
-  if (profile.portfolio) contactInfo.push({ label: 'Portfolio', value: profile.portfolio });
-
-  return contactInfo.map(info =>
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: '• ',
-          size: 20,
-          font: 'Cambria',
-        }),
-        new TextRun({
-          text: `${info.label}: `,
-          size: 20,
-          font: 'Cambria',
-          bold: true,
-        }),
-        new TextRun({
-          text: info.value,
-          size: 20,
-          font: 'Cambria',
-        }),
-      ],
-      alignment: AlignmentType.LEFT,
-      spacing: {
-        after: 100,
-      },
-    })
-  );
 };
 
 const createSectionHeader = (title: string): Paragraph => {
@@ -227,285 +307,233 @@ const createSectionHeader = (title: string): Paragraph => {
     children: [
       new TextRun({
         text: title,
-        size: 28,
+        size: RESUME_SIZES.section,
         bold: true,
-        font: 'Cambria',
+        font: FONT_HEADING,
+        color: RESUME_COLORS.primary,
         allCaps: true,
       }),
     ],
-    spacing: {
-      before: 400,
-      after: 200,
-    },
+    spacing: { before: 240, after: 120 },
     border: {
       bottom: {
-        space: 1,
         style: BorderStyle.SINGLE,
-        size: 6,
+        size: 8,
+        color: RESUME_COLORS.accent,
+        space: 4,
       },
     },
   });
 };
 
-const createProfessionalExperienceSection = (originalExperience: any[], aiExperience: any[], useAiEnhancedJobTitle: boolean): Paragraph[] => {
-  const paragraphs: Paragraph[] = [];
+const createSkillsSection = (sections: { label: string; skills: string[] }[]): Paragraph[] => {
+  return sections.map(
+    (cat) =>
+      new Paragraph({
+        children: [
+          bodyRun({ text: `${cat.label}: `, bold: true }),
+          bodyRun({ text: cat.skills.join(', ') }),
+        ],
+        spacing: bodyParagraphSpacing(80),
+      })
+  );
+};
+
+const createTwoColumnRow = (leftParas: Paragraph[], rightParas: Paragraph[]): Table => {
+  const leftWidth = 2200;
+  const rightWidth = 7400;
+  return new Table({
+    width: { size: 9600, type: WidthType.DXA },
+    columnWidths: [leftWidth, rightWidth],
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: leftWidth, type: WidthType.DXA },
+            borders: noBorder,
+            verticalAlign: VerticalAlign.TOP,
+            children: leftParas.length
+              ? leftParas
+              : [new Paragraph({ children: [] })],
+          }),
+          new TableCell({
+            width: { size: rightWidth, type: WidthType.DXA },
+            borders: noBorder,
+            verticalAlign: VerticalAlign.TOP,
+            children: rightParas.length
+              ? rightParas
+              : [new Paragraph({ children: [] })],
+          }),
+        ],
+      }),
+    ],
+  });
+};
+
+const createProfessionalExperienceSection = (
+  originalExperience: any[],
+  aiExperience: any[],
+  useAiEnhancedJobTitle: boolean
+): (Paragraph | Table)[] => {
+  const blocks: (Paragraph | Table)[] = [];
   const entries = resolveResumeExperience(originalExperience, aiExperience, useAiEnhancedJobTitle);
 
   entries.forEach((exp, index) => {
     const jobTitle = exp.position ?? '';
     const descriptions = exp.descriptions ?? [];
+    const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
 
-    // Add spacing before each experience entry
     if (index > 0) {
-      paragraphs.push(
-        new Paragraph({
-          children: [],
-          spacing: { before: 300 },
-        })
-      );
+      blocks.push(new Paragraph({ children: [], spacing: { before: 160 } }));
     }
 
-    // Company name
-    paragraphs.push(
+    // Company name — full width, bold teal
+    blocks.push(
       new Paragraph({
         children: [
-          new TextRun({
-            text: exp.company,
-            size: 24,
+          bodyRun({
+            text: exp.company ?? '',
+            size: RESUME_SIZES.experienceHeading,
             bold: true,
-            font: 'Cambria',
+            color: RESUME_COLORS.primary,
           }),
         ],
-        spacing: { after: 100 },
+        spacing: bodyParagraphSpacing(40),
       })
     );
 
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: jobTitle,
-            size: 22,
-            bold: true,
-            font: 'Cambria',
-          }),
-        ],
-        spacing: { after: 100 },
-      })
-    );
-
-    // Date range and address
-    const dateAddress = [];
-    const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
-    if (dateRange) dateAddress.push(dateRange);
-    if (exp.address) dateAddress.push(exp.address);
-
-    if (dateAddress.length > 0) {
-      paragraphs.push(
+    const leftParas: Paragraph[] = [];
+    if (dateRange) {
+      leftParas.push(
         new Paragraph({
           children: [
-            new TextRun({
-              text: dateAddress.join(' | '),
-              size: 20,
-              italics: true,
-              font: 'Cambria',
+            bodyRun({
+              text: dateRange,
+              size: RESUME_SIZES.experienceMeta,
+              bold: true,
+              color: RESUME_COLORS.primary,
             }),
           ],
-          spacing: { after: 200 },
+          spacing: bodyParagraphSpacing(20),
+        })
+      );
+    }
+    if (exp.address) {
+      leftParas.push(
+        new Paragraph({
+          children: [
+            bodyRun({
+              text: exp.address,
+              color: RESUME_COLORS.muted,
+            }),
+          ],
+          spacing: bodyParagraphSpacing(0),
         })
       );
     }
 
-    // Experience bullet points
-    if (descriptions && descriptions.length > 0) {
-      const bulletPoints = createExperienceBulletPoints(descriptions);
-      paragraphs.push(...bulletPoints);
+    const rightParas: Paragraph[] = [
+      new Paragraph({
+        children: [
+          bodyRun({
+            text: jobTitle,
+            size: RESUME_SIZES.experienceHeading,
+            bold: true,
+          }),
+        ],
+        spacing: bodyParagraphSpacing(80),
+      }),
+    ];
+
+    for (const description of descriptions) {
+      const text = ensureTrailingPeriod(description);
+      const segments = parseBoldMarkup(text);
+      rightParas.push(
+        new Paragraph({
+          children: [
+            bodyRun({ text: '• ', size: RESUME_SIZES.experienceBullet }),
+            ...segments.map((seg) =>
+              bodyRun({
+                text: seg.text,
+                size: RESUME_SIZES.experienceBullet,
+                bold: seg.bold,
+              })
+            ),
+          ],
+          spacing: bodyParagraphSpacing(60),
+        })
+      );
     }
 
-    // Add spacing after the experience entry
-    paragraphs.push(
-      new Paragraph({
-        children: [],
-        spacing: { after: 200 },
-      })
-    );
+    blocks.push(createTwoColumnRow(leftParas, rightParas));
   });
 
-  return paragraphs;
+  return blocks;
 };
 
-const createEducationSection = (education: any[]): Paragraph[] => {
-  const paragraphs: Paragraph[] = [];
+const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
+  const blocks: (Paragraph | Table)[] = [];
 
   education.forEach((edu, index) => {
     if (index > 0) {
-      paragraphs.push(
-        new Paragraph({
-          children: [],
-          spacing: { before: 200 },
-        })
-      );
+      blocks.push(new Paragraph({ children: [], spacing: { before: 120 } }));
     }
 
-    // Degree and field
     const degreeText = [edu.degree, edu.field].filter(Boolean).join(' in ');
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: degreeText,
-            size: 22,
-            bold: true,
-            font: 'Cambria',
-          }),
-        ],
-        spacing: { after: 100 },
-      })
-    );
-
-    // School and dates
-    const schoolInfo = [];
-    if (edu.school) schoolInfo.push(edu.school);
     const dateRange = formatDateRange(edu.start_date, edu.end_date);
-    if (dateRange) schoolInfo.push(`(${dateRange})`);
 
-    if (schoolInfo.length > 0) {
-      paragraphs.push(
+    const leftParas: Paragraph[] = [];
+    if (dateRange) {
+      leftParas.push(
         new Paragraph({
           children: [
-            new TextRun({
-              text: schoolInfo.join(' '),
-              size: 20,
-              font: 'Cambria',
+            bodyRun({
+              text: dateRange,
+              bold: true,
+              color: RESUME_COLORS.primary,
             }),
           ],
-          spacing: { after: 200 },
+          spacing: bodyParagraphSpacing(20),
         })
       );
     }
+
+    const rightParas: Paragraph[] = [];
+    if (degreeText) {
+      rightParas.push(
+        new Paragraph({
+          children: [
+            bodyRun({
+              text: degreeText,
+              bold: true,
+              color: RESUME_COLORS.primary,
+            }),
+          ],
+          spacing: bodyParagraphSpacing(20),
+        })
+      );
+    }
+    if (edu.school) {
+      rightParas.push(
+        new Paragraph({
+          children: [
+            bodyRun({
+              text: edu.school,
+              color: RESUME_COLORS.accent,
+            }),
+          ],
+          spacing: bodyParagraphSpacing(0),
+        })
+      );
+    }
+
+    blocks.push(createTwoColumnRow(leftParas, rightParas));
   });
 
-  return paragraphs;
-};
-
-const createExperienceBulletPoints = (descriptions: string[]): Paragraph[] => {
-  if (!descriptions || descriptions.length === 0) return [];
-
-  return descriptions.map(description =>
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: '• ',
-          size: 22,
-          font: 'Cambria',
-        }),
-        new TextRun({
-          text: description.endsWith('.') ? description : description + '.',
-          size: 22,
-          font: 'Cambria',
-        }),
-      ],
-      spacing: {
-        after: 120,
-      },
-      indent: {
-        left: 360, // 0.25 inch indent
-      },
-    })
-  );
-};
-
-const createSkillsSection = (skills: string[]): Paragraph[] => {
-  // Group skills into categories for better presentation
-  const technicalSkills = skills.filter(skill =>
-    /(javascript|python|java|c\+\+|react|angular|vue|node|sql|aws|docker|kubernetes|git|agile|scrum|api|html|css|typescript|php|ruby|go|rust|swift|kotlin|flutter|react native|machine learning|ai|data|analytics|cloud|devops|testing|ci\/cd)/i.test(skill)
-  );
-
-  const softSkills = skills.filter(skill =>
-    /(leadership|communication|teamwork|problem solving|project management|collaboration|mentoring|presentation|negotiation|customer service|time management|organization|creativity|adaptability|critical thinking|decision making)/i.test(skill)
-  );
-
-  const otherSkills = skills.filter(skill =>
-    !technicalSkills.includes(skill) && !softSkills.includes(skill)
-  );
-
-  const paragraphs: Paragraph[] = [];
-
-  if (technicalSkills.length > 0) {
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: 'Technical: ',
-            size: 22,
-            font: 'Cambria',
-            bold: true,
-          }),
-          new TextRun({
-            text: technicalSkills.join(', '),
-            size: 22,
-            font: 'Cambria',
-          }),
-        ],
-        spacing: {
-          after: 150,
-        },
-      })
-    );
-  }
-
-  if (softSkills.length > 0) {
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: 'Soft Skills: ',
-            size: 22,
-            font: 'Cambria',
-            bold: true,
-          }),
-          new TextRun({
-            text: softSkills.join(', '),
-            size: 22,
-            font: 'Cambria',
-          }),
-        ],
-        spacing: {
-          after: 150,
-        },
-      })
-    );
-  }
-
-  if (otherSkills.length > 0) {
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: 'Other: ',
-            size: 22,
-            font: 'Cambria',
-            bold: true,
-          }),
-          new TextRun({
-            text: otherSkills.join(', '),
-            size: 22,
-            font: 'Cambria',
-          }),
-        ],
-        spacing: {
-          after: 300,
-        },
-      })
-    );
-  }
-
-  return paragraphs;
+  return blocks;
 };
 
 export const formatDateRange = (startDate: string, endDate: string): string => {
-
-
   const start = formatDate(startDate);
   const end = formatDate(endDate);
 
@@ -514,4 +542,4 @@ export const formatDateRange = (startDate: string, endDate: string): string => {
   if (!end) return `${start} - Present`;
 
   return `${start} – ${end}`;
-}; 
+};
