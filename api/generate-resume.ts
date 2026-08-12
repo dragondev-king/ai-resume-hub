@@ -23,7 +23,7 @@ const SYSTEM_PROMPT_KEEP_COMPANIES =
   `${SYSTEM_PROMPT_BASE} CRITICAL: Tailor only experience bullet points (and summary/skills). Keep every original company name and job title/position exactly as provided — do not rename employers or roles.`;
 
 const SYSTEM_PROMPT_TAILOR_COMPANIES =
-  `${SYSTEM_PROMPT_BASE} CRITICAL: Also tailor company names and role/job titles. Research the target employer from the job description (industry, business type, approximate size). Replace the candidate's two most recent employers with REAL mid-sized, lesser-known companies in that same industry (roughly 50–500 employees, niche/regional — NOT famous giants). Prefer a lesser-known mid-market rival for the most recent employer. Never list the target company itself as a past employer. Never use FAANG, Fortune 500 household names, Big Tech, mega-insurers, or other globally famous brands. Update addresses to match the replacement companies when known.`;
+  `${SYSTEM_PROMPT_BASE} CRITICAL: Also tailor company names and role/job titles. Research the target employer from the job description (industry, business type, approximate size). Replace the candidate's two most recent employers with REAL mid-sized, lesser-known companies in that same industry (roughly 50–500 employees, niche/regional — NOT famous giants). Prefer a lesser-known mid-market rival for the most recent employer. For those two most recent roles, heavily stress domain/industry experience matching the target field (e.g. healthcare, fintech) in the bullet points — not only tech skills. Never list the target company itself as a past employer. Never use FAANG, Fortune 500 household names, Big Tech, mega-insurers, or other globally famous brands. Update addresses to match the replacement companies when known.`;
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
@@ -215,6 +215,12 @@ const createAIPrompt = (
      - DO NOT invent fake-sounding names; use real companies that fit the mid-market / lesser-known criteria
    - MOST RECENT employer: prefer a lesser-known mid-market rival/competitor of the target company when a credible one exists
    - SECOND MOST RECENT employer: another mid-sized lesser-known company in the same industry (not the target, and not the same as the first substitute)
+   - INDUSTRY EXPERIENCE FOR THE LAST 2 ROLES (REQUIRED):
+     - Identify the target company's industry/field from the JD (e.g. healthcare / health-IT, payer case management, fintech, logistics)
+     - In bullet points for ONLY the two most recent roles, heavily stress hands-on experience in that industry field — domain workflows, regulations, data models, business problems, and terminology from that field
+     - Make it clear the candidate has deep industry exposure there (not generic software work that could be any industry)
+     - Weave industry context into most bullets for those two roles (e.g. members/providers/authorizations/HIPAA for healthcare; payments/risk for fintech) while still including relevant technical skills
+     - Older roles (beyond the two most recent) do not need this industry emphasis
    - NEVER use the target company itself as a past employer
    - Keep all earlier employers (beyond the two most recent) EXACTLY as provided
    - Update "address" for replaced companies to a plausible real HQ or major office for that company when known
@@ -314,7 +320,8 @@ EXAMPLE OF COMPANY SUBSTITUTION (when tailorCompanyNames is ON):
 If applying to a mid-market healthcare case-management software vendor (~50–200 employees):
 - Most recent employer → another lesser-known mid-market health-IT / care-management software company (NOT Epic, Cerner/Oracle Health, Optum, UnitedHealth, or other famous giants), with a tailored role title
 - Second most recent → a different mid-sized niche healthcare software or payer-tech firm of similar scale
-- Older employers → keep original company names unchanged
+- For those two roles' bullets → stress healthcare-industry work (e.g. care management, members/providers, authorizations, HIPAA, payer workflows) alongside the tech stack — not generic CRUD apps
+- Older employers → keep original company names unchanged; lighter/no industry emphasis required
 - Wrong examples to avoid: Google, Amazon, Microsoft, Optum, Epic, Salesforce, IBM
 ` : ''}
 IMPORTANT JSON FORMATTING RULES:
@@ -322,7 +329,7 @@ IMPORTANT JSON FORMATTING RULES:
 - The generated number of positions must be the same as the original experience (${experience.length} positions)
 - Every experience item MUST include a non-empty "descriptions" array
 ${tailorCompanyNames
-    ? '- For the two most recent roles, company names (and preferably addresses) SHOULD change to mid-sized lesser-known peers per the research rules above; keep older company names unchanged. Role titles SHOULD be tailored.'
+    ? '- For the two most recent roles, company names (and preferably addresses) SHOULD change to mid-sized lesser-known peers per the research rules above; keep older company names unchanged. Role titles SHOULD be tailored. Bullet points for those two roles MUST emphasize the target industry/field, not only technology.'
     : '- Keep all original company names and job titles unchanged. Only tailor descriptions, summary, and skills.'}
 - Must follow the response format exactly.
 
