@@ -13,19 +13,18 @@ const anthropic = new Anthropic({
 });
 
 /** Long pasted JDs (e.g. LinkedIn/export dumps) blow the output budget; keep the useful front portion. */
-const MAX_JOB_DESCRIPTION_CHARS = 12000;
-const MAX_OUTPUT_TOKENS = 12000;
-
-const SYSTEM_PROMPT_BASE =
-  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 6-10 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>). Always return complete valid JSON with a non-empty experience array matching the original number of positions.';
-
-const SYSTEM_PROMPT_KEEP_COMPANIES =
-  `${SYSTEM_PROMPT_BASE} CRITICAL: Tailor only experience bullet points (and summary/skills). Keep every original company name and job title/position exactly as provided — do not rename employers or roles.`;
-
-const SYSTEM_PROMPT_TAILOR_COMPANIES =
-  `${SYSTEM_PROMPT_BASE} CRITICAL: Also tailor company names and role/job titles. Research the target employer from the job description (industry, business type, approximate size). Replace the candidate's two most recent employers with REAL mid-sized, lesser-known companies in that same industry (roughly 50–500 employees, niche/regional — NOT famous giants). Prefer a lesser-known mid-market rival for the most recent employer. For those two most recent roles, heavily stress domain/industry experience matching the target field (e.g. healthcare, fintech) in the bullet points — not only tech skills. Never list the target company itself as a past employer. Never use FAANG, Fortune 500 household names, Big Tech, mega-insurers, or other globally famous brands. Update addresses to match the replacement companies when known.`;
+const MAX_JOB_DESCRIPTION_CHARS = 10000;
+/** Resume body only — company substitution is a separate smaller call. */
+const MAX_RESUME_OUTPUT_TOKENS = 8000;
+const MAX_COMPANY_PICK_TOKENS = 1200;
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+const SYSTEM_PROMPT_RESUME =
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience to fit the target role. Generate 5-8 bullet points per work experience. Extract job title and company name from the job description. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>). Always return complete valid JSON with a non-empty experience array matching the original number of positions. Never truncate the JSON.';
+
+const SYSTEM_PROMPT_COMPANY_PICK =
+  'You research mid-market employers. Given a job description, identify the target company and industry, then propose real mid-sized lesser-known peer companies (roughly 50-500 employees) in that industry. Prefer a lesser-known rival for the most recent role. Never suggest FAANG, Fortune 500 household names, Big Tech, mega insurers, or mega EHR vendors. Never suggest the target company itself. Return only valid JSON.';
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -61,6 +60,28 @@ const RESUME_OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
+const COMPANY_PICK_SCHEMA = {
+  type: 'object',
+  properties: {
+    targetCompany: { type: 'string' },
+    industry: { type: 'string' },
+    replacements: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          company: { type: 'string' },
+          address: { type: 'string' },
+        },
+        required: ['company', 'address'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['targetCompany', 'industry', 'replacements'],
+  additionalProperties: false,
+};
+
 interface RequestBody {
   profile: any;
   jobDescription: string;
@@ -68,16 +89,83 @@ interface RequestBody {
   tailorCompanyNames?: boolean;
 }
 
+type CompanyReplacement = { company: string; address: string };
+
+type CompanyPickResult = {
+  targetCompany: string;
+  industry: string;
+  replacements: CompanyReplacement[];
+};
+
 function truncateJobDescription(jobDescription: string): string {
   const trimmed = jobDescription.trim();
   if (trimmed.length <= MAX_JOB_DESCRIPTION_CHARS) return trimmed;
   return `${trimmed.slice(0, MAX_JOB_DESCRIPTION_CHARS)}\n\n[Job description truncated for length; use the content above as the source of truth.]`;
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+function cloneProfile(profile: any) {
+  return JSON.parse(JSON.stringify(profile));
+}
+
+function applyCompanyReplacements(profile: any, replacements: CompanyReplacement[]): any {
+  const next = cloneProfile(profile);
+  const experience = Array.isArray(next.experience) ? next.experience : [];
+  const count = Math.min(2, replacements.length, experience.length);
+  for (let i = 0; i < count; i++) {
+    experience[i] = {
+      ...experience[i],
+      company: replacements[i].company,
+      address: replacements[i].address || experience[i].address || '',
+    };
+  }
+  next.experience = experience;
+  return next;
+}
+
+function forceCompaniesOnAiJson(
+  aiResponse: string,
+  replacements: CompanyReplacement[]
+): string {
+  if (!replacements.length) return aiResponse;
+  try {
+    const parsed = JSON.parse(stripCodeFences(aiResponse));
+    if (!Array.isArray(parsed.experience)) return aiResponse;
+    const count = Math.min(2, replacements.length, parsed.experience.length);
+    for (let i = 0; i < count; i++) {
+      parsed.experience[i] = {
+        ...parsed.experience[i],
+        company: replacements[i].company,
+        address: replacements[i].address || parsed.experience[i].address || '',
+      };
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return aiResponse;
+  }
+}
+
+function stripCodeFences(text: string): string {
+  let jsonString = text.trim();
+  if (jsonString.startsWith('```json')) {
+    jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  } else if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
+  }
+  return jsonString;
+}
+
+function parseJsonLoose(text: string): any {
+  let jsonString = stripCodeFences(text);
+  if (!jsonString.startsWith('{')) {
+    const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response');
+    jsonString = jsonMatch[0];
+  }
+  jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+  return JSON.parse(jsonString);
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -112,18 +200,34 @@ export default async function handler(
       });
     }
 
-    const prompt = createAIPrompt(
-      profile,
-      truncateJobDescription(jobDescription),
-      Boolean(tailorCompanyNames)
-    );
-    const systemPrompt = Boolean(tailorCompanyNames)
-      ? SYSTEM_PROMPT_TAILOR_COMPANIES
-      : SYSTEM_PROMPT_KEEP_COMPANIES;
-    const aiResponse =
+    const jd = truncateJobDescription(jobDescription);
+    const shouldTailorCompanies = Boolean(tailorCompanyNames);
+    let profileForGeneration = profile;
+    let companyPick: CompanyPickResult | null = null;
+
+    // Phase 1: pick mid-market peer companies (small, reliable JSON) then bake them into the profile
+    if (shouldTailorCompanies) {
+      try {
+        companyPick = await pickSubstituteCompanies(profile, jd, provider);
+        if (companyPick.replacements?.length) {
+          profileForGeneration = applyCompanyReplacements(profile, companyPick.replacements);
+        }
+      } catch (pickError: any) {
+        console.error('Company substitution failed; continuing with original companies:', pickError);
+      }
+    }
+
+    // Phase 2: generate the resume with companies already set; stress industry on last 2 when enabled
+    const prompt = createAIPrompt(profileForGeneration, jd, {
+      tailorRoleTitles: shouldTailorCompanies,
+      stressIndustryLast2: shouldTailorCompanies,
+      industry: companyPick?.industry || '',
+    });
+
+    let aiResponse =
       provider === 'claude'
-        ? await generateWithClaude(prompt, systemPrompt)
-        : await generateWithOpenAI(prompt, systemPrompt);
+        ? await generateWithClaude(prompt, SYSTEM_PROMPT_RESUME, RESUME_OUTPUT_SCHEMA, MAX_RESUME_OUTPUT_TOKENS)
+        : await generateWithOpenAI(prompt, SYSTEM_PROMPT_RESUME, MAX_RESUME_OUTPUT_TOKENS);
 
     if (!aiResponse?.trim()) {
       return res.status(502).json({
@@ -132,10 +236,21 @@ export default async function handler(
       });
     }
 
+    if (companyPick?.replacements?.length) {
+      aiResponse = forceCompaniesOnAiJson(aiResponse, companyPick.replacements);
+    }
+
     return res.status(200).json({
       success: true,
       aiResponse,
       provider,
+      companyPick: companyPick
+        ? {
+            targetCompany: companyPick.targetCompany,
+            industry: companyPick.industry,
+            replacements: companyPick.replacements,
+          }
+        : null,
     });
   } catch (error: any) {
     console.error('Error generating resume:', error);
@@ -146,7 +261,72 @@ export default async function handler(
   }
 }
 
-async function generateWithOpenAI(prompt: string, systemPrompt: string): Promise<string> {
+async function pickSubstituteCompanies(
+  profile: any,
+  jobDescription: string,
+  provider: AIProvider
+): Promise<CompanyPickResult> {
+  const experience = Array.isArray(profile.experience) ? profile.experience : [];
+  const recent = experience.slice(0, 2);
+  const prompt = `
+From this job description, identify the hiring company and its industry/field.
+
+Then propose ${Math.min(2, Math.max(1, recent.length))} REAL mid-sized, lesser-known peer companies in that SAME industry to use as the candidate's most recent employer(s) on a resume.
+
+SIZE & FAME RULES (STRICT):
+- Prefer roughly 50–500 employees / niche mid-market firms
+- Prefer obscure / regional / lesser-known companies (not household brands)
+- DO NOT use FAANG, Big Tech, Fortune 500 household names, mega insurers/payers, or mega EHR vendors (Epic, Oracle Health/Cerner, Optum, UnitedHealth, Anthem/Elevance, Cigna, CVS/Aetna, Google, Amazon, Microsoft, Apple, Meta, IBM, Salesforce, etc.)
+- DO NOT use the target hiring company itself
+- First replacement should preferably be a lesser-known mid-market rival/competitor of the target
+- Second replacement should be a different mid-sized peer in the same industry
+- Use real company names only
+- Provide a plausible HQ / major office city for each
+
+JOB DESCRIPTION:
+${jobDescription}
+
+CANDIDATE CURRENT MOST RECENT EMPLOYERS (for context only — replace these):
+${recent.map((exp: any, i: number) => `${i + 1}. ${exp.company || 'Unknown'} — ${exp.position || ''}`).join('\n')}
+
+Return ONLY JSON:
+{
+  "targetCompany": "hiring company from the JD",
+  "industry": "short industry/field label, e.g. healthcare case management software",
+  "replacements": [
+    { "company": "Mid-sized lesser-known peer/rival", "address": "City, State" }
+  ]
+}
+`;
+
+  const raw =
+    provider === 'claude'
+      ? await generateWithClaude(prompt, SYSTEM_PROMPT_COMPANY_PICK, COMPANY_PICK_SCHEMA, MAX_COMPANY_PICK_TOKENS)
+      : await generateWithOpenAI(prompt, SYSTEM_PROMPT_COMPANY_PICK, MAX_COMPANY_PICK_TOKENS);
+
+  const parsed = parseJsonLoose(raw) as CompanyPickResult;
+  if (!parsed?.replacements || !Array.isArray(parsed.replacements) || parsed.replacements.length === 0) {
+    throw new Error('Company pick returned no replacements');
+  }
+
+  return {
+    targetCompany: String(parsed.targetCompany || ''),
+    industry: String(parsed.industry || ''),
+    replacements: parsed.replacements
+      .slice(0, 2)
+      .map((r) => ({
+        company: String(r.company || '').trim(),
+        address: String(r.address || '').trim(),
+      }))
+      .filter((r) => r.company),
+  };
+}
+
+async function generateWithOpenAI(
+  prompt: string,
+  systemPrompt: string,
+  maxTokens: number
+): Promise<string> {
   const completion = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
@@ -155,38 +335,39 @@ async function generateWithOpenAI(prompt: string, systemPrompt: string): Promise
     ],
     response_format: { type: 'json_object' },
     temperature: 0.7,
-    max_tokens: MAX_OUTPUT_TOKENS,
+    max_tokens: maxTokens,
   });
 
   const content = completion.choices[0]?.message?.content || '';
   if (completion.choices[0]?.finish_reason === 'length') {
-    console.warn('OpenAI resume response truncated due to max_tokens');
+    console.warn('OpenAI response truncated due to max_tokens');
   }
   return content;
 }
 
-async function generateWithClaude(prompt: string, systemPrompt: string): Promise<string> {
+async function generateWithClaude(
+  prompt: string,
+  systemPrompt: string,
+  schema: Record<string, unknown>,
+  maxTokens: number
+): Promise<string> {
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: MAX_OUTPUT_TOKENS,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: 'user', content: prompt }],
     output_config: {
       format: {
         type: 'json_schema',
-        schema: RESUME_OUTPUT_SCHEMA,
+        schema,
       },
     },
   });
 
   if (message.stop_reason === 'max_tokens') {
-    console.warn('Claude resume response truncated due to max_tokens');
+    console.warn('Claude response truncated due to max_tokens');
   }
 
-  return extractClaudeTextContent(message);
-}
-
-function extractClaudeTextContent(message: Anthropic.Message): string {
   return message.content
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
     .map((block) => block.text)
@@ -196,50 +377,48 @@ function extractClaudeTextContent(message: Anthropic.Message): string {
 const createAIPrompt = (
   profile: any,
   jobDescription: string,
-  tailorCompanyNames: boolean
+  options: {
+    tailorRoleTitles: boolean;
+    stressIndustryLast2: boolean;
+    industry: string;
+  }
 ): string => {
   const experience = Array.isArray(profile.experience) ? profile.experience : [];
   const education = Array.isArray(profile.education) ? profile.education : [];
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
+  const { tailorRoleTitles, stressIndustryLast2, industry } = options;
 
-  const companyAndRoleInstructions = tailorCompanyNames
+  const roleInstructions = tailorRoleTitles
     ? `
-4. COMPANY NAME & ROLE RESEARCH (REQUIRED — tailorCompanyNames is ON):
-   - Identify the target company the candidate is applying to from the job description
-   - Infer what kind of business it is: industry, products/services, business model, and approximate company size
-   - Replace the candidate's TWO MOST RECENT employers (usually the first two entries when experience is newest-first) with REAL mid-sized, lesser-known companies in the SAME industry
-   - SIZE & FAME RULES (STRICT):
-     - Prefer roughly 50–500 employees (or similar mid-market scale to the target if known)
-     - Prefer obscure / niche / regional firms that recruiters would not instantly recognize as household brands
-     - DO NOT use famous giants or well-known brands, including but not limited to: FAANG/Big Tech, Fortune 500 household names, mega insurers/payers, mega EHR vendors (e.g. Epic, Oracle Health/Cerner, Optum, UnitedHealth, Anthem/Elevance, Cigna, CVS/Aetna), and other globally famous companies
-     - DO NOT invent fake-sounding names; use real companies that fit the mid-market / lesser-known criteria
-   - MOST RECENT employer: prefer a lesser-known mid-market rival/competitor of the target company when a credible one exists
-   - SECOND MOST RECENT employer: another mid-sized lesser-known company in the same industry (not the target, and not the same as the first substitute)
-   - INDUSTRY EXPERIENCE FOR THE LAST 2 ROLES (REQUIRED):
-     - Identify the target company's industry/field from the JD (e.g. healthcare / health-IT, payer case management, fintech, logistics)
-     - In bullet points for ONLY the two most recent roles, heavily stress hands-on experience in that industry field — domain workflows, regulations, data models, business problems, and terminology from that field
-     - Make it clear the candidate has deep industry exposure there (not generic software work that could be any industry)
-     - Weave industry context into most bullets for those two roles (e.g. members/providers/authorizations/HIPAA for healthcare; payments/risk for fintech) while still including relevant technical skills
-     - Older roles (beyond the two most recent) do not need this industry emphasis
-   - NEVER use the target company itself as a past employer
-   - Keep all earlier employers (beyond the two most recent) EXACTLY as provided
-   - Update "address" for replaced companies to a plausible real HQ or major office for that company when known
-   - Also tailor "position" / role titles:
-     - Most recent: closely match or sit one step below the target job title
-     - Earlier roles: show clear progression toward the target role
-     - Use industry-standard titles aligned with the target position
+4. ROLE TITLES (REQUIRED):
+   - Tailor "position" / job titles toward the target role
+   - Most recent: closely match or sit one step below the target job title
+   - Earlier roles: show clear progression toward the target role
+   - Keep EVERY company name and address EXACTLY as provided in ORIGINAL EXPERIENCE (already researched/substituted when needed)
    - Keep start_date / end_date and the number of experience entries identical to the original
 `
     : `
-4. COMPANY NAMES & ROLE TITLES (REQUIRED — tailorCompanyNames is OFF):
+4. COMPANY NAMES & ROLE TITLES (REQUIRED):
    - Keep EVERY company name EXACTLY as provided in ORIGINAL EXPERIENCE
    - Keep EVERY position / job title EXACTLY as provided in ORIGINAL EXPERIENCE
    - Keep addresses and dates as provided
-   - Only rewrite bullet point descriptions (and summary/skills) — do not rename employers or roles
+   - Only rewrite bullet point descriptions (and summary/skills)
 `;
 
+  const industryInstructions = stressIndustryLast2
+    ? `
+5. INDUSTRY EXPERIENCE FOR THE LAST 2 ROLES (REQUIRED):
+   - Target industry/field: ${industry || 'infer from the job description'}
+   - For ONLY the two most recent roles (first two experience entries), heavily stress hands-on experience in that industry field
+   - Include domain workflows, regulations, data models, business problems, and terminology from that field in MOST bullets for those two roles
+   - Make industry exposure obvious (not generic software work that could be any industry)
+   - Still include relevant technical skills from the JD with <b>...</b> tags
+   - Older roles do not need this industry emphasis
+`
+    : '';
+
   return `
-Please create a highly tailored resume for the following job description. The goal is to position the candidate as an ideal fit for this specific role, even if their original experience doesn't perfectly match.
+Please create a highly tailored resume for the following job description.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -248,116 +427,70 @@ CANDIDATE INFORMATION:
 Name: ${profile.first_name} ${profile.last_name}
 Current Summary: ${profile.summary || ''}
 
-ORIGINAL EXPERIENCE (Use as inspiration but don't be limited by it):
-${experience.map((exp: any) => `
+ORIGINAL EXPERIENCE (companies/addresses are authoritative — keep them exactly):
+${experience
+  .map(
+    (exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
   Address: ${exp.address || ''}
   Original Description: ${exp.description || ''}
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 EDUCATION:
-${education.map((edu: any) => `
+${education
+  .map(
+    (edu: any) => `
 - ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 CURRENT SKILLS:
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 CRITICAL INSTRUCTIONS FOR TAILORING:
-1. ANALYZE the job description thoroughly to identify:
-   - Job title and company name
-   - Required technical skills and technologies
-   - Key responsibilities and duties
-   - Industry-specific terminology
-   - Desired qualifications and experience level
-   - Company culture and values mentioned
-   ${tailorCompanyNames ? '- Target company industry, business type, and approximate size (needed for employer substitution)' : ''}
+1. ANALYZE the job description for job title, company name, required skills, responsibilities, and terminology.
 
-2. TRANSFORM each work experience to align with the target role:
+2. TRANSFORM each work experience:
    - Rewrite bullet points to emphasize relevant skills and achievements
-   - Include specific technologies, tools, and methodologies mentioned in the job description
-   - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
-   - Focus on transferable skills that apply to the target role
-   - Use industry-specific language and terminology from the job description
-   - Write 6-10 bullet points per position (complete all bullets — never leave descriptions empty)
+   - Include technologies/tools from the job description where natural
+   - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple
+   - Write 5-8 complete bullet points per position (never leave descriptions empty)
 
-3. CREATIVE TAILORING APPROACH:
-   - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
-   - Emphasize similar frameworks, methodologies, or problem-solving approaches
-   - Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
-   - Highlight leadership, project management, and collaboration skills that are universally valuable
-   - Show how past experiences demonstrate the ability to learn and adapt to new technologies
-   - Create bullet points that showcase the candidate's potential to excel in the target role
-${companyAndRoleInstructions}
-Please provide the following in JSON format:
+3. CREATIVE TAILORING:
+   - Incorporate relevant technologies without mirroring the JD stack too closely
+   - Highlight transferable skills, collaboration, and delivery impact
+${roleInstructions}${industryInstructions}
+Please respond with ONLY valid COMPLETE JSON (no markdown):
 
-1. Extract the job title and company name from the job description
-2. A compelling professional summary that positions the candidate for this specific role
-3. Enhanced work experience with 6-10 complete bullet points per position that:
-   - Are specifically tailored to the job description requirements
-   - Include relevant technologies, tools, and methodologies from the job description
-   - Show quantifiable achievements and measurable impact
-   - Demonstrate transferable skills and adaptability
-   - Use action verbs and industry-specific terminology from the job description
-   - Vary bullet point count based on role complexity and duration
-4. Enhanced skills list that includes both current skills and skills mentioned in the job description
-
-5. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
-   - In every experience bullet point, wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b> tags
-   - Examples: <b>React</b>, <b>Node.js</b>, <b>PostgreSQL</b>, <b>AWS</b>, <b>Docker</b>, <b>CI/CD</b>, <b>TypeScript</b>
-   - Only wrap the skill/technology token itself — not entire sentences
-   - Do not bold soft skills or generic words
-   - Keep the <b> tags inside the JSON string values (valid JSON)
-
-EXAMPLE OF TAILORING:
-If applying for "Ruby on Rails Developer" and original experience was in "Web Development":
-- Adjust title to "Ruby on Rails Developer"${tailorCompanyNames ? '' : ' ONLY if tailorCompanyNames is ON — otherwise keep the original title'}
-- Include bullet points about web development, database management, API development
-- Emphasize experience with similar frameworks (if any) or rapid learning abilities
-- Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
-${tailorCompanyNames ? `
-EXAMPLE OF COMPANY SUBSTITUTION (when tailorCompanyNames is ON):
-If applying to a mid-market healthcare case-management software vendor (~50–200 employees):
-- Most recent employer → another lesser-known mid-market health-IT / care-management software company (NOT Epic, Cerner/Oracle Health, Optum, UnitedHealth, or other famous giants), with a tailored role title
-- Second most recent → a different mid-sized niche healthcare software or payer-tech firm of similar scale
-- For those two roles' bullets → stress healthcare-industry work (e.g. care management, members/providers, authorizations, HIPAA, payer workflows) alongside the tech stack — not generic CRUD apps
-- Older employers → keep original company names unchanged; lighter/no industry emphasis required
-- Wrong examples to avoid: Google, Amazon, Microsoft, Optum, Epic, Salesforce, IBM
-` : ''}
-IMPORTANT JSON FORMATTING RULES:
-- Respond with ONLY valid COMPLETE JSON - no markdown code blocks, no extra text, no truncated output
-- The generated number of positions must be the same as the original experience (${experience.length} positions)
-- Every experience item MUST include a non-empty "descriptions" array
-${tailorCompanyNames
-    ? '- For the two most recent roles, company names (and preferably addresses) SHOULD change to mid-sized lesser-known peers per the research rules above; keep older company names unchanged. Role titles SHOULD be tailored. Bullet points for those two roles MUST emphasize the target industry/field, not only technology.'
-    : '- Keep all original company names and job titles unchanged. Only tailor descriptions, summary, and skills.'}
-- Must follow the response format exactly.
-
-Response format:
 {
   "jobTitle": "extracted or inferred job title from the job description",
   "companyName": "extracted or inferred company name from the job description",
   "summary": "Professional summary tailored to this specific role...",
   "experience": [
     {
-      "position": "${tailorCompanyNames ? 'Tailored Job Title' : 'Original Job Title (unchanged)'}",
-      "company": "${tailorCompanyNames ? 'Mid-sized lesser-known peer/rival for recent roles; original otherwise' : 'Original Company Name (unchanged)'}",
+      "position": "${tailorRoleTitles ? 'Tailored Job Title' : 'Original Job Title (unchanged)'}",
+      "company": "EXACT company name from ORIGINAL EXPERIENCE",
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",
-      "address": "Company Address",
+      "address": "EXACT address from ORIGINAL EXPERIENCE when provided",
       "descriptions": [
-        "Built APIs with <b>Node.js</b> and <b>TypeScript</b> on <b>AWS</b>...",
-        "Led frontend delivery using <b>React</b> and <b>Next.js</b>...",
-        "Optimized <b>PostgreSQL</b> queries and improved performance...",
-        "Technical accomplishment using relevant technologies...",
-        "Collaboration experience valuable for the target position...",
-        "Problem-solving that shows adaptability...",
-        "Delivery experience relevant to the target role...",
-        "Cross-functional work demonstrating team skills..."
+        "Bullet with <b>Tech</b> and relevant impact...",
+        "Another complete bullet..."
       ]
     }
   ],
   "skills": ["skill1", "skill2", "skill3"]
 }
+
+IMPORTANT:
+- Number of experience entries MUST be ${experience.length}
+- Every experience item MUST have a non-empty "descriptions" array
+- Keep company names exactly as listed in ORIGINAL EXPERIENCE
+${tailorRoleTitles ? '- Tailor role titles' : '- Keep role titles exactly as listed'}
+${stressIndustryLast2 ? '- Stress the target industry in bullets for the first two (most recent) roles' : ''}
+- Complete the full JSON — do not truncate
 `;
 };

@@ -118,8 +118,12 @@ const ResumeGenerator: React.FC = () => {
 
       console.log(generated, '=== generated')
 
-      // Check if this profile can apply to this company before showing the resume
-      // Only check if the profile has duplicate checking enabled (defaults to true)
+      setGeneratedWithTailoredCompanies(tailorCompanyNames);
+      setGeneratedResume(generated);
+      setEditingResume(generated);
+      setIsEditing(false);
+
+      // Duplicate check after we have a result so the user can still see tailored content
       if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
         const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
           p_profile_id: selectedProfile,
@@ -129,26 +133,17 @@ const ResumeGenerator: React.FC = () => {
         if (checkError) {
           console.error('Error checking application eligibility:', checkError);
           toast.error('Error checking application eligibility');
-          setLoading(false);
-          return;
-        }
-
-        if (!canApply) {
+          setIsApplicationEligible(false);
+        } else if (!canApply) {
           setIsApplicationEligible(false);
           toast.error(`This profile already has an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
-          setLoading(false);
-          return;
+        } else {
+          setIsApplicationEligible(true);
         }
-        setIsApplicationEligible(true);
       } else {
-        // If duplicate checking is disabled, always allow
         setIsApplicationEligible(true);
       }
 
-      setGeneratedWithTailoredCompanies(tailorCompanyNames);
-      setGeneratedResume(generated);
-      setEditingResume(generated);
-      setIsEditing(false);
       setTimeout(() => {
         document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
       }, 300);
@@ -280,6 +275,11 @@ const ResumeGenerator: React.FC = () => {
   const handleDownload = async (format: ResumeDownloadFormat) => {
     if (!generatedResume) {
       toast.error('No resume to download');
+      return;
+    }
+
+    if (!isApplicationEligible) {
+      toast.error('Cannot save: this profile already has an active application to that company');
       return;
     }
 
@@ -581,6 +581,17 @@ const ResumeGenerator: React.FC = () => {
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
   const useAiEnhancedJobTitle =
     generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile);
+  /** When companies were substituted, always show the generated experience as-is (do not rematch to profile). */
+  const previewExperience =
+    currentResume == null
+      ? []
+      : isEditing || generatedWithTailoredCompanies
+        ? currentResume.experience
+        : resolveResumeExperience(
+            profile?.experience ?? [],
+            currentResume.experience,
+            useAiEnhancedJobTitle
+          );
 
   if (profilesLoading) {
     return (
@@ -768,7 +779,7 @@ const ResumeGenerator: React.FC = () => {
       </div>
 
       {/* Generated Resume */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div id="generated-resume" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
@@ -801,6 +812,12 @@ const ResumeGenerator: React.FC = () => {
               )}
             </div>
           </div>
+
+          {!isApplicationEligible && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              This profile already has an active application to the extracted company. You can review the generated resume below, but saving a new application is blocked until you reset or choose a different company.
+            </div>
+          )}
 
           <div className="mb-6 flex flex-col items-stretch gap-3">
             <fieldset className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
@@ -866,7 +883,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Save & Download Word (.docx)</span>
@@ -874,7 +892,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Save & Download PDF (.pdf)</span>
@@ -884,7 +903,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Download Word (.docx) only</span>
@@ -892,7 +912,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download PDF (.pdf) only</span>
@@ -1014,10 +1035,7 @@ const ResumeGenerator: React.FC = () => {
             <div>
               <h4 className="font-medium text-gray-900 mb-2">Experience</h4>
               <div className="space-y-3">
-                {(isEditing
-                  ? currentResume.experience
-                  : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle)
-                ).map((exp, index) => (
+                {previewExperience.map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
                     {isEditing ? (
                       <div className="space-y-2">
