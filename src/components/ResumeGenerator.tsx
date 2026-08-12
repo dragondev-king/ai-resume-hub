@@ -9,6 +9,7 @@ import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { parseBoldMarkup } from '../utils/resumeLayout';
+import { pickRandomResumeTemplate, getResumeTemplate } from '../resumeTemplates';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
@@ -236,11 +237,15 @@ const ResumeGenerator: React.FC = () => {
 
   const exportResumeFile = async (
     profile: (typeof profiles)[0],
-    format: ResumeDownloadFormat
+    format: ResumeDownloadFormat,
+    templateId?: string
   ) => {
+    const template =
+      (templateId && getResumeTemplate(templateId)) || pickRandomResumeTemplate();
     const opts = {
       useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
       includeLinkedIn,
+      templateId: template.id,
     };
     const fileName = buildResumeFileName(
       profile,
@@ -253,6 +258,7 @@ const ResumeGenerator: React.FC = () => {
     } else {
       await generateResumePdf(generatedResume!, fileName, profile, opts);
     }
+    return template;
   };
 
   const handleDownload = async (format: ResumeDownloadFormat) => {
@@ -268,6 +274,8 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
+      const template = pickRandomResumeTemplate();
+
       if (user) {
         const storedFileName = buildResumeFileName(
           profile,
@@ -286,6 +294,7 @@ const ResumeGenerator: React.FC = () => {
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
+          p_metadata: { resumeTemplateId: template.id },
         });
 
         if (saveError) {
@@ -295,8 +304,8 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
-      await exportResumeFile(profile, format);
-      toast.success('Resume downloaded and job application saved!');
+      await exportResumeFile(profile, format, template.id);
+      toast.success(`Resume saved · template: ${template.name}`);
     } catch (error: any) {
       console.error('Error downloading resume:', error);
       toast.error(error.message || 'Failed to download resume');
@@ -316,8 +325,8 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      await exportResumeFile(profile, format);
-      toast.success('Resume downloaded successfully!');
+      const template = await exportResumeFile(profile, format);
+      toast.success(`Resume downloaded · template: ${template.name}`);
     } catch (error: any) {
       console.error('Error downloading resume:', error);
       toast.error(error.message || 'Failed to download resume');

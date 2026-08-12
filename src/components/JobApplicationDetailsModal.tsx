@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { X, Building, User, FileText, Download, Link, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Trash2, Copy, Check } from 'lucide-react';
 import { JobApplicationWithDetails } from '../lib/supabase';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -11,6 +11,8 @@ import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileNa
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
 import { parseBoldMarkup } from '../utils/resumeLayout';
+import { getResumeTemplateIdForApplication } from '../utils/applicationMetadata';
+import { getResumeTemplate, pickRandomResumeTemplate } from '../resumeTemplates';
 import ConfirmationModal from './ConfirmationModal';
 
 interface JobApplicationDetailsModalProps {
@@ -42,12 +44,18 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedDescription, setCopiedDescription] = useState(false);
+  /** Keeps template stable after backfill within this modal session. */
+  const [sessionTemplateId, setSessionTemplateId] = useState<string | undefined>();
 
   const { profiles } = useProfiles();
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(applicationProfile);
+
+  useEffect(() => {
+    setSessionTemplateId(getResumeTemplateIdForApplication(application ?? undefined));
+  }, [application?.id, application?.metadata]);
 
   const copyToClipboard = useCallback(async (text: string, setCopiedState: (value: boolean) => void) => {
     try {
@@ -92,14 +100,34 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
           skills: application.generated_skills || [],
         };
 
-        const opts = { useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile) };
+        const savedTemplateId =
+          sessionTemplateId || getResumeTemplateIdForApplication(application);
+        const template =
+          (savedTemplateId && getResumeTemplate(savedTemplateId)) || pickRandomResumeTemplate();
+
+        // Backfill template id for older applications that have no metadata yet
+        if (!savedTemplateId) {
+          setSessionTemplateId(template.id);
+          const { error: metaError } = await supabase.rpc('update_job_application_metadata', {
+            p_application_id: application.id,
+            p_metadata: { resumeTemplateId: template.id },
+          });
+          if (metaError) {
+            console.warn('Could not persist resume template metadata:', metaError);
+          }
+        }
+
+        const opts = {
+          useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile),
+          templateId: template.id,
+        };
         if (format === 'docx') {
           await generateDocx(generatedResumeData, fileName, applicationProfile, opts);
         } else {
           await generateResumePdf(generatedResumeData, fileName, applicationProfile, opts);
         }
 
-        toast.success(`Resume downloaded (${format === 'docx' ? 'Word' : 'PDF'})`);
+        toast.success(`Resume downloaded (${format === 'docx' ? 'Word' : 'PDF'}) · ${template.name}`);
       } catch (error) {
         console.error('Error downloading resume:', error);
         toast.error('Failed to download resume');
@@ -107,7 +135,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         setIsGenerating(false);
       }
     },
-    [application, applicationProfile]
+    [application, applicationProfile, sessionTemplateId]
   );
 
   const handleRejectApplication = useCallback(async () => {

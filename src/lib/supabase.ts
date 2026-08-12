@@ -77,6 +77,8 @@ export interface JobApplication {
   rejected_at?: string;
   withdrawn_at?: string;
   created_at: string;
+  /** Arbitrary JSON (e.g. resumeTemplateId). From job_applications.metadata when loaded via RPC. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface Experience {
@@ -154,6 +156,8 @@ export interface JobApplicationRPC {
   bidder_first_name?: string;
   bidder_last_name?: string;
   bidder_email?: string;
+  /** From job_applications.metadata */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ProfileRPC {

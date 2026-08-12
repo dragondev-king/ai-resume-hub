@@ -1,4 +1,5 @@
 import {
+  AlignmentType,
   Document,
   Packer,
   Paragraph,
@@ -15,42 +16,11 @@ import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { formatDate } from './helpers';
 import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
 import {
-  RESUME_COLORS,
-  RESUME_FONTS,
-  RESUME_SIZES,
-  RESUME_SPACING,
-  RESUME_PAGE_MARGIN_PT,
   buildResumeSkillSections,
   ensureTrailingPeriod,
   parseBoldMarkup,
 } from './resumeLayout';
-
-const FONT_HEADING = RESUME_FONTS.heading;
-const FONT_BODY = RESUME_FONTS.body;
-
-const bodyParagraphSpacing = (after = 120) => ({
-  after,
-  line: RESUME_SPACING.line,
-  lineRule: 'auto' as const,
-});
-
-const bodyRun = (opts: {
-  text: string;
-  bold?: boolean;
-  italics?: boolean;
-  size?: number;
-  color?: string;
-  font?: string;
-}) =>
-  new TextRun({
-    text: opts.text,
-    bold: opts.bold,
-    italics: opts.italics,
-    size: opts.size ?? RESUME_SIZES.body,
-    font: opts.font ?? FONT_BODY,
-    color: opts.color ?? RESUME_COLORS.body,
-    characterSpacing: RESUME_SPACING.charSpacing,
-  });
+import { resolveResumeTheme, type ResumeTheme } from '../resumeTemplates';
 
 interface GeneratedResume {
   summary: string;
@@ -65,6 +35,8 @@ export interface GenerateDocxOptions {
   useAiEnhancedJobTitle?: boolean;
   /** When false, omit LinkedIn from the contact section. Defaults to true. */
   includeLinkedIn?: boolean;
+  /** Force a template id; otherwise a random template is chosen. */
+  templateId?: string;
 }
 
 function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profile): boolean {
@@ -78,16 +50,9 @@ export function normalizeDateForMatch(d?: string): string {
   return (d ?? '').toString().trim().toLowerCase();
 }
 
-/**
- * Match company names bidirectionally so we find profile entries even when AI shortens or rephrases
- * (e.g. profile "Cerner Corporation" vs AI "Cerner", or profile "AIG" vs AI "American International Group").
- */
 export function companiesMatch(a?: string, b?: string): boolean {
   if (!a || !b) return false;
-  const x = a.trim().toLowerCase();
-  const y = b.trim().toLowerCase();
-  if (x === y) return true;
-  return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 type ExperienceEntry = {
@@ -110,11 +75,6 @@ function findMatchingAiExperience(
   );
 }
 
-/**
- * Resolve experience entries for resume display and DOCX export.
- * When useAiEnhancedJobTitle is true, uses AI experience (company, title, dates, bullets).
- * When false, uses profile experience for metadata and AI-matched bullet descriptions only.
- */
 export function resolveResumeExperience(
   originalExperience: ExperienceEntry[],
   aiExperience: ExperienceEntry[],
@@ -144,52 +104,101 @@ const noBorder = {
   right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
 };
 
+function makeBodyRun(theme: ResumeTheme) {
+  return (opts: {
+    text: string;
+    bold?: boolean;
+    italics?: boolean;
+    size?: number;
+    color?: string;
+    font?: string;
+  }) =>
+    new TextRun({
+      text: opts.text,
+      bold: opts.bold,
+      italics: opts.italics,
+      size: opts.size ?? theme.docxSizes.body,
+      font: opts.font ?? theme.fonts.body,
+      color: opts.color ?? theme.colors.body,
+      characterSpacing: theme.spacing.charSpacingDocx,
+    });
+}
+
+function bodyParagraphSpacing(theme: ResumeTheme, after = 120) {
+  return {
+    after,
+    line: theme.spacing.lineDocx,
+    lineRule: 'auto' as const,
+  };
+}
+
 export const generateDocx = async (
   generatedResume: GeneratedResume,
   fileName: string,
   profile?: Profile,
   options?: GenerateDocxOptions
 ): Promise<void> => {
+  const theme = resolveResumeTheme(options?.templateId);
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const bodyRun = makeBodyRun(theme);
+  const t = theme.template;
 
   const children: (Paragraph | Table)[] = [
-    ...createHeader(profile, includeLinkedIn),
+    ...createHeader(theme, bodyRun, profile, includeLinkedIn),
   ];
 
-  if (generatedResume.summary) {
-    children.push(createSectionHeader('SUMMARY'));
-    children.push(
-      new Paragraph({
-        children: parseBoldMarkup(generatedResume.summary).map((seg) =>
-          bodyRun({ text: seg.text, bold: seg.bold, size: RESUME_SIZES.body })
+  const sectionBuilders: Record<string, () => (Paragraph | Table)[]> = {
+    summary: () => {
+      if (!generatedResume.summary) return [];
+      return [
+        createSectionHeader(theme, 'SUMMARY'),
+        new Paragraph({
+          children: parseBoldMarkup(generatedResume.summary).map((seg) =>
+            bodyRun({ text: seg.text, bold: seg.bold, size: theme.docxSizes.body })
+          ),
+          spacing: bodyParagraphSpacing(theme, 200),
+          alignment:
+            t.header.nameAlign === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
+        }),
+      ];
+    },
+    skills: () => {
+      const skills = generatedResume.skills ?? [];
+      if (!skills.length && !skillSections.length) return [];
+      return [
+        createSectionHeader(theme, 'SKILLS'),
+        ...createSkillsSection(theme, bodyRun, skillSections, t.skills.categorized, skills),
+      ];
+    },
+    education: () => {
+      if (!profile?.education?.length) return [];
+      return [
+        createSectionHeader(theme, 'EDUCATION'),
+        ...createEducationSection(theme, bodyRun, profile.education),
+      ];
+    },
+    experience: () => {
+      if (!profile?.experience?.length) return [];
+      return [
+        createSectionHeader(theme, 'EXPERIENCE'),
+        ...createProfessionalExperienceSection(
+          theme,
+          bodyRun,
+          profile.experience,
+          generatedResume.experience,
+          useAiEnhancedJobTitle
         ),
-        spacing: bodyParagraphSpacing(200),
-      })
-    );
+      ];
+    },
+  };
+
+  for (const sectionId of t.sectionOrder) {
+    children.push(...(sectionBuilders[sectionId]?.() ?? []));
   }
 
-  children.push(createSectionHeader('SKILLS'));
-  children.push(...createSkillsSection(skillSections));
-
-  if (profile?.education && profile.education.length > 0) {
-    children.push(createSectionHeader('EDUCATION'));
-    children.push(...createEducationSection(profile.education));
-  }
-
-  if (profile?.experience && profile.experience.length > 0) {
-    children.push(createSectionHeader('EXPERIENCE'));
-    children.push(
-      ...createProfessionalExperienceSection(
-        profile.experience,
-        generatedResume.experience,
-        useAiEnhancedJobTitle
-      )
-    );
-  }
-
-  const marginTwips = RESUME_PAGE_MARGIN_PT * 20; // pt → twips
+  const marginTwips = theme.spacing.marginPt * 20;
   const doc = new Document({
     sections: [
       {
@@ -212,20 +221,33 @@ export const generateDocx = async (
   saveAs(blob, fileName);
 };
 
-const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] => {
-  const name = profile ? `${profile.first_name} ${profile.last_name}`.toUpperCase() : 'PROFESSIONAL RESUME';
-  const title = profile?.title;
+type BodyRunFn = ReturnType<typeof makeBodyRun>;
+
+const createHeader = (
+  theme: ResumeTheme,
+  bodyRun: BodyRunFn,
+  profile?: Profile,
+  includeLinkedIn = true
+): Paragraph[] => {
+  const t = theme.template;
+  const rawName = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
+  const name = t.header.nameTransform === 'uppercase' ? rawName.toUpperCase() : rawName;
+  const align = t.header.nameAlign === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT;
+  const title = t.header.showRole ? profile?.title : undefined;
+
   const paragraphs: Paragraph[] = [
     new Paragraph({
       children: [
         new TextRun({
           text: name,
-          size: RESUME_SIZES.name,
+          size: theme.docxSizes.name,
           bold: true,
-          font: FONT_HEADING,
-          color: RESUME_COLORS.primary,
+          font: theme.fonts.heading,
+          color: theme.colors.primary,
+          characterSpacing: theme.spacing.charSpacingDocx,
         }),
       ],
+      alignment: align,
       spacing: { after: title ? 60 : 200 },
     }),
   ];
@@ -234,99 +256,136 @@ const createHeader = (profile?: Profile, includeLinkedIn = true): Paragraph[] =>
     paragraphs.push(
       new Paragraph({
         children: [
-          new TextRun({
+          bodyRun({
             text: title,
-            size: RESUME_SIZES.title,
+            size: theme.docxSizes.title,
             bold: true,
-            font: FONT_BODY,
-            color: RESUME_COLORS.accent,
+            color: theme.colors.accent,
           }),
         ],
-        // Space between role and contact details
-        spacing: { after: 280 },
+        alignment: align,
+        spacing: { after: 200 },
       })
     );
   }
 
-  if (profile) {
-    const contactParts: { label: string; value: string }[] = [];
-    if (profile.phone) contactParts.push({ label: 'Phone', value: profile.phone });
-    if (profile.email) contactParts.push({ label: 'Email', value: profile.email });
-    if (profile.location) contactParts.push({ label: 'Location', value: profile.location });
-    if (includeLinkedIn && profile.linkedin) contactParts.push({ label: 'LinkedIn', value: profile.linkedin });
-    if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
+  if (!profile) return paragraphs;
 
-    if (contactParts.length) {
-      contactParts.forEach((part, i) => {
-        const isLast = i === contactParts.length - 1;
-        paragraphs.push(
-          new Paragraph({
-            children: [
-              bodyRun({
-                text: `${part.label}: `,
-                size: RESUME_SIZES.contact,
-                bold: true,
-                color: RESUME_COLORS.accent,
-              }),
-              bodyRun({
-                text: part.value,
-                size: RESUME_SIZES.contact,
-              }),
-            ],
-            spacing: bodyParagraphSpacing(isLast ? 120 : 40),
-            ...(isLast
-              ? {
-                  border: {
-                    bottom: {
-                      style: BorderStyle.SINGLE,
-                      size: 12,
-                      color: RESUME_COLORS.primary,
-                      space: 4,
-                    },
-                  },
-                }
-              : {}),
-          })
-        );
-      });
+  const contactParts: { label: string; value: string }[] = [];
+  if (profile.phone) contactParts.push({ label: 'Phone', value: profile.phone });
+  if (profile.email) contactParts.push({ label: 'Email', value: profile.email });
+  if (profile.location) contactParts.push({ label: 'Location', value: profile.location });
+  if (includeLinkedIn && profile.linkedin) contactParts.push({ label: 'LinkedIn', value: profile.linkedin });
+  if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
+  if (!contactParts.length) return paragraphs;
+
+  const contactBorder = t.header.underlineAfterContact
+    ? {
+        bottom: {
+          style: BorderStyle.SINGLE,
+          size: 12,
+          color: theme.colors.primary,
+          space: 4,
+        },
+      }
+    : undefined;
+
+  if (t.contact.layout === 'inline') {
+    const runs: TextRun[] = [];
+    contactParts.forEach((part, i) => {
+      if (i > 0) runs.push(bodyRun({ text: '   |   ', size: theme.docxSizes.contact }));
+      runs.push(
+        bodyRun({
+          text: `${part.label}: `,
+          size: theme.docxSizes.contact,
+          bold: true,
+          color: theme.colors.accent,
+        }),
+        bodyRun({ text: part.value, size: theme.docxSizes.contact })
+      );
+    });
+    paragraphs.push(
+      new Paragraph({
+        children: runs,
+        alignment: align,
+        spacing: bodyParagraphSpacing(theme, 160),
+        border: contactBorder,
+      })
+    );
+  } else {
+    contactParts.forEach((part, i) => {
+      const isLast = i === contactParts.length - 1;
       paragraphs.push(
         new Paragraph({
-          children: [],
-          spacing: { after: 120 },
+          children: [
+            bodyRun({
+              text: `${part.label}: `,
+              size: theme.docxSizes.contact,
+              bold: true,
+              color: theme.colors.accent,
+            }),
+            bodyRun({ text: part.value, size: theme.docxSizes.contact }),
+          ],
+          alignment: align,
+          spacing: bodyParagraphSpacing(theme, isLast ? 120 : 40),
+          border: isLast ? contactBorder : undefined,
         })
       );
-    }
+    });
   }
 
+  paragraphs.push(new Paragraph({ children: [], spacing: { after: 120 } }));
   return paragraphs;
 };
 
-const createSectionHeader = (title: string): Paragraph => {
+const createSectionHeader = (theme: ResumeTheme, title: string): Paragraph => {
+  const label = theme.template.sectionStyle.allCaps ? title.toUpperCase() : title;
   return new Paragraph({
     children: [
       new TextRun({
-        text: title,
-        size: RESUME_SIZES.section,
+        text: label,
+        size: theme.docxSizes.section,
         bold: true,
-        font: FONT_HEADING,
-        color: RESUME_COLORS.primary,
-        allCaps: true,
+        font: theme.fonts.heading,
+        color: theme.colors.primary,
+        characterSpacing: theme.spacing.charSpacingDocx,
       }),
     ],
     spacing: { before: 240, after: 120 },
-    border: {
-      bottom: {
-        style: BorderStyle.SINGLE,
-        size: 8,
-        color: RESUME_COLORS.accent,
-        space: 4,
-      },
-    },
+    border: theme.template.sectionStyle.underline
+      ? {
+          bottom: {
+            style: BorderStyle.SINGLE,
+            size: 8,
+            color: theme.colors.accent,
+            space: 4,
+          },
+        }
+      : undefined,
   });
 };
 
-const createSkillsSection = (sections: { label: string; skills: string[] }[]): Paragraph[] => {
+const createSkillsSection = (
+  theme: ResumeTheme,
+  bodyRun: BodyRunFn,
+  sections: { label: string; skills: string[] }[],
+  categorized: boolean,
+  flatSkills: string[]
+): Paragraph[] => {
+  if (!categorized) {
+    const skills = flatSkills.length
+      ? Array.from(new Set(flatSkills))
+      : sections.flatMap((s) => s.skills);
+    if (!skills.length) return [];
+    return [
+      new Paragraph({
+        children: [bodyRun({ text: skills.join(', ') })],
+        spacing: bodyParagraphSpacing(theme, 80),
+      }),
+    ];
+  }
+
   return sections.map(
     (cat) =>
       new Paragraph({
@@ -334,7 +393,7 @@ const createSkillsSection = (sections: { label: string; skills: string[] }[]): P
           bodyRun({ text: `${cat.label}: `, bold: true }),
           bodyRun({ text: cat.skills.join(', ') }),
         ],
-        spacing: bodyParagraphSpacing(80),
+        spacing: bodyParagraphSpacing(theme, 80),
       })
   );
 };
@@ -352,17 +411,13 @@ const createTwoColumnRow = (leftParas: Paragraph[], rightParas: Paragraph[]): Ta
             width: { size: leftWidth, type: WidthType.DXA },
             borders: noBorder,
             verticalAlign: VerticalAlign.TOP,
-            children: leftParas.length
-              ? leftParas
-              : [new Paragraph({ children: [] })],
+            children: leftParas.length ? leftParas : [new Paragraph({ children: [] })],
           }),
           new TableCell({
             width: { size: rightWidth, type: WidthType.DXA },
             borders: noBorder,
             verticalAlign: VerticalAlign.TOP,
-            children: rightParas.length
-              ? rightParas
-              : [new Paragraph({ children: [] })],
+            children: rightParas.length ? rightParas : [new Paragraph({ children: [] })],
           }),
         ],
       }),
@@ -371,12 +426,16 @@ const createTwoColumnRow = (leftParas: Paragraph[], rightParas: Paragraph[]): Ta
 };
 
 const createProfessionalExperienceSection = (
+  theme: ResumeTheme,
+  bodyRun: BodyRunFn,
   originalExperience: any[],
   aiExperience: any[],
   useAiEnhancedJobTitle: boolean
 ): (Paragraph | Table)[] => {
   const blocks: (Paragraph | Table)[] = [];
   const entries = resolveResumeExperience(originalExperience, aiExperience, useAiEnhancedJobTitle);
+  const twoColumn = theme.template.experience.layout === 'twoColumn';
+  const showAddress = theme.template.experience.showAddress;
 
   entries.forEach((exp, index) => {
     const jobTitle = exp.position ?? '';
@@ -387,92 +446,141 @@ const createProfessionalExperienceSection = (
       blocks.push(new Paragraph({ children: [], spacing: { before: 160 } }));
     }
 
-    // Company name — full width, bold teal
     blocks.push(
       new Paragraph({
         children: [
           bodyRun({
             text: exp.company ?? '',
-            size: RESUME_SIZES.experienceHeading,
+            size: theme.docxSizes.experienceHeading,
             bold: true,
-            color: RESUME_COLORS.primary,
+            color: theme.colors.primary,
           }),
         ],
-        spacing: bodyParagraphSpacing(40),
+        spacing: bodyParagraphSpacing(theme, 40),
       })
     );
 
-    const leftParas: Paragraph[] = [];
-    if (dateRange) {
-      leftParas.push(
-        new Paragraph({
-          children: [
-            bodyRun({
-              text: dateRange,
-              size: RESUME_SIZES.experienceMeta,
-              bold: true,
-              color: RESUME_COLORS.primary,
-            }),
-          ],
-          spacing: bodyParagraphSpacing(20),
-        })
-      );
-    }
-    if (exp.address) {
-      leftParas.push(
-        new Paragraph({
-          children: [
-            bodyRun({
-              text: exp.address,
-              color: RESUME_COLORS.muted,
-            }),
-          ],
-          spacing: bodyParagraphSpacing(0),
-        })
-      );
-    }
-
-    const rightParas: Paragraph[] = [
-      new Paragraph({
-        children: [
-          bodyRun({
-            text: jobTitle,
-            size: RESUME_SIZES.experienceHeading,
-            bold: true,
-          }),
-        ],
-        spacing: bodyParagraphSpacing(80),
-      }),
-    ];
-
-    for (const description of descriptions) {
-      const text = ensureTrailingPeriod(description);
-      const segments = parseBoldMarkup(text);
-      rightParas.push(
-        new Paragraph({
-          children: [
-            bodyRun({ text: '• ', size: RESUME_SIZES.experienceBullet }),
-            ...segments.map((seg) =>
+    if (twoColumn) {
+      const leftParas: Paragraph[] = [];
+      if (dateRange) {
+        leftParas.push(
+          new Paragraph({
+            children: [
               bodyRun({
-                text: seg.text,
-                size: RESUME_SIZES.experienceBullet,
-                bold: seg.bold,
-              })
-            ),
-          ],
-          spacing: bodyParagraphSpacing(60),
-        })
-      );
-    }
+                text: dateRange,
+                size: theme.docxSizes.experienceMeta,
+                bold: true,
+                color: theme.colors.primary,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(theme, 20),
+          })
+        );
+      }
+      if (showAddress && exp.address) {
+        leftParas.push(
+          new Paragraph({
+            children: [bodyRun({ text: exp.address, color: theme.colors.muted })],
+            spacing: bodyParagraphSpacing(theme, 0),
+          })
+        );
+      }
 
-    blocks.push(createTwoColumnRow(leftParas, rightParas));
+      const rightParas: Paragraph[] = [
+        new Paragraph({
+          children: [
+            bodyRun({
+              text: jobTitle,
+              size: theme.docxSizes.experienceHeading,
+              bold: true,
+            }),
+          ],
+          spacing: bodyParagraphSpacing(theme, 80),
+        }),
+      ];
+
+      for (const description of descriptions) {
+        const text = ensureTrailingPeriod(description);
+        rightParas.push(
+          new Paragraph({
+            children: [
+              bodyRun({ text: '• ', size: theme.docxSizes.experienceBullet }),
+              ...parseBoldMarkup(text).map((seg) =>
+                bodyRun({
+                  text: seg.text,
+                  size: theme.docxSizes.experienceBullet,
+                  bold: seg.bold,
+                })
+              ),
+            ],
+            spacing: bodyParagraphSpacing(theme, 60),
+          })
+        );
+      }
+
+      blocks.push(createTwoColumnRow(leftParas, rightParas));
+    } else {
+      if (jobTitle) {
+        blocks.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: jobTitle,
+                size: theme.docxSizes.experienceHeading,
+                bold: true,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(theme, 40),
+          })
+        );
+      }
+      const metaBits = [dateRange, showAddress ? exp.address : ''].filter(Boolean);
+      if (metaBits.length) {
+        blocks.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: metaBits.join('  ·  '),
+                size: theme.docxSizes.experienceMeta,
+                italics: true,
+                color: theme.colors.muted,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(theme, 60),
+          })
+        );
+      }
+      for (const description of descriptions) {
+        const text = ensureTrailingPeriod(description);
+        blocks.push(
+          new Paragraph({
+            children: [
+              bodyRun({ text: '• ', size: theme.docxSizes.experienceBullet }),
+              ...parseBoldMarkup(text).map((seg) =>
+                bodyRun({
+                  text: seg.text,
+                  size: theme.docxSizes.experienceBullet,
+                  bold: seg.bold,
+                })
+              ),
+            ],
+            spacing: bodyParagraphSpacing(theme, 60),
+          })
+        );
+      }
+    }
   });
 
   return blocks;
 };
 
-const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
+const createEducationSection = (
+  theme: ResumeTheme,
+  bodyRun: BodyRunFn,
+  education: any[]
+): (Paragraph | Table)[] => {
   const blocks: (Paragraph | Table)[] = [];
+  const twoColumn = theme.template.experience.layout === 'twoColumn';
 
   education.forEach((edu, index) => {
     if (index > 0) {
@@ -482,52 +590,71 @@ const createEducationSection = (education: any[]): (Paragraph | Table)[] => {
     const degreeText = [edu.degree, edu.field].filter(Boolean).join(' in ');
     const dateRange = formatDateRange(edu.start_date, edu.end_date);
 
-    const leftParas: Paragraph[] = [];
-    if (dateRange) {
-      leftParas.push(
-        new Paragraph({
-          children: [
-            bodyRun({
-              text: dateRange,
-              bold: true,
-              color: RESUME_COLORS.primary,
-            }),
-          ],
-          spacing: bodyParagraphSpacing(20),
-        })
-      );
+    if (twoColumn) {
+      const leftParas: Paragraph[] = [];
+      if (dateRange) {
+        leftParas.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: dateRange,
+                bold: true,
+                color: theme.colors.primary,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(theme, 20),
+          })
+        );
+      }
+      const rightParas: Paragraph[] = [];
+      if (degreeText) {
+        rightParas.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: degreeText,
+                bold: true,
+                color: theme.colors.primary,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(theme, 20),
+          })
+        );
+      }
+      if (edu.school) {
+        rightParas.push(
+          new Paragraph({
+            children: [bodyRun({ text: edu.school, color: theme.colors.accent })],
+            spacing: bodyParagraphSpacing(theme, 0),
+          })
+        );
+      }
+      blocks.push(createTwoColumnRow(leftParas, rightParas));
+    } else {
+      if (degreeText) {
+        blocks.push(
+          new Paragraph({
+            children: [
+              bodyRun({
+                text: degreeText,
+                bold: true,
+                color: theme.colors.primary,
+              }),
+            ],
+            spacing: bodyParagraphSpacing(theme, 20),
+          })
+        );
+      }
+      const schoolLine = [edu.school, dateRange].filter(Boolean).join('  ·  ');
+      if (schoolLine) {
+        blocks.push(
+          new Paragraph({
+            children: [bodyRun({ text: schoolLine, color: theme.colors.muted })],
+            spacing: bodyParagraphSpacing(theme, 40),
+          })
+        );
+      }
     }
-
-    const rightParas: Paragraph[] = [];
-    if (degreeText) {
-      rightParas.push(
-        new Paragraph({
-          children: [
-            bodyRun({
-              text: degreeText,
-              bold: true,
-              color: RESUME_COLORS.primary,
-            }),
-          ],
-          spacing: bodyParagraphSpacing(20),
-        })
-      );
-    }
-    if (edu.school) {
-      rightParas.push(
-        new Paragraph({
-          children: [
-            bodyRun({
-              text: edu.school,
-              color: RESUME_COLORS.accent,
-            }),
-          ],
-          spacing: bodyParagraphSpacing(0),
-        })
-      );
-    }
-
-    blocks.push(createTwoColumnRow(leftParas, rightParas));
   });
 
   return blocks;
