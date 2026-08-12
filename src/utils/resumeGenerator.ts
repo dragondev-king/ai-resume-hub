@@ -22,6 +22,48 @@ export type AIProvider = 'openai' | 'claude';
 
 type CompanyReplacement = { company: string; address: string };
 
+/** Normalize messy AI/profile description fields into a bullet array. */
+export function normalizeDescriptions(exp: any): string[] {
+  if (!exp || typeof exp !== 'object') return [];
+
+  const fromArray = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object' && typeof (item as any).text === 'string') {
+          return String((item as any).text).trim();
+        }
+        return '';
+      })
+      .filter(Boolean);
+  };
+
+  const fromDescriptions = fromArray(exp.descriptions);
+  if (fromDescriptions.length) return fromDescriptions;
+
+  const fromBullets = fromArray(exp.bullets);
+  if (fromBullets.length) return fromBullets;
+
+  const fromAchievements = fromArray(exp.achievements);
+  if (fromAchievements.length) return fromAchievements;
+
+  if (typeof exp.description === 'string' && exp.description.trim()) {
+    const text = exp.description.trim();
+    const lines = text
+      .split(/\n+/)
+      .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
+      .filter(Boolean);
+    return lines.length > 1 ? lines : [text];
+  }
+
+  if (Array.isArray(exp.description)) {
+    return fromArray(exp.description);
+  }
+
+  return [];
+}
+
 export const generateResume = async (
   profile: Profile,
   jobDescription: string,
@@ -77,66 +119,45 @@ const parseAIResponse = (
 
     console.log(parsed, '=== parsed');
 
-    if (!Array.isArray(parsed.experience) || parsed.experience.length === 0) {
+    const aiExperience = Array.isArray(parsed.experience)
+      ? (parsed.experience as any[])
+      : [];
+    const originalExperience = originalProfile.experience || [];
+
+    if (!aiExperience.length && !originalExperience.length) {
       throw new Error('AI response did not include any experience entries');
     }
 
-    const aiExperience = parsed.experience as GeneratedResume['experience'];
-    const originalExperience = originalProfile.experience || [];
+    // Always merge by index so company renames never wipe bullets
+    const rowCount = Math.max(aiExperience.length, originalExperience.length);
+    const experience: GeneratedResume['experience'] = [];
 
-    let experience: GeneratedResume['experience'];
+    for (let index = 0; index < rowCount; index++) {
+      const original = originalExperience[index];
+      const aiExp = aiExperience[index] || {};
+      const replacement = tailorCompanyNames && index < 2 ? replacements[index] : undefined;
+      const descriptions = normalizeDescriptions(aiExp);
+      const fallbackDescriptions = normalizeDescriptions(original);
 
-    if (tailorCompanyNames) {
-      experience = aiExperience.map((aiExp, index) => {
-        const original = originalExperience[index];
-        const replacement = replacements[index];
-        return {
-          position: aiExp.position || original?.position || '',
-          // Prefer researched replacement companies for the first two roles
-          company: replacement?.company || aiExp.company || original?.company || '',
-          start_date: aiExp.start_date || original?.start_date || '',
-          end_date: aiExp.end_date || original?.end_date || '',
-          address: replacement?.address || aiExp.address || original?.address || '',
-          descriptions: Array.isArray(aiExp.descriptions)
-            ? aiExp.descriptions.filter((d) => typeof d === 'string' && d.trim())
-            : [],
-        };
-      });
-    } else {
-      experience = originalExperience.map((exp, index) => {
-        const aiExp = aiExperience[index];
-        return {
-          position: exp.position,
-          company: exp.company,
-          start_date: exp.start_date,
-          end_date: exp.end_date,
-          address: exp.address,
-          descriptions: aiExp?.descriptions?.length
-            ? aiExp.descriptions.filter((d) => typeof d === 'string' && d.trim())
-            : exp.description
-              ? [exp.description]
-              : [],
-        };
+      experience.push({
+        position: tailorCompanyNames
+          ? aiExp.position || original?.position || ''
+          : original?.position || aiExp.position || '',
+        company: replacement?.company
+          || (tailorCompanyNames ? aiExp.company || original?.company || '' : original?.company || aiExp.company || ''),
+        start_date: original?.start_date || aiExp.start_date || '',
+        end_date: original?.end_date || aiExp.end_date || '',
+        address: replacement?.address
+          || (tailorCompanyNames ? aiExp.address || original?.address || '' : original?.address || aiExp.address || ''),
+        descriptions: descriptions.length ? descriptions : fallbackDescriptions,
       });
     }
 
-    // If AI returned fewer rows than the profile, pad from profile so the UI is never blank
-    if (experience.length < originalExperience.length) {
-      for (let i = experience.length; i < originalExperience.length; i++) {
-        const exp = originalExperience[i];
-        experience.push({
-          position: exp.position,
-          company: exp.company,
-          start_date: exp.start_date,
-          end_date: exp.end_date,
-          address: exp.address,
-          descriptions: exp.description ? [exp.description] : [],
-        });
-      }
-    }
-
-    if (!experience.length) {
-      throw new Error('Parsed resume has no experience entries');
+    const missingBullets = experience.filter((exp) => !exp.descriptions.length).length;
+    if (missingBullets === experience.length && experience.length > 0) {
+      throw new Error(
+        'Resume was generated without experience bullet points. Please try again.'
+      );
     }
 
     const enhancedData: GeneratedResume = {
@@ -158,12 +179,12 @@ const parseAIResponse = (
         aiResponse.substring(Math.max(0, aiResponse.length - 500))
       );
       if (!aiResponse.trim().endsWith('}')) {
-        throw new Error(
-          'Resume generation was truncated before completion. Please try again.'
-        );
+        throw new Error('Resume generation was truncated before completion. Please try again.');
       }
     }
-    toast.error('An error occurred while parsing the AI response');
+    toast.error(
+      error instanceof Error ? error.message : 'An error occurred while parsing the AI response'
+    );
     throw error instanceof Error
       ? error
       : new Error('An error occurred while parsing the AI response');

@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume, AIProvider } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
-import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
+import { generateDocx } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
@@ -579,19 +579,8 @@ const ResumeGenerator: React.FC = () => {
   const currentResume = isEditing ? editingResume : generatedResume;
   console.log(currentResume, '=== currentResume')
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
-  const useAiEnhancedJobTitle =
-    generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile);
-  /** When companies were substituted, always show the generated experience as-is (do not rematch to profile). */
-  const previewExperience =
-    currentResume == null
-      ? []
-      : isEditing || generatedWithTailoredCompanies
-        ? currentResume.experience
-        : resolveResumeExperience(
-            profile?.experience ?? [],
-            currentResume.experience,
-            useAiEnhancedJobTitle
-          );
+  /** Generator preview shows the generated payload as-is (export still uses resolveResumeExperience). */
+  const previewExperience = currentResume?.experience ?? [];
 
   if (profilesLoading) {
     return (
