@@ -49,6 +49,9 @@ const ResumeGenerator: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
+  const [tailorCompanyNames, setTailorCompanyNames] = useState(false);
+  /** True when the current generated resume used company/role name tailoring. */
+  const [generatedWithTailoredCompanies, setGeneratedWithTailoredCompanies] = useState(false);
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [loading, setLoading] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
@@ -111,7 +114,7 @@ const ResumeGenerator: React.FC = () => {
     setLoading(true);
     try {
       // Generate AI resume with job title and company name extraction
-      const generated = await generateResume(profile, jobDescription, aiProvider);
+      const generated = await generateResume(profile, jobDescription, aiProvider, tailorCompanyNames);
 
       console.log(generated, '=== generated')
 
@@ -142,6 +145,7 @@ const ResumeGenerator: React.FC = () => {
         setIsApplicationEligible(true);
       }
 
+      setGeneratedWithTailoredCompanies(tailorCompanyNames);
       setGeneratedResume(generated);
       setEditingResume(generated);
       setIsEditing(false);
@@ -254,7 +258,8 @@ const ResumeGenerator: React.FC = () => {
     const template =
       (templateId && getResumeTemplate(templateId)) || pickRandomResumeTemplate();
     const opts = {
-      useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
+      useAiEnhancedJobTitle:
+        generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile),
       includeLinkedIn,
       templateId: template.id,
     };
@@ -305,7 +310,10 @@ const ResumeGenerator: React.FC = () => {
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
-          p_metadata: { resumeTemplateId: template.id },
+          p_metadata: {
+            resumeTemplateId: template.id,
+            tailorCompanyNames: generatedWithTailoredCompanies,
+          },
         });
 
         if (saveError) {
@@ -563,13 +571,16 @@ const ResumeGenerator: React.FC = () => {
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
     setIncludeLinkedIn(true);
+    setTailorCompanyNames(false);
+    setGeneratedWithTailoredCompanies(false);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
   console.log(currentResume, '=== currentResume')
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
+  const useAiEnhancedJobTitle =
+    generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile);
 
   if (profilesLoading) {
     return (
@@ -639,7 +650,26 @@ const ResumeGenerator: React.FC = () => {
             )}
           </div>
 
-
+          {/* Tailor company / role names */}
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                type="checkbox"
+                id="tailor_company_names"
+                checked={tailorCompanyNames}
+                onChange={(e) => setTailorCompanyNames(e.target.checked)}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+            </div>
+            <div className="ml-3 text-sm">
+              <label htmlFor="tailor_company_names" className="font-medium text-gray-700">
+                Tailor company names and role titles
+              </label>
+              <p className="text-gray-500">
+                When enabled, researches the target employer and replaces the last two companies with similar-sized peers in the same industry (preferring a rival for the most recent), and also tailors role titles. When disabled, only experience bullet points are tailored.
+              </p>
+            </div>
+          </div>
 
           {/* Job Description Link */}
           <div>

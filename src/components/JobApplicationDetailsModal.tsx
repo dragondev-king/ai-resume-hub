@@ -11,7 +11,7 @@ import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileNa
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
 import { parseBoldMarkup } from '../utils/resumeLayout';
-import { getResumeTemplateIdForApplication } from '../utils/applicationMetadata';
+import { getResumeTemplateIdForApplication, getTailorCompanyNamesForApplication } from '../utils/applicationMetadata';
 import { getResumeTemplate, pickRandomResumeTemplate } from '../resumeTemplates';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -51,7 +51,9 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(applicationProfile);
+  const tailoredCompanyNames = getTailorCompanyNamesForApplication(application ?? undefined);
+  const useAiEnhancedJobTitle =
+    tailoredCompanyNames || getUseAiEnhancedJobTitleForProfile(applicationProfile);
 
   useEffect(() => {
     setSessionTemplateId(getResumeTemplateIdForApplication(application ?? undefined));
@@ -118,7 +120,9 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         }
 
         const opts = {
-          useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile),
+          useAiEnhancedJobTitle:
+            getTailorCompanyNamesForApplication(application) ||
+            getUseAiEnhancedJobTitleForProfile(applicationProfile),
           templateId: template.id,
         };
         if (format === 'docx') {

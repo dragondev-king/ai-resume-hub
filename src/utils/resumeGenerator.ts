@@ -24,7 +24,8 @@ export type AIProvider = 'openai' | 'claude';
 export const generateResume = async (
   profile: Profile,
   jobDescription: string,
-  provider: AIProvider = 'openai'
+  provider: AIProvider = 'openai',
+  tailorCompanyNames: boolean = false
 ): Promise<GeneratedResume> => {
   try {
     const response = await fetch('/api/generate-resume', {
@@ -36,6 +37,7 @@ export const generateResume = async (
         profile,
         jobDescription,
         provider,
+        tailorCompanyNames,
       }),
     });
 
@@ -48,7 +50,7 @@ export const generateResume = async (
     const aiResponse = data.aiResponse;
     
     // Parse the AI response and enhance the resume data
-    const enhancedData = parseAIResponse(profile, aiResponse);
+    const enhancedData = parseAIResponse(profile, aiResponse, tailorCompanyNames);
     
     return enhancedData;
   } catch (error) {
@@ -71,7 +73,11 @@ export const generateResume = async (
   }
 };
 
-const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<string, unknown>): GeneratedResume => {
+const parseAIResponse = (
+  originalProfile: Profile,
+  aiResponse: string | Record<string, unknown>,
+  tailorCompanyNames: boolean = false
+): GeneratedResume => {
   try {
     const parsed =
       typeof aiResponse === 'string'
@@ -79,18 +85,42 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
         : aiResponse;
 
     console.log(parsed, '=== parsed')
-    
-    // Validate and enhance the parsed data
-    const enhancedData: GeneratedResume = {
-      summary: (parsed.summary as string) || originalProfile.summary || '',
-      experience: (parsed.experience as GeneratedResume['experience']) || originalProfile.experience.map(exp => ({
+
+    const aiExperience =
+      (parsed.experience as GeneratedResume['experience']) ||
+      originalProfile.experience.map((exp) => ({
         position: exp.position,
         company: exp.company,
         start_date: exp.start_date,
         end_date: exp.end_date,
         descriptions: exp.description ? [exp.description] : [],
-        address: exp.address
-      })),
+        address: exp.address,
+      }));
+
+    // When company/role tailoring is off, lock company + position (+ dates/address) to the profile
+    // so only bullet points / summary / skills are AI-rewritten.
+    const experience = tailorCompanyNames
+      ? aiExperience
+      : originalProfile.experience.map((exp, index) => {
+          const aiExp = aiExperience[index];
+          return {
+            position: exp.position,
+            company: exp.company,
+            start_date: exp.start_date,
+            end_date: exp.end_date,
+            address: exp.address,
+            descriptions: aiExp?.descriptions?.length
+              ? aiExp.descriptions
+              : exp.description
+                ? [exp.description]
+                : [],
+          };
+        });
+    
+    // Validate and enhance the parsed data
+    const enhancedData: GeneratedResume = {
+      summary: (parsed.summary as string) || originalProfile.summary || '',
+      experience,
       skills: (parsed.skills as string[]) || originalProfile.skills,
       jobTitle: (parsed.jobTitle as string) || '',
       companyName: (parsed.companyName as string) || ''
@@ -117,7 +147,6 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
     };
   }
 };
-
 const parseJsonResponse = (aiResponse: string): Record<string, unknown> => {
   let jsonString = aiResponse.trim();
 

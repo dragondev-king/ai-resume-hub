@@ -12,8 +12,14 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const SYSTEM_PROMPT =
-  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).';
+const SYSTEM_PROMPT_BASE =
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).';
+
+const SYSTEM_PROMPT_KEEP_COMPANIES =
+  `${SYSTEM_PROMPT_BASE} CRITICAL: Tailor only experience bullet points (and summary/skills). Keep every original company name and job title/position exactly as provided — do not rename employers or roles.`;
+
+const SYSTEM_PROMPT_TAILOR_COMPANIES =
+  `${SYSTEM_PROMPT_BASE} CRITICAL: Also tailor company names and role/job titles. Research the target employer from the job description (industry, business type, approximate size). Replace the candidate's two most recent employers with real similar-sized companies in that same industry; prefer a direct rival/competitor of the target company for the most recent employer. Never list the target company itself as a past employer. Update addresses to match the replacement companies when known.`;
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
@@ -55,6 +61,7 @@ interface RequestBody {
   profile: any;
   jobDescription: string;
   provider?: AIProvider;
+  tailorCompanyNames?: boolean;
 }
 
 export default async function handler(
@@ -66,7 +73,12 @@ export default async function handler(
   }
 
   try {
-    const { profile, jobDescription, provider = 'openai' } = req.body as RequestBody;
+    const {
+      profile,
+      jobDescription,
+      provider = 'openai',
+      tailorCompanyNames = false,
+    } = req.body as RequestBody;
 
     if (!profile || !jobDescription) {
       return res.status(400).json({ error: 'Missing required fields: profile and jobDescription' });
@@ -90,11 +102,14 @@ export default async function handler(
       });
     }
 
-    const prompt = createAIPrompt(profile, jobDescription);
+    const prompt = createAIPrompt(profile, jobDescription, Boolean(tailorCompanyNames));
+    const systemPrompt = Boolean(tailorCompanyNames)
+      ? SYSTEM_PROMPT_TAILOR_COMPANIES
+      : SYSTEM_PROMPT_KEEP_COMPANIES;
     const aiResponse =
       provider === 'claude'
-        ? await generateWithClaude(prompt)
-        : await generateWithOpenAI(prompt);
+        ? await generateWithClaude(prompt, systemPrompt)
+        : await generateWithOpenAI(prompt, systemPrompt);
 
     return res.status(200).json({
       success: true,
@@ -110,11 +125,11 @@ export default async function handler(
   }
 }
 
-async function generateWithOpenAI(prompt: string): Promise<string> {
+async function generateWithOpenAI(prompt: string, systemPrompt: string): Promise<string> {
   const completion = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt },
     ],
     response_format: { type: 'json_object' },
@@ -125,11 +140,11 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
   return completion.choices[0]?.message?.content || '';
 }
 
-async function generateWithClaude(prompt: string): Promise<string> {
+async function generateWithClaude(prompt: string, systemPrompt: string): Promise<string> {
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 5000,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     messages: [{ role: 'user', content: prompt }],
     output_config: {
       format: {
@@ -149,7 +164,36 @@ function extractClaudeTextContent(message: Anthropic.Message): string {
     .join('');
 }
 
-const createAIPrompt = (profile: any, jobDescription: string): string => {
+const createAIPrompt = (
+  profile: any,
+  jobDescription: string,
+  tailorCompanyNames: boolean
+): string => {
+  const companyAndRoleInstructions = tailorCompanyNames
+    ? `
+4. COMPANY NAME & ROLE RESEARCH (REQUIRED — tailorCompanyNames is ON):
+   - Identify the target company the candidate is applying to from the job description
+   - Infer what kind of business it is: industry, products/services, business model, and approximate company size (startup / mid-market / enterprise)
+   - Using your knowledge, choose REAL companies of similar size in the SAME industry to replace the candidate's TWO MOST RECENT employers (usually the first two entries when experience is newest-first)
+   - MOST RECENT employer (first of those two): prefer a direct rival/competitor of the target company when a credible one exists
+   - SECOND MOST RECENT employer: another similar-sized company in the same industry (not the target company, and ideally not the same as the rival you just chose)
+   - NEVER use the target company itself as a past employer
+   - Keep all earlier employers (beyond the two most recent) EXACTLY as provided
+   - Update "address" for replaced companies to a plausible real HQ or major office location for that company when known; otherwise keep a realistic city/region for that industry
+   - Also tailor "position" / role titles:
+     - Most recent: closely match or sit one step below the target job title
+     - Earlier roles: show clear progression toward the target role
+     - Use industry-standard titles aligned with the target position
+   - Keep start_date / end_date and the number of experience entries identical to the original
+`
+    : `
+4. COMPANY NAMES & ROLE TITLES (REQUIRED — tailorCompanyNames is OFF):
+   - Keep EVERY company name EXACTLY as provided in ORIGINAL EXPERIENCE
+   - Keep EVERY position / job title EXACTLY as provided in ORIGINAL EXPERIENCE
+   - Keep addresses and dates as provided
+   - Only rewrite bullet point descriptions (and summary/skills) — do not rename employers or roles
+`;
+
   return `
 Please create a highly tailored resume for the following job description. The goal is to position the candidate as an ideal fit for this specific role, even if their original experience doesn't perfectly match.
 
@@ -183,9 +227,9 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Industry-specific terminology
    - Desired qualifications and experience level
    - Company culture and values mentioned
+   ${tailorCompanyNames ? '- Target company industry, business type, and approximate size (needed for employer substitution)' : ''}
 
 2. TRANSFORM each work experience to align with the target role:
-   - Adjust job titles to show progression toward the target position
    - Rewrite bullet points to emphasize relevant skills and achievements
    - Include specific technologies, tools, and methodologies mentioned in the job description
    - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
@@ -199,13 +243,7 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Highlight leadership, project management, and collaboration skills that are universally valuable
    - Show how past experiences demonstrate the ability to learn and adapt to new technologies
    - Create bullet points that showcase the candidate's potential to excel in the target role
-
-4. JOB TITLE STRATEGY:
-   - Most recent position: Make it closely match or be one step below the target job title
-   - Previous positions: Show clear career progression toward the target role
-   - Use industry-standard titles that align with the target position
-   - Keep company names exactly as provided
-
+${companyAndRoleInstructions}
 Please provide the following in JSON format:
 
 1. Extract the job title and company name from the job description
@@ -228,14 +266,23 @@ Please provide the following in JSON format:
 
 EXAMPLE OF TAILORING:
 If applying for "Ruby on Rails Developer" and original experience was in "Web Development":
-- Adjust title to "Ruby on Rails Developer"
+- Adjust title to "Ruby on Rails Developer"${tailorCompanyNames ? '' : ' ONLY if tailorCompanyNames is ON — otherwise keep the original title'}
 - Include bullet points about web development, database management, API development
 - Emphasize experience with similar frameworks (if any) or rapid learning abilities
 - Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
-
+${tailorCompanyNames ? `
+EXAMPLE OF COMPANY SUBSTITUTION (when tailorCompanyNames is ON):
+If applying to Stripe (fintech payments, large scale):
+- Most recent employer → a rival like Adyen or Square/Block (similar industry & scale), with a tailored role title
+- Second most recent → another similar-sized fintech/payments company (not Stripe)
+- Older employers → keep original company names unchanged
+` : ''}
 IMPORTANT JSON FORMATTING RULES:
 - Respond with ONLY valid JSON - no markdown code blocks, no extra text
-- Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
+- The generated number of positions must be the same as the original experience
+${tailorCompanyNames
+    ? '- For the two most recent roles, company names (and preferably addresses) SHOULD change per the research rules above; keep older company names unchanged. Role titles SHOULD be tailored.'
+    : '- Keep all original company names and job titles unchanged. Only tailor descriptions, summary, and skills.'}
 - Must follow the response format exactly.
 
 Response format:
@@ -245,8 +292,8 @@ Response format:
   "summary": "Professional summary tailored to this specific role...",
   "experience": [
     {
-      "position": "Tailored Job Title",
-      "company": "Company Name", 
+      "position": "${tailorCompanyNames ? 'Tailored Job Title' : 'Original Job Title (unchanged)'}",
+      "company": "${tailorCompanyNames ? 'Researched similar/rival company for recent roles; original otherwise' : 'Original Company Name (unchanged)'}",
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",
       "address": "Company Address",
