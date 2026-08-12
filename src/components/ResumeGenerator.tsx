@@ -666,7 +666,7 @@ const ResumeGenerator: React.FC = () => {
                 Tailor company names and role titles
               </label>
               <p className="text-gray-500">
-                When enabled, researches the target employer and replaces the last two companies with similar-sized peers in the same industry (preferring a rival for the most recent), and also tailors role titles. When disabled, only experience bullet points are tailored.
+                When enabled, researches the target employer and replaces the last two companies with mid-sized, lesser-known peers in the same industry (preferring a rival for the most recent — not famous giants), and also tailors role titles. When disabled, only experience bullet points are tailored.
               </p>
             </div>
           </div>

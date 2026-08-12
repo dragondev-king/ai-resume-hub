@@ -27,50 +27,38 @@ export const generateResume = async (
   provider: AIProvider = 'openai',
   tailorCompanyNames: boolean = false
 ): Promise<GeneratedResume> => {
-  try {
-    const response = await fetch('/api/generate-resume', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        profile,
-        jobDescription,
-        provider,
-        tailorCompanyNames,
-      }),
-    });
+  const response = await fetch('/api/generate-resume', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      profile,
+      jobDescription,
+      provider,
+      tailorCompanyNames,
+    }),
+  });
 
-    if (!response.ok) {
+  if (!response.ok) {
+    let message = 'Failed to generate resume';
+    try {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate resume');
+      message = errorData.details || errorData.error || message;
+    } catch {
+      // ignore JSON parse errors on error body
     }
-
-    const data = await response.json();
-    const aiResponse = data.aiResponse;
-    
-    // Parse the AI response and enhance the resume data
-    const enhancedData = parseAIResponse(profile, aiResponse, tailorCompanyNames);
-    
-    return enhancedData;
-  } catch (error) {
-    console.error('Error generating resume with AI:', error);
-    // Return the original data if AI generation fails
-    return {
-      summary: profile.summary || '',
-      experience: profile.experience.map(exp => ({
-        position: exp.position,
-        company: exp.company,
-        start_date: exp.start_date,
-        end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : [],
-        address: exp.address
-      })),
-      skills: profile.skills,
-      jobTitle: '',
-      companyName: ''
-    };
+    throw new Error(message);
   }
+
+  const data = await response.json();
+  const aiResponse = data.aiResponse;
+
+  if (!aiResponse || (typeof aiResponse === 'string' && !aiResponse.trim())) {
+    throw new Error('The AI returned an empty resume response. Please try again.');
+  }
+
+  return parseAIResponse(profile, aiResponse, tailorCompanyNames);
 };
 
 const parseAIResponse = (
@@ -84,24 +72,29 @@ const parseAIResponse = (
         ? parseJsonResponse(aiResponse)
         : aiResponse;
 
-    console.log(parsed, '=== parsed')
+    console.log(parsed, '=== parsed');
 
-    const aiExperience =
-      (parsed.experience as GeneratedResume['experience']) ||
-      originalProfile.experience.map((exp) => ({
-        position: exp.position,
-        company: exp.company,
-        start_date: exp.start_date,
-        end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : [],
-        address: exp.address,
-      }));
+    if (!Array.isArray(parsed.experience) || parsed.experience.length === 0) {
+      throw new Error('AI response did not include any experience entries');
+    }
+
+    const aiExperience = parsed.experience as GeneratedResume['experience'];
 
     // When company/role tailoring is off, lock company + position (+ dates/address) to the profile
     // so only bullet points / summary / skills are AI-rewritten.
     const experience = tailorCompanyNames
-      ? aiExperience
-      : originalProfile.experience.map((exp, index) => {
+      ? aiExperience.map((aiExp, index) => {
+          const original = originalProfile.experience?.[index];
+          return {
+            position: aiExp.position || original?.position || '',
+            company: aiExp.company || original?.company || '',
+            start_date: aiExp.start_date || original?.start_date || '',
+            end_date: aiExp.end_date || original?.end_date || '',
+            address: aiExp.address || original?.address || '',
+            descriptions: Array.isArray(aiExp.descriptions) ? aiExp.descriptions : [],
+          };
+        })
+      : (originalProfile.experience || []).map((exp, index) => {
           const aiExp = aiExperience[index];
           return {
             position: exp.position,
@@ -116,37 +109,43 @@ const parseAIResponse = (
                 : [],
           };
         });
-    
-    // Validate and enhance the parsed data
+
+    if (experience.some((exp) => !exp.descriptions?.length)) {
+      console.warn('One or more experience entries have empty descriptions');
+    }
+
     const enhancedData: GeneratedResume = {
       summary: (parsed.summary as string) || originalProfile.summary || '',
       experience,
-      skills: (parsed.skills as string[]) || originalProfile.skills,
+      skills: (parsed.skills as string[]) || originalProfile.skills || [],
       jobTitle: (parsed.jobTitle as string) || '',
-      companyName: (parsed.companyName as string) || ''
+      companyName: (parsed.companyName as string) || '',
     };
 
-    console.log(enhancedData, '=== enhancedData')
+    console.log(enhancedData, '=== enhancedData');
 
     return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
     if (typeof aiResponse === 'string') {
       console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
-      console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
-    } else {
-      console.error('AI Response object:', aiResponse);
+      console.error(
+        'AI Response preview (last 500 chars):',
+        aiResponse.substring(Math.max(0, aiResponse.length - 500))
+      );
+      if (!aiResponse.trim().endsWith('}')) {
+        throw new Error(
+          'Resume generation was truncated before completion. Please try again (shorter job description may help).'
+        );
+      }
     }
-    toast.error("An error occurred while parsing the AI response")
-    
-    // Return original data if parsing fails
-    return {
-      summary: '',
-      experience: [],
-      skills: originalProfile.skills,
-    };
+    toast.error('An error occurred while parsing the AI response');
+    throw error instanceof Error
+      ? error
+      : new Error('An error occurred while parsing the AI response');
   }
 };
+
 const parseJsonResponse = (aiResponse: string): Record<string, unknown> => {
   let jsonString = aiResponse.trim();
 
@@ -167,5 +166,15 @@ const parseJsonResponse = (aiResponse: string): Record<string, unknown> => {
 
   jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
 
-  return JSON.parse(jsonString);
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    // Common when the model hits max_tokens mid-object
+    if (!jsonString.trim().endsWith('}')) {
+      throw new Error(
+        'Resume generation was truncated before completion. Please try again (shorter job description may help).'
+      );
+    }
+    throw error;
+  }
 };
