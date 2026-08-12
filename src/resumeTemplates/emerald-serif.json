@@ -1,0 +1,56 @@
+{
+  "id": "emerald-serif",
+  "name": "PANDA",
+  "colors": {
+    "primary": "065F46",
+    "accent": "059669",
+    "body": "374151",
+    "muted": "6B7280"
+  },
+  "fonts": {
+    "heading": "Georgia",
+    "body": "Garamond"
+  },
+  "sizes": {
+    "name": 25,
+    "title": 12,
+    "section": 11,
+    "experienceHeading": 11,
+    "experienceMeta": 9,
+    "body": 9,
+    "contact": 8
+  },
+  "spacing": {
+    "charSpacingDocx": 6,
+    "lineDocx": 288,
+    "pdfCharSpace": 0.1,
+    "pdfLineHeight": 1.35,
+    "marginPt": 44
+  },
+  "header": {
+    "nameAlign": "center",
+    "nameTransform": "none",
+    "showRole": true,
+    "underlineAfterContact": true
+  },
+  "contact": {
+    "layout": "inline"
+  },
+  "sectionOrder": [
+    "summary",
+    "education",
+    "experience",
+    "skills"
+  ],
+  "experience": {
+    "layout": "twoColumn",
+    "showAddress": false
+  },
+  "skills": {
+    "categorized": false
+  },
+  "sectionStyle": {
+    "underline": true,
+    "allCaps": true
+  }
+}

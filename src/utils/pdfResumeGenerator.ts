@@ -6,15 +6,12 @@ import type { GenerateDocxOptions } from './docxGenerator';
 import { formatDateRange, resolveResumeExperience } from './docxGenerator';
 import { registerResumePdfFonts } from './pdfFonts';
 import {
-  RESUME_COLORS,
-  RESUME_PDF_SIZES,
-  RESUME_PAGE_MARGIN_PT,
-  RESUME_SPACING,
   buildResumeSkillSections,
   ensureTrailingPeriod,
   parseBoldMarkup,
   type BoldTextSegment,
 } from './resumeLayout';
+import { resolveResumeTheme } from '../resumeTemplates';
 
 interface GeneratedResume {
   summary: string;
@@ -23,7 +20,6 @@ interface GeneratedResume {
 }
 
 type Profile = ProfileWithDetailsRPC;
-
 type StyledToken = { text: string; bold: boolean; color: [number, number, number] };
 
 function resolveUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profile): boolean {
@@ -43,27 +39,31 @@ export async function generateResumePdf(
   profile?: Profile,
   options?: GenerateDocxOptions
 ): Promise<void> {
+  const theme = resolveResumeTheme(options?.templateId);
+  const t = theme.template;
   const useAiEnhancedJobTitle = resolveUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
+
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const { heading: fontHeading, body: fontBody } = await registerResumePdfFonts(doc);
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = RESUME_PAGE_MARGIN_PT;
+  const margin = theme.spacing.marginPt;
   const maxW = pageWidth - 2 * margin;
   const leftColW = 110;
   const rightColX = margin + leftColW + 12;
   const rightColW = maxW - leftColW - 12;
   let y = margin;
 
-  const primary = hexToRgb(RESUME_COLORS.primary);
-  const accent = hexToRgb(RESUME_COLORS.accent);
-  const body = hexToRgb(RESUME_COLORS.body);
-  const muted = hexToRgb(RESUME_COLORS.muted);
+  const primary = hexToRgb(theme.colors.primary);
+  const accent = hexToRgb(theme.colors.accent);
+  const body = hexToRgb(theme.colors.body);
+  const muted = hexToRgb(theme.colors.muted);
+  const sizes = theme.pdfSizes;
 
-  const lineHeight = (pt: number) => pt * RESUME_SPACING.pdfLineHeight;
-  const charSpace = RESUME_SPACING.pdfCharSpace;
+  const lineHeight = (pt: number) => pt * theme.spacing.pdfLineHeight;
+  const charSpace = theme.spacing.pdfCharSpace;
 
   const needSpace = (h: number) => {
     if (y + h > pageHeight - margin) {
@@ -86,33 +86,67 @@ export async function generateResumePdf(
     return doc.getTextWidth(text) + Math.max(0, text.length - 1) * charSpace;
   };
 
-  /** Flow styled tokens across lines within maxWidth (contact + mixed body). */
   const writeStyledFlow = (
     tokens: StyledToken[],
     fontSize: number,
     x: number,
     maxWidth: number,
-    family: string = fontBody
+    family: string = fontBody,
+    align: 'left' | 'center' = 'left'
   ) => {
     const lh = lineHeight(fontSize);
-    let xCursor = x;
+    // For center align, measure full line groups simply by left-flow then re-draw — keep left for body.
+    let xCursor = align === 'center' ? x : x;
+    const startX = x;
     needSpace(lh);
+
+    // Center: build lines then draw centered
+    if (align === 'center') {
+      type Line = StyledToken[];
+      const lines: Line[] = [[]];
+      let lineWidth = 0;
+      for (const token of tokens) {
+        const isSpace = /^\s+$/.test(token.text);
+        const width = measureText(token.text, fontSize, family, token.bold);
+        if (!isSpace && lineWidth > 0 && lineWidth + width > maxWidth) {
+          lines.push([]);
+          lineWidth = 0;
+        }
+        lines[lines.length - 1].push(token);
+        if (!(isSpace && lineWidth === 0)) lineWidth += width;
+      }
+      for (const lineTokens of lines) {
+        let w = 0;
+        for (const tok of lineTokens) w += measureText(tok.text, fontSize, family, tok.bold);
+        let cx = startX + Math.max(0, (maxWidth - w) / 2);
+        needSpace(lh);
+        for (const tok of lineTokens) {
+          setFont(family, tok.bold);
+          doc.setFontSize(fontSize);
+          setColor(tok.color);
+          doc.text(tok.text, cx, y, { charSpace });
+          cx += measureText(tok.text, fontSize, family, tok.bold);
+        }
+        y += lh;
+      }
+      return;
+    }
 
     for (const token of tokens) {
       const isSpace = /^\s+$/.test(token.text);
       const width = measureText(token.text, fontSize, family, token.bold);
 
-      if (!isSpace && xCursor > x && xCursor + width > x + maxWidth) {
+      if (!isSpace && xCursor > startX && xCursor + width > startX + maxWidth) {
         y += lh;
         needSpace(lh);
-        xCursor = x;
+        xCursor = startX;
       }
 
       if (!isSpace && width > maxWidth) {
         let chunk = '';
         for (const ch of token.text) {
           const next = chunk + ch;
-          const avail = maxWidth - (xCursor - x);
+          const avail = maxWidth - (xCursor - startX);
           if (chunk && measureText(next, fontSize, family, token.bold) > avail) {
             setFont(family, token.bold);
             doc.setFontSize(fontSize);
@@ -120,7 +154,7 @@ export async function generateResumePdf(
             doc.text(chunk, xCursor, y, { charSpace });
             y += lh;
             needSpace(lh);
-            xCursor = x;
+            xCursor = startX;
             chunk = ch;
           } else {
             chunk = next;
@@ -153,19 +187,10 @@ export async function generateResumePdf(
     x: number,
     maxWidth: number,
     color: [number, number, number] = body,
-    family: string = fontBody
+    family: string = fontBody,
+    align: 'left' | 'center' = 'left'
   ) => {
-    const effectiveMax = Math.max(40, maxWidth - charSpace * 4);
-    setFont(family, bold);
-    doc.setFontSize(fontSize);
-    setColor(color);
-    const lines = doc.splitTextToSize(text, effectiveMax) as string[];
-    const lh = lineHeight(fontSize);
-    for (const line of lines) {
-      needSpace(lh);
-      doc.text(line, x, y, { charSpace });
-      y += lh;
-    }
+    writeStyledFlow([{ text, bold, color }], fontSize, x, maxWidth, family, align);
   };
 
   const writeMixedWrapped = (
@@ -187,42 +212,36 @@ export async function generateResumePdf(
   };
 
   const sectionHeader = (title: string) => {
+    const label = t.sectionStyle.allCaps ? title.toUpperCase() : title;
     y += 8;
-    needSpace(lineHeight(RESUME_PDF_SIZES.section) + 8);
+    needSpace(lineHeight(sizes.section) + 8);
     setFont(fontHeading, true);
-    doc.setFontSize(RESUME_PDF_SIZES.section);
+    doc.setFontSize(sizes.section);
     setColor(primary);
-    doc.text(title.toUpperCase(), margin, y);
+    doc.text(label, margin, y);
     y += 3;
-    doc.setDrawColor(accent[0], accent[1], accent[2]);
-    doc.setLineWidth(1);
-    doc.line(margin, y, pageWidth - margin, y);
+    if (t.sectionStyle.underline) {
+      doc.setDrawColor(accent[0], accent[1], accent[2]);
+      doc.setLineWidth(1);
+      doc.line(margin, y, pageWidth - margin, y);
+    }
     y += 8;
   };
 
-  const bodySize = RESUME_PDF_SIZES.body;
+  const bodySize = sizes.body;
   const bodyLh = lineHeight(bodySize);
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const headerAlign = t.header.nameAlign;
 
   // —— Header ——
-  const name = profile
-    ? `${profile.first_name} ${profile.last_name}`.toUpperCase()
-    : 'PROFESSIONAL RESUME';
+  const rawName = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
+  const name = t.header.nameTransform === 'uppercase' ? rawName.toUpperCase() : rawName;
   needSpace(28);
-  setFont(fontHeading, true);
-  doc.setFontSize(RESUME_PDF_SIZES.name);
-  setColor(primary);
-  doc.text(name, margin, y, { charSpace: charSpace * 0.5 });
-  y += lineHeight(RESUME_PDF_SIZES.name);
+  writeWrapped(name, sizes.name, true, margin, maxW, primary, fontHeading, headerAlign);
 
-  if (profile?.title) {
-    needSpace(16);
-    // Role under name uses body font (matches DOCX)
-    setFont(fontBody, true);
-    doc.setFontSize(RESUME_PDF_SIZES.title);
-    setColor(accent);
-    doc.text(profile.title, margin, y, { charSpace: charSpace * 0.5 });
-    y += lineHeight(RESUME_PDF_SIZES.title) + 8;
+  if (t.header.showRole && profile?.title) {
+    writeWrapped(profile.title, sizes.title, true, margin, maxW, accent, fontBody, headerAlign);
+    y += 4;
   }
 
   if (profile) {
@@ -234,166 +253,224 @@ export async function generateResumePdf(
     if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
     if (contactParts.length) {
-      for (const part of contactParts) {
-        writeStyledFlow(
-          [
-            { text: `${part.label}: `, bold: true, color: accent },
-            { text: part.value, bold: false, color: body },
-          ],
-          bodySize,
-          margin,
-          maxW,
-          fontBody
-        );
+      if (t.contact.layout === 'inline') {
+        const tokens: StyledToken[] = [];
+        contactParts.forEach((part, i) => {
+          if (i > 0) tokens.push({ text: '  |  ', bold: false, color: body });
+          tokens.push({ text: `${part.label}: `, bold: true, color: accent });
+          tokens.push({ text: part.value, bold: false, color: body });
+        });
+        writeStyledFlow(tokens, sizes.contact, margin, maxW, fontBody, headerAlign);
+      } else {
+        for (const part of contactParts) {
+          writeStyledFlow(
+            [
+              { text: `${part.label}: `, bold: true, color: accent },
+              { text: part.value, bold: false, color: body },
+            ],
+            sizes.contact,
+            margin,
+            maxW,
+            fontBody,
+            headerAlign
+          );
+        }
       }
 
-      y += 2;
-      doc.setDrawColor(primary[0], primary[1], primary[2]);
-      doc.setLineWidth(1.2);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 14;
+      if (t.header.underlineAfterContact) {
+        y += 2;
+        doc.setDrawColor(primary[0], primary[1], primary[2]);
+        doc.setLineWidth(1.2);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 14;
+      } else {
+        y += 10;
+      }
     }
   }
 
-  // —— Summary ——
-  if (generatedResume.summary) {
+  const renderSummary = () => {
+    if (!generatedResume.summary) return;
     sectionHeader('Summary');
     writeMixedWrapped(parseBoldMarkup(generatedResume.summary), bodySize, margin, maxW, body, fontBody);
-  }
+  };
 
-  // —— Skills ——
-  sectionHeader('Skills');
-  for (const cat of skillSections) {
-    writeMixedWrapped(
-      [
-        { text: `${cat.label}: `, bold: true },
-        { text: cat.skills.join(', '), bold: false },
-      ],
-      bodySize,
-      margin,
-      maxW,
-      body,
-      fontBody
-    );
-  }
+  const renderSkills = () => {
+    sectionHeader('Skills');
+    if (!t.skills.categorized) {
+      const flat = Array.from(
+        new Set([...(generatedResume.skills ?? []), ...skillSections.flatMap((s) => s.skills)])
+      );
+      if (flat.length) {
+        writeMixedWrapped([{ text: flat.join(', '), bold: false }], bodySize, margin, maxW, body, fontBody);
+      }
+      return;
+    }
+    for (const cat of skillSections) {
+      writeMixedWrapped(
+        [
+          { text: `${cat.label}: `, bold: true },
+          { text: cat.skills.join(', '), bold: false },
+        ],
+        bodySize,
+        margin,
+        maxW,
+        body,
+        fontBody
+      );
+    }
+  };
 
-  // —— Education ——
-  if (profile?.education?.length) {
+  const renderEducation = () => {
+    if (!profile?.education?.length) return;
     sectionHeader('Education');
+    const twoColumn = t.experience.layout === 'twoColumn';
+
     for (let index = 0; index < profile.education.length; index++) {
       const edu = profile.education[index];
       if (index > 0) y += 6;
-
       const degreeText = [edu.degree, edu.field].filter(Boolean).join(' in ');
       const edr = formatDateRange(edu.start_date, edu.end_date);
 
-      needSpace(bodyLh * 2);
-      const startY = y;
-      let leftY = startY;
-      let rightY = startY;
-
-      if (edr) {
-        setFont(fontBody, true);
-        doc.setFontSize(bodySize);
-        setColor(primary);
-        for (const line of doc.splitTextToSize(edr, leftColW) as string[]) {
-          doc.text(line, margin, leftY, { charSpace });
-          leftY += bodyLh;
+      if (twoColumn) {
+        needSpace(bodyLh * 2);
+        const startY = y;
+        let leftY = startY;
+        let rightY = startY;
+        if (edr) {
+          setFont(fontBody, true);
+          doc.setFontSize(bodySize);
+          setColor(primary);
+          for (const line of doc.splitTextToSize(edr, leftColW) as string[]) {
+            doc.text(line, margin, leftY, { charSpace });
+            leftY += bodyLh;
+          }
         }
-      }
-
-      if (degreeText) {
-        setFont(fontBody, true);
-        doc.setFontSize(bodySize);
-        setColor(primary);
-        for (const line of doc.splitTextToSize(degreeText, rightColW) as string[]) {
-          doc.text(line, rightColX, rightY, { charSpace });
+        if (degreeText) {
+          setFont(fontBody, true);
+          doc.setFontSize(bodySize);
+          setColor(primary);
+          for (const line of doc.splitTextToSize(degreeText, rightColW) as string[]) {
+            doc.text(line, rightColX, rightY, { charSpace });
+            rightY += bodyLh;
+          }
+        }
+        if (edu.school) {
+          setFont(fontBody, false);
+          doc.setFontSize(bodySize);
+          setColor(accent);
+          doc.text(edu.school, rightColX, rightY, { charSpace });
           rightY += bodyLh;
         }
+        y = Math.max(leftY, rightY);
+      } else {
+        if (degreeText) writeWrapped(degreeText, bodySize, true, margin, maxW, primary, fontBody);
+        const schoolLine = [edu.school, edr].filter(Boolean).join('  ·  ');
+        if (schoolLine) writeWrapped(schoolLine, bodySize, false, margin, maxW, muted, fontBody);
       }
-      if (edu.school) {
-        setFont(fontBody, false);
-        doc.setFontSize(bodySize);
-        setColor(accent);
-        doc.text(edu.school, rightColX, rightY, { charSpace });
-        rightY += bodyLh;
-      }
-
-      y = Math.max(leftY, rightY);
     }
-  }
+  };
 
-  // —— Experience ——
-  const experienceEntries = resolveResumeExperience(
-    profile?.experience ?? [],
-    generatedResume.experience ?? [],
-    useAiEnhancedJobTitle
-  );
+  const renderExperience = () => {
+    const experienceEntries = resolveResumeExperience(
+      profile?.experience ?? [],
+      generatedResume.experience ?? [],
+      useAiEnhancedJobTitle
+    );
+    if (!experienceEntries.length) return;
 
-  if (experienceEntries.length) {
     sectionHeader('Experience');
+    const twoColumn = t.experience.layout === 'twoColumn';
+    const showAddress = t.experience.showAddress;
+
     for (let index = 0; index < experienceEntries.length; index++) {
       const exp = experienceEntries[index];
       if (index > 0) y += 8;
 
       needSpace(52);
-      writeWrapped(
-        exp.company ?? '',
-        RESUME_PDF_SIZES.experienceHeading,
-        true,
-        margin,
-        maxW,
-        primary,
-        fontBody
-      );
+      writeWrapped(exp.company ?? '', sizes.experienceHeading, true, margin, maxW, primary, fontBody);
 
       const dateRange = formatDateRange(exp.start_date ?? '', exp.end_date ?? '');
-      const metaStartY = y;
-      let leftY = metaStartY;
-      let rightY = metaStartY;
-      const metaLh = lineHeight(RESUME_PDF_SIZES.experienceMeta);
-      const headingLh = lineHeight(RESUME_PDF_SIZES.experienceHeading);
 
-      if (dateRange) {
-        setFont(fontBody, true);
-        doc.setFontSize(RESUME_PDF_SIZES.experienceMeta);
-        setColor(primary);
-        for (const line of doc.splitTextToSize(dateRange, leftColW) as string[]) {
-          doc.text(line, margin, leftY, { charSpace });
-          leftY += metaLh;
+      if (twoColumn) {
+        const metaStartY = y;
+        let leftY = metaStartY;
+        let rightY = metaStartY;
+        const metaLh = lineHeight(sizes.experienceMeta);
+        const headingLh = lineHeight(sizes.experienceHeading);
+
+        if (dateRange) {
+          setFont(fontBody, true);
+          doc.setFontSize(sizes.experienceMeta);
+          setColor(primary);
+          for (const line of doc.splitTextToSize(dateRange, leftColW) as string[]) {
+            doc.text(line, margin, leftY, { charSpace });
+            leftY += metaLh;
+          }
         }
-      }
-      if (exp.address) {
-        setFont(fontBody, false);
-        doc.setFontSize(bodySize);
-        setColor(muted);
-        for (const line of doc.splitTextToSize(exp.address, leftColW) as string[]) {
-          doc.text(line, margin, leftY, { charSpace });
-          leftY += bodyLh;
+        if (showAddress && exp.address) {
+          setFont(fontBody, false);
+          doc.setFontSize(bodySize);
+          setColor(muted);
+          for (const line of doc.splitTextToSize(exp.address, leftColW) as string[]) {
+            doc.text(line, margin, leftY, { charSpace });
+            leftY += bodyLh;
+          }
         }
-      }
 
-      if (exp.position) {
-        setFont(fontBody, true);
-        doc.setFontSize(RESUME_PDF_SIZES.experienceHeading);
-        setColor(body);
-        for (const line of doc.splitTextToSize(exp.position, rightColW) as string[]) {
-          doc.text(line, rightColX, rightY, { charSpace });
-          rightY += headingLh;
+        if (exp.position) {
+          setFont(fontBody, true);
+          doc.setFontSize(sizes.experienceHeading);
+          setColor(body);
+          for (const line of doc.splitTextToSize(exp.position, rightColW) as string[]) {
+            doc.text(line, rightColX, rightY, { charSpace });
+            rightY += headingLh;
+          }
         }
-      }
 
-      y = rightY;
-
-      for (const desc of exp.descriptions ?? []) {
-        const text = ensureTrailingPeriod(desc);
-        writeMixedWrapped(parseBoldMarkup(`• ${text}`), bodySize, rightColX, rightColW, body, fontBody);
-      }
-
-      if (y >= metaStartY) {
-        y = Math.max(y, leftY);
+        y = rightY;
+        for (const desc of exp.descriptions ?? []) {
+          writeMixedWrapped(
+            parseBoldMarkup(`• ${ensureTrailingPeriod(desc)}`),
+            bodySize,
+            rightColX,
+            rightColW,
+            body,
+            fontBody
+          );
+        }
+        if (y >= metaStartY) y = Math.max(y, leftY);
+      } else {
+        if (exp.position) {
+          writeWrapped(exp.position, sizes.experienceHeading, true, margin, maxW, body, fontBody);
+        }
+        const metaBits = [dateRange, showAddress ? exp.address : ''].filter(Boolean);
+        if (metaBits.length) {
+          writeWrapped(metaBits.join('  ·  '), sizes.experienceMeta, false, margin, maxW, muted, fontBody);
+        }
+        for (const desc of exp.descriptions ?? []) {
+          writeMixedWrapped(
+            parseBoldMarkup(`• ${ensureTrailingPeriod(desc)}`),
+            bodySize,
+            margin,
+            maxW,
+            body,
+            fontBody
+          );
+        }
       }
     }
+  };
+
+  const sectionRenderers: Record<string, () => void> = {
+    summary: renderSummary,
+    skills: renderSkills,
+    education: renderEducation,
+    experience: renderExperience,
+  };
+
+  for (const sectionId of t.sectionOrder) {
+    sectionRenderers[sectionId]?.();
   }
 
   const blob = doc.output('blob');

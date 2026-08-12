@@ -9,9 +9,11 @@ import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { parseBoldMarkup } from '../utils/resumeLayout';
+import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from '../resumeTemplates';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
+import ResumeTemplatePreview from './ResumeTemplatePreview';
 
 function BoldMarkupText({ text }: { text: string }) {
   return (
@@ -70,12 +72,22 @@ const ResumeGenerator: React.FC = () => {
 
   // Per-application download options (local only; not persisted)
   const [includeLinkedIn, setIncludeLinkedIn] = useState(true);
+  /** Empty string = pick a template at random on download. */
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   // Copy State
   const [copiedCoverLetter, setCopiedCoverLetter] = useState(false);
   const [copiedAnswers, setCopiedAnswers] = useState<{ [key: string]: boolean }>({});
 
   const { user, role } = useUser();
+  const resumeTemplates = listResumeTemplates();
+
+  const resolveExportTemplate = () => {
+    if (selectedTemplateId) {
+      return getResumeTemplate(selectedTemplateId) || pickRandomResumeTemplate();
+    }
+    return pickRandomResumeTemplate();
+  };
 
   // Auto-select profile if there's only one
   useEffect(() => {
@@ -236,11 +248,15 @@ const ResumeGenerator: React.FC = () => {
 
   const exportResumeFile = async (
     profile: (typeof profiles)[0],
-    format: ResumeDownloadFormat
+    format: ResumeDownloadFormat,
+    templateId?: string
   ) => {
+    const template =
+      (templateId && getResumeTemplate(templateId)) || pickRandomResumeTemplate();
     const opts = {
       useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
       includeLinkedIn,
+      templateId: template.id,
     };
     const fileName = buildResumeFileName(
       profile,
@@ -253,6 +269,7 @@ const ResumeGenerator: React.FC = () => {
     } else {
       await generateResumePdf(generatedResume!, fileName, profile, opts);
     }
+    return template;
   };
 
   const handleDownload = async (format: ResumeDownloadFormat) => {
@@ -268,6 +285,8 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
+      const template = resolveExportTemplate();
+
       if (user) {
         const storedFileName = buildResumeFileName(
           profile,
@@ -286,6 +305,7 @@ const ResumeGenerator: React.FC = () => {
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
+          p_metadata: { resumeTemplateId: template.id },
         });
 
         if (saveError) {
@@ -295,8 +315,8 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
-      await exportResumeFile(profile, format);
-      toast.success('Resume downloaded and job application saved!');
+      await exportResumeFile(profile, format, template.id);
+      toast.success(`Resume saved · template: ${template.name}`);
     } catch (error: any) {
       console.error('Error downloading resume:', error);
       toast.error(error.message || 'Failed to download resume');
@@ -316,8 +336,9 @@ const ResumeGenerator: React.FC = () => {
     }
 
     try {
-      await exportResumeFile(profile, format);
-      toast.success('Resume downloaded successfully!');
+      const template = resolveExportTemplate();
+      await exportResumeFile(profile, format, template.id);
+      toast.success(`Resume downloaded · template: ${template.name}`);
     } catch (error: any) {
       console.error('Error downloading resume:', error);
       toast.error(error.message || 'Failed to download resume');
@@ -719,9 +740,9 @@ const ResumeGenerator: React.FC = () => {
       {/* Generated Resume */}
       {currentResume && isApplicationEligible && (
         <div id="generated-resume" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {!isEditing ? (
                 <button
                   onClick={handleStartEditing}
@@ -748,52 +769,104 @@ const ResumeGenerator: React.FC = () => {
                   </button>
                 </>
               )}
-              <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            </div>
+          </div>
+
+          <div className="mb-6 flex flex-col items-stretch gap-3">
+            <fieldset className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+              <legend className="px-1 text-sm font-medium text-gray-900">Resume template</legend>
+              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <label
+                  className={`relative flex cursor-pointer flex-col gap-2 rounded-md border bg-white p-2 transition-colors ${
+                    selectedTemplateId === ''
+                      ? 'border-primary-500 ring-2 ring-primary-200'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
                   <input
-                    type="checkbox"
-                    checked={includeLinkedIn}
-                    onChange={(e) => setIncludeLinkedIn(e.target.checked)}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    type="radio"
+                    name="resume-template"
+                    value=""
+                    checked={selectedTemplateId === ''}
+                    onChange={() => setSelectedTemplateId('')}
+                    className="sr-only"
                   />
-                  <span>Include LinkedIn link</span>
+                  <div
+                    className="flex aspect-[8.5/11] w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-center"
+                    aria-hidden
+                  >
+                    <span className="px-2 text-xs font-medium text-gray-600">Random</span>
+                  </div>
+                  <span className="text-center text-sm font-medium text-gray-900">Random</span>
                 </label>
-                <div className="flex flex-wrap gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleDownload('docx')}
-                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                {resumeTemplates.map((template) => (
+                  <label
+                    key={template.id}
+                    className={`relative flex cursor-pointer flex-col gap-2 rounded-md border bg-white p-2 transition-colors ${
+                      selectedTemplateId === template.id
+                        ? 'border-primary-500 ring-2 ring-primary-200'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
                   >
-                    <FileText className="w-4 h-4" />
-                    <span>Save & Download Word (.docx)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDownload('pdf')}
-                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Save & Download PDF (.pdf)</span>
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadOnly('docx')}
-                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>Download Word (.docx) only</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadOnly('pdf')}
-                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download PDF (.pdf) only</span>
-                  </button>
-                </div>
+                    <input
+                      type="radio"
+                      name="resume-template"
+                      value={template.id}
+                      checked={selectedTemplateId === template.id}
+                      onChange={() => setSelectedTemplateId(template.id)}
+                      className="sr-only"
+                    />
+                    <ResumeTemplatePreview template={template} className="w-full" />
+                    <span className="text-center text-sm font-medium text-gray-900">{template.name}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="flex flex-col items-stretch gap-3 sm:items-end">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeLinkedIn}
+                  onChange={(e) => setIncludeLinkedIn(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <span>Include LinkedIn link</span>
+              </label>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('docx')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Save & Download Word (.docx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('pdf')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Save & Download PDF (.pdf)</span>
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadOnly('docx')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Download Word (.docx) only</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadOnly('pdf')}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF (.pdf) only</span>
+                </button>
               </div>
             </div>
           </div>

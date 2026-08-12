@@ -3,11 +3,14 @@ import {
   Users,
   Calendar,
   Clock,
-  BarChart3
+  BarChart3,
+  X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import OwnerProfileModal from '../components/OwnerProfileModal';
+import ResumeTemplatePreview from '../components/ResumeTemplatePreview';
+import { listResumeTemplates, type ResumeTemplate } from '../resumeTemplates';
 
 interface OwnerSummary {
   owner_id: string;
@@ -26,6 +29,8 @@ const HomePage: React.FC = () => {
   const [ownerSummaries, setOwnerSummaries] = useState<OwnerSummary[]>([]);
   const [selectedOwner, setSelectedOwner] = useState<{ id: string; name: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [expandedTemplate, setExpandedTemplate] = useState<ResumeTemplate | null>(null);
+  const resumeTemplates = listResumeTemplates();
 
   const loadOwnerSummaries = useCallback(async () => {
     try {
@@ -58,6 +63,15 @@ const HomePage: React.FC = () => {
     }
   }, [user, role, loadOwnerSummaries]);
 
+  useEffect(() => {
+    if (!expandedTemplate) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpandedTemplate(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [expandedTemplate]);
+
   const handleOwnerClick = (owner: OwnerSummary) => {
     setSelectedOwner({
       id: owner.owner_id,
@@ -86,10 +100,90 @@ const HomePage: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">
-            Welcome back, {user?.first_name}! Here's a summary of applications.
+            Welcome back, {user?.first_name}!
           </p>
         </div>
       </div>
+
+      {/* Resume template previews */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-medium text-gray-900">Resume templates</h2>
+          <p className="text-sm text-gray-600">
+            Click a template to open a full preview with sample content.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {resumeTemplates.map((template) => (
+            <button
+              key={template.id}
+              type="button"
+              onClick={() => setExpandedTemplate(template)}
+              className="group flex flex-col gap-2 rounded-lg border border-transparent p-2 text-left transition-colors hover:border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+            >
+              <ResumeTemplatePreview
+                template={template}
+                variant="compact"
+                className="w-full transition-shadow group-hover:shadow-md"
+              />
+              <div className="text-center">
+                <div className="text-sm font-medium text-gray-900">{template.name}</div>
+                <div className="mt-1 flex items-center justify-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-gray-200"
+                    style={{ backgroundColor: `#${template.colors.primary}` }}
+                    aria-hidden
+                  />
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-gray-200"
+                    style={{ backgroundColor: `#${template.colors.accent}` }}
+                    aria-hidden
+                  />
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {expandedTemplate && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="template-preview-title"
+          onClick={() => setExpandedTemplate(null)}
+        >
+          <div
+            className="relative my-4 w-full max-w-3xl rounded-lg bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 rounded-t-lg">
+              <div>
+                <h3 id="template-preview-title" className="text-lg font-medium text-gray-900">
+                  {expandedTemplate.name}
+                </h3>
+                <p className="text-sm text-gray-500">Sample resume preview</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpandedTemplate(null)}
+                className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                aria-label="Close preview"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="bg-gray-100 p-4 sm:p-8">
+              <ResumeTemplatePreview
+                template={expandedTemplate}
+                variant="expanded"
+                className="mx-auto w-full max-w-[8.5in] shadow-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Applications by Profile */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">

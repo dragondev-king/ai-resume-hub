@@ -1,0 +1,56 @@
+{
+  "id": "classic-teal",
+  "name": "DRAGON",
+  "colors": {
+    "primary": "124E44",
+    "accent": "3CB370",
+    "body": "3D3D3D",
+    "muted": "666666"
+  },
+  "fonts": {
+    "heading": "Verdana",
+    "body": "Lucida Sans"
+  },
+  "sizes": {
+    "name": 24,
+    "title": 13,
+    "section": 12,
+    "experienceHeading": 11,
+    "experienceMeta": 9,
+    "body": 8,
+    "contact": 8
+  },
+  "spacing": {
+    "charSpacingDocx": 12,
+    "lineDocx": 276,
+    "pdfCharSpace": 0.25,
+    "pdfLineHeight": 1.25,
+    "marginPt": 36
+  },
+  "header": {
+    "nameAlign": "left",
+    "nameTransform": "uppercase",
+    "showRole": true,
+    "underlineAfterContact": true
+  },
+  "contact": {
+    "layout": "stacked"
+  },
+  "sectionOrder": [
+    "summary",
+    "skills",
+    "education",
+    "experience"
+  ],
+  "experience": {
+    "layout": "twoColumn",
+    "showAddress": true
+  },
+  "skills": {
+    "categorized": true
+  },
+  "sectionStyle": {
+    "underline": true,
+    "allCaps": true
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "slate-coral",
+  "name": "SMILE",
+  "colors": {
+    "primary": "334155",
+    "accent": "E07A5F",
+    "body": "1E293B",
+    "muted": "64748B"
+  },
+  "fonts": {
+    "heading": "Arial",
+    "body": "Arial"
+  },
+  "sizes": {
+    "name": 22,
+    "title": 12,
+    "section": 11,
+    "experienceHeading": 10,
+    "experienceMeta": 9,
+    "body": 8,
+    "contact": 8
+  },
+  "spacing": {
+    "charSpacingDocx": 10,
+    "lineDocx": 270,
+    "pdfCharSpace": 0.2,
+    "pdfLineHeight": 1.28,
+    "marginPt": 32
+  },
+  "header": {
+    "nameAlign": "left",
+    "nameTransform": "none",
+    "showRole": true,
+    "underlineAfterContact": false
+  },
+  "contact": {
+    "layout": "stacked"
+  },
+  "sectionOrder": [
+    "skills",
+    "summary",
+    "experience",
+    "education"
+  ],
+  "experience": {
+    "layout": "stacked",
+    "showAddress": true
+  },
+  "skills": {
+    "categorized": true
+  },
+  "sectionStyle": {
+    "underline": false,
+    "allCaps": false
+  }
+}
