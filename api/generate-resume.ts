@@ -25,13 +25,13 @@ const SYSTEM_PROMPT_ORIGINAL =
 
 /** Tailor-company mode system prompt - used when checkbox is ON. */
 const SYSTEM_PROMPT_TAILOR_COMPANY =
-  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY a clean professional job title with no company name, location, or employment-type noise (e.g. "Senior Android Engineer" or "Senior Software Engineer" — never comma specialties like "Senior Software Engineer, Android"). Every experience item MUST include a non-empty "descriptions" array with 5-8 contentful bullet strings. Bullet tone MUST match that role\'s seniority: Junior/entry roles must NOT lead teams, own architecture, or mentor; use contribute/implement/build language. Mid roles own features; Senior roles may lead and mentor. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate\'s original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.';
+  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY a clean professional job title with no company name, location, or employment-type noise (e.g. "Senior Android Engineer" or "Senior Software Engineer" — never comma specialties like "Senior Software Engineer, Android"). Every experience item MUST include a non-empty "descriptions" array. The TWO MOST RECENT roles need PLENTY of content: 8-10 long, detailed bullets each covering industry/field experience, technical delivery, AND remote/distributed-team collaboration. Older roles: 5-7 technical-focused bullets. Bullet tone MUST match that role\'s seniority: Junior/entry roles must NOT lead teams, own architecture, or mentor; use contribute/implement/build language. Mid roles own features; Senior roles may lead and mentor. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate\'s original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.';
 
 const SYSTEM_PROMPT_COMPANY_PICK =
   'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself. CRITICAL: replacements must have NO business relationship with the hiring company (not partners, customers, vendors, subsidiaries, parents, affiliates, investors, portfolio companies, contractors, or companies named in the JD). The ONLY allowed relationship is being a direct rival/competitor.';
 
 const SYSTEM_PROMPT_REPAIR =
-  'You fill missing resume bullet points. Return ONLY valid JSON: { "experience": [ { "descriptions": ["bullet", ...] } ] } with one entry per input role, each having 5-8 non-empty contentful description strings. Bullet seniority MUST match the role title (Junior never Led/Owned architecture/Mentored). Wrap tech skills in <b>...</b>.';
+  'You fill and enrich resume bullet points. Return ONLY valid JSON: { "experience": [ { "descriptions": ["bullet", ...] } ] } with one entry per input role. For the two most recent roles when asked, write 8-10 plentiful detailed bullets covering industry/field experience, technical delivery, and remote/distributed-team contributions. Older roles: 5-7 technical bullets. Bullet seniority MUST match the role title (Junior never Led/Owned architecture/Mentored). Wrap tech skills in <b>...</b>.';
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -642,6 +642,13 @@ function experienceHasAllDescriptions(experience: any[]): boolean {
   );
 }
 
+/** Two most recent roles should have plenty of bullets in tailor-company mode. */
+function experienceRecentRolesNeedEnrichment(experience: any[], minBullets = 8): boolean {
+  if (!Array.isArray(experience) || experience.length === 0) return false;
+  const recent = mostRecentExperienceIndices(experience, 2);
+  return recent.some((index) => normalizeDescriptions(experience[index]).length < minBullets);
+}
+
 function normalizeSkillName(skill: unknown): string {
   if (typeof skill !== 'string') return '';
   return skill
@@ -767,8 +774,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let parsed = normalizeParsedResume(parseJsonLoose(rawResponse));
 
-    if (!experienceHasAllDescriptions(parsed.experience)) {
-      console.warn('Resume missing bullet points - running repair pass');
+    const needsRepair =
+      !experienceHasAllDescriptions(parsed.experience) ||
+      (shouldTailorCompanies && experienceRecentRolesNeedEnrichment(parsed.experience, 8));
+
+    if (needsRepair) {
+      console.warn('Resume missing or thin bullet points - running repair/enrich pass');
       parsed = await repairMissingDescriptions(parsed, profileForGeneration, jd, provider, {
         stressIndustryLast2: shouldTailorCompanies,
         industry: companyPick?.industry || '',
@@ -832,6 +843,10 @@ async function repairMissingDescriptions(
     existingDescriptions: normalizeDescriptions(exp),
   }));
 
+  const recentSet = options.stressIndustryLast2
+    ? new Set(mostRecentExperienceIndices(roles, 2))
+    : new Set<number>();
+
   const prompt = `
 Fill missing resume bullet points for these roles.
 
@@ -842,17 +857,23 @@ ROLES:
 ${roles
   .map(
     (role: any) => `
-[${role.index}] ${role.position} at ${role.company} (${role.start_date} - ${role.end_date})
+[${role.index}] ${role.position} at ${role.company} (${role.start_date} - ${role.end_date})${
+      recentSet.has(role.index)
+        ? ' ★ TWO MOST RECENT — write 8-10 plentiful bullets (industry + tech + remote work)'
+        : ''
+    }
 Original notes: ${role.originalDescription || '(none)'}
-Existing bullets: ${role.existingDescriptions.length ? JSON.stringify(role.existingDescriptions) : '(MISSING - generate 5-8 bullets)'}
+Existing bullets: ${
+      role.existingDescriptions.length
+        ? JSON.stringify(role.existingDescriptions)
+        : '(MISSING - generate bullets)'
+    }
 `
   )
   .join('\n')}
 
 RULES:
 - Return one experience entry per role, same order
-- Each MUST have "descriptions": string[] with 5-8 contentful bullets
-- If bullets already exist, you may improve them but keep them non-empty
 - Match bullet seniority to that role's position title:
   - Junior/Jr/Entry: Contribute, Implement, Build, Assist, Debug, Write — NEVER Led, Owned architecture, Mentored, Spearheaded, Directed
   - Associate/mid (no Junior/Senior): Own features/components; avoid team leadership claims
@@ -861,10 +882,11 @@ RULES:
 - Include relevant technologies from the JD with <b>...</b> tags inside description bullets only
 ${
   options.stressIndustryLast2
-    ? `- For the two most recent roles only, stress industry/field experience: ${options.industry || 'infer from JD'}
-- For all older roles, stress ONLY technical skills - do NOT mention industry domain experience
+    ? `- TWO MOST RECENT roles (by employment dates): MUST have 8-10 PLENTY detailed bullets each covering (1) industry/field experience for ${options.industry || 'infer from JD'}, (2) technical delivery, and (3) remote/distributed-team contributions (async collab, timezones, remote delivery). Expand/replace thin existing bullets for those roles.
+- OLDER roles: 5-7 technical-only bullets — do NOT mention industry domain experience
 - Do NOT change company names for older roles - leave them as provided`
-    : ''
+    : `- Each MUST have "descriptions": string[] with 5-8 contentful bullets
+- If bullets already exist, you may improve them but keep them non-empty`
 }
 - Do not change company names or dates
 
@@ -879,13 +901,25 @@ JSON only:
 
   const repaired = parseJsonLoose(raw);
   const repairedExperience = Array.isArray(repaired.experience) ? repaired.experience : [];
+  const recentIdx = options.stressIndustryLast2
+    ? new Set(mostRecentExperienceIndices(experience, 2))
+    : new Set<number>();
 
   const mergedExperience = experience.map((exp: any, index: number) => {
     const existing = normalizeDescriptions(exp);
     const repairedDescs = normalizeDescriptions(repairedExperience[index]);
+    let descriptions = existing;
+    if (!existing.length) {
+      descriptions = repairedDescs;
+    } else if (recentIdx.has(index) && repairedDescs.length >= 8 && repairedDescs.length >= existing.length) {
+      // Prefer enriched plenty bullets for the two most recent roles
+      descriptions = repairedDescs;
+    } else if (recentIdx.has(index) && existing.length < 8 && repairedDescs.length > existing.length) {
+      descriptions = repairedDescs;
+    }
     return {
       ...exp,
-      descriptions: existing.length ? existing : repairedDescs,
+      descriptions,
     };
   });
 
@@ -1266,9 +1300,15 @@ INSTRUCTIONS:
    - Strip company name, location, remote/hybrid, full-time/part-time, seniority badges, match %, and other marketing/UI noise
    - Do NOT return titles like "Senior Java Developer - Chordline Health" or "Senior Java Developer | Remote"
 2. Write a tailored summary
-3. For EACH of the ${experience.length} roles, write 5-8 contentful bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
+3. For EACH of the ${experience.length} roles, write contentful bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
+   - TWO MOST RECENT roles: write 8-10 PLENTY, detailed bullets each (longer sentences OK). Must include:
+     (a) industry/field experience for ${industry || 'the JD industry'} — domain workflows, business problems, regulations/compliance if relevant, industry terminology
+     (b) technical delivery with <b>...</b> skills
+     (c) remote/distributed work — async collaboration, timezone coordination, remote code review, Slack/Teams/Zoom rituals, shipping without co-location, documenting for remote teammates, pairing across locations
+     At least 2 bullets per recent role should explicitly show remote-work contribution; at least 3 should show industry/field impact
+   - OLDER roles: write 5-7 technical-focused bullets (no industry domain emphasis)
    - Each bullet must be specific: action + what was built/changed + technologies with <b>...</b> + concrete detail (scope, feature, data volume, latency, users, accuracy, or other measurable outcome when plausible)
-   - Cover different facets of the work (implementation, debugging, collaboration, testing/delivery) — not repetitive generic lines
+   - Cover different facets of the work — not repetitive generic lines
    - Avoid vague filler ("worked on projects", "helped the team", "used various tools")
 4. In experience bullet "descriptions" only, wrap tech skills with <b>...</b> tags (e.g. <b>React</b>). Do NOT put <b> tags in the skills array, summary, jobTitle, companyName, or position fields.
 5. skills must be a flat array of plain skill name strings with NO HTML/markup (e.g. ["Node.js", "TypeScript"] not ["<b>Node.js</b>"])
@@ -1304,8 +1344,12 @@ INSTRUCTIONS:
 
 8. EXPERIENCE FOCUS BY ROLE (STRICT):
    - Industry/field for context: ${industry || 'infer from the job description (NOT from older employers)'}
-   - TWO MOST RECENT roles only: stress industry-related experience (domain workflows, regulations, business problems, industry terminology) AND technical skills with <b>...</b>
-   - ALL OLDER roles (not among the two most recent): stress ONLY technical skills, tools, and engineering work with <b>...</b> — do NOT mention industry domain experience, healthcare/fintech/etc. terminology, or industry-specific workflows
+   - TWO MOST RECENT roles (REQUIRED — make these the richest sections on the resume):
+     - Plenty of industry/field experience: domain workflows, regulations, customer/user problems, industry terminology, how the work mattered in that field
+     - Plenty of technical depth with <b>...</b>
+     - Explicit remote-working contributions: delivering in a remote or hybrid distributed environment (async standups, cross-timezone collaboration, written design docs, remote mentoring/pairing, reliable remote release cadence)
+     - Prefer 8-10 bullets; each should read as a full accomplishment, not a short stub
+   - ALL OLDER roles (not among the two most recent): stress ONLY technical skills, tools, and engineering work with <b>...</b> — do NOT mention industry domain experience, healthcare/fintech/etc. terminology, or industry-specific workflows; 5-7 bullets is enough
    - Do NOT change company names for older employers
 
 Return ONLY this JSON shape:
@@ -1327,6 +1371,7 @@ Return ONLY this JSON shape:
 }
 
 CRITICAL: experience length must be ${experience.length}. Every item needs non-empty contentful descriptions[].
+CRITICAL: The two most recent roles must have PLENTY of bullets (8-10) covering industry experience AND remote-work contributions.
 CRITICAL: Rewrite position titles for EVERY role into a junior→senior ladder from the JD (oldest company=Junior, newest=Senior). Never keep profile titles. Only the two most recent company names may differ from the profile.
 CRITICAL: Descriptions for each role must match that role's seniority. Junior roles must never claim leading teams, owning architecture, or mentoring.
 `;
