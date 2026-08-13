@@ -134,44 +134,55 @@ const parseAIResponse = (
     const rowCount = Math.max(aiExperience.length, originalExperience.length);
     const experience: GeneratedResume['experience'] = [];
 
-    const dateSource = (originalExperience.length ? originalExperience : aiExperience).slice(
-      0,
-      rowCount
-    );
-    // Two most recent roles by date — only those get company name swaps
-    const recentOrdered = mostRecentIndices(dateSource, 2);
-    const recentIdx = new Set(recentOrdered);
+    if (!tailorCompanyNames) {
+      // Original main-branch behavior: keep AI experience (titles tailored, companies unchanged)
+      for (let index = 0; index < rowCount; index++) {
+        const original = originalExperience[index];
+        const aiExp = aiExperience[index] || {};
+        const descriptions = normalizeDescriptions(aiExp);
+        const fallbackDescriptions = normalizeDescriptions(original);
+        experience.push({
+          position: aiExp.position || original?.position || '',
+          company: aiExp.company || original?.company || '',
+          start_date: aiExp.start_date || original?.start_date || '',
+          end_date: aiExp.end_date || original?.end_date || '',
+          address: aiExp.address || original?.address || '',
+          descriptions: descriptions.length ? descriptions : fallbackDescriptions,
+        });
+      }
+    } else {
+      const dateSource = (originalExperience.length ? originalExperience : aiExperience).slice(
+        0,
+        rowCount
+      );
+      // Two most recent roles by date — only those get company name swaps
+      const recentOrdered = mostRecentIndices(dateSource, 2);
+      const recentIdx = new Set(recentOrdered);
 
-    for (let index = 0; index < rowCount; index++) {
-      const original = originalExperience[index];
-      const aiExp = aiExperience[index] || {};
-      const isRecentForCompany = tailorCompanyNames && recentIdx.has(index);
-      const replacementForIndex = isRecentForCompany
-        ? replacements[recentOrdered.indexOf(index)]
-        : undefined;
+      for (let index = 0; index < rowCount; index++) {
+        const original = originalExperience[index];
+        const aiExp = aiExperience[index] || {};
+        const isRecentForCompany = recentIdx.has(index);
+        const replacementForIndex = isRecentForCompany
+          ? replacements[recentOrdered.indexOf(index)]
+          : undefined;
 
-      const descriptions = normalizeDescriptions(aiExp);
-      const fallbackDescriptions = normalizeDescriptions(original);
+        const descriptions = normalizeDescriptions(aiExp);
+        const fallbackDescriptions = normalizeDescriptions(original);
 
-      experience.push({
-        // Positions from AI when tailor is on; career ladder applied to ALL roles below
-        position: tailorCompanyNames
-          ? aiExp.position || original?.position || ''
-          : original?.position || aiExp.position || '',
-        company: isRecentForCompany
-          ? replacementForIndex?.company || aiExp.company || original?.company || ''
-          : tailorCompanyNames
-            ? original?.company || aiExp.company || ''
+        experience.push({
+          position: aiExp.position || original?.position || '',
+          company: isRecentForCompany
+            ? replacementForIndex?.company || aiExp.company || original?.company || ''
             : original?.company || aiExp.company || '',
-        start_date: original?.start_date || aiExp.start_date || '',
-        end_date: original?.end_date || aiExp.end_date || '',
-        address: isRecentForCompany
-          ? replacementForIndex?.address || aiExp.address || original?.address || ''
-          : tailorCompanyNames
-            ? original?.address || aiExp.address || ''
+          start_date: original?.start_date || aiExp.start_date || '',
+          end_date: original?.end_date || aiExp.end_date || '',
+          address: isRecentForCompany
+            ? replacementForIndex?.address || aiExp.address || original?.address || ''
             : original?.address || aiExp.address || '',
-        descriptions: descriptions.length ? descriptions : fallbackDescriptions,
-      });
+          descriptions: descriptions.length ? descriptions : fallbackDescriptions,
+        });
+      }
     }
 
     const missingBullets = experience.filter((exp) => !exp.descriptions.length).length;
@@ -184,7 +195,7 @@ const parseAIResponse = (
     const jobTitle = cleanJobTitle(parsed.jobTitle, parsed.companyName as string | undefined);
     const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
 
-    // Junior (oldest company) → Senior (newest company) for EVERY role
+    // Junior→senior ladder only when tailor-company checkbox is on
     const finalExperience = tailorCompanyNames
       ? applyCareerTitleProgression(experience, jobTitle)
       : experience;

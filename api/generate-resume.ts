@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+﻿import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
@@ -19,11 +19,13 @@ const MAX_REPAIR_TOKENS = 6000;
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-const SYSTEM_PROMPT_RESUME =
-  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY the exact professional job title with no company name, location, or employment-type noise (e.g. "Senior Java Developer"). Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) — always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets — never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>").';
+/** Original main-branch system prompt - used when tailor-company checkbox is OFF. */
+const SYSTEM_PROMPT_ORIGINAL =
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).';
 
-const SYSTEM_PROMPT_RESUME_WITH_TITLES =
-  `${SYSTEM_PROMPT_RESUME} When role-title tailoring is enabled: rewrite EVERY experience "position" for the target JD. Experience is newest-first — index 0 must be a senior-level title matching the JD; the oldest/last entry must be junior-level; middle roles must show clear progression. Never reuse the candidate's original profile titles.`;
+/** Tailor-company mode system prompt - used when checkbox is ON. */
+const SYSTEM_PROMPT_TAILOR_COMPANY =
+  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY the exact professional job title with no company name, location, or employment-type noise (e.g. "Senior Java Developer"). Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate\'s original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.';
 
 const SYSTEM_PROMPT_COMPANY_PICK =
   'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself.';
@@ -160,7 +162,7 @@ function parseSortDate(value?: string): string {
   return trimmed.slice(0, 7);
 }
 
-/** Indices sorted oldest → newest by start_date. */
+/** Indices sorted oldest -> newest by start_date. */
 function chronologicalExperienceIndices(experience: any[]): number[] {
   return experience
     .map((_, index) => index)
@@ -221,7 +223,7 @@ function forceCompaniesOnParsed(
 }
 
 /**
- * Titles by chronology: oldest company = Junior … newest company = Senior (JD).
+ * Titles by chronology: oldest company = Junior ... newest company = Senior (JD).
  * Returns titles aligned to experience array indices.
  */
 function buildCareerTitleLadder(targetTitle: string, experience: any[]): string[] {
@@ -268,7 +270,7 @@ function buildCareerTitleLadder(targetTitle: string, experience: any[]): string[
   return byIndex;
 }
 
-/** Force junior→senior titles on EVERY role based on employment dates. */
+/** Force junior->senior titles on EVERY role based on employment dates. */
 function applyTitleProgression(parsed: any): any {
   if (!parsed || !Array.isArray(parsed.experience) || parsed.experience.length === 0) {
     return parsed;
@@ -296,7 +298,7 @@ function stripCodeFences(text: string): string {
   return jsonString;
 }
 
-/** Clean professional job title — strip company, location, employment-type noise. */
+/** Clean professional job title - strip company, location, employment-type noise. */
 function cleanJobTitle(raw: unknown, companyName?: string): string {
   if (typeof raw !== 'string') return '';
   let title = raw.trim();
@@ -306,8 +308,8 @@ function cleanJobTitle(raw: unknown, companyName?: string): string {
     .replace(/[\u00b7\u2022]/g, ' | ')
     .replace(/\s+/g, ' ')
     .replace(/^company[- ]?logo\s*/i, '')
-    .replace(/^job\s*title\s*[:\-–—]\s*/i, '')
-    .replace(/^position\s*[:\-–—]\s*/i, '')
+    .replace(/^job\s*title\s*[:\---]\s*/i, '')
+    .replace(/^position\s*[:\---]\s*/i, '')
     .trim();
 
   const noise =
@@ -338,15 +340,15 @@ function cleanJobTitle(raw: unknown, companyName?: string): string {
   }
 
   title = title
-    .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
+    .replace(/\s+[---]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
     .replace(/\s+(?:at|@)\s+[A-Z][\w.&'"\s-]{1,60}$/gi, '')
     .trim();
 
   if (companyName && companyName.trim()) {
     const company = companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     title = title
-      .replace(new RegExp(`\\s*[-–—|/]?\\s*${company}\\s*$`, 'i'), '')
-      .replace(new RegExp(`^${company}\\s*[-–—|/:]?\\s*`, 'i'), '')
+      .replace(new RegExp(`\\s*[---|/]?\\s*${company}\\s*$`, 'i'), '')
+      .replace(new RegExp(`^${company}\\s*[---|/:]?\\s*`, 'i'), '')
       .trim();
   }
 
@@ -356,7 +358,7 @@ function cleanJobTitle(raw: unknown, companyName?: string): string {
     .filter((part) => part && !noise.test(part))
     .join(' ')
     .replace(/\s+/g, ' ')
-    .replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, '')
+    .replace(/^[\s\---|:]+|[\s\---|:]+$/g, '')
     .trim();
 
   if (title.length > 3 && title === title.toUpperCase()) {
@@ -407,7 +409,7 @@ function normalizeDescriptions(exp: any): string[] {
     const text = exp.description.trim();
     const lines = text
       .split(/\n+/)
-      .map((line: string) => line.replace(/^\s*[-•*]\s*/, '').trim())
+      .map((line: string) => line.replace(/^\s*[-**]\s*/, '').trim())
       .filter(Boolean);
     return lines.length > 1 ? lines : [text];
   }
@@ -530,25 +532,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       profileForGeneration = applyCompanyReplacements(profile, companyPick.replacements);
     }
 
-    const prompt = createAIPrompt(profileForGeneration, jd, {
-      tailorRoleTitles: shouldTailorCompanies,
-      stressIndustryLast2: shouldTailorCompanies,
-      industry: companyPick?.industry || '',
-    });
+    const prompt = shouldTailorCompanies
+      ? createTailorCompanyAIPrompt(profileForGeneration, jd, companyPick?.industry || '')
+      : createOriginalAIPrompt(profileForGeneration, jd);
+
+    const systemPrompt = shouldTailorCompanies
+      ? SYSTEM_PROMPT_TAILOR_COMPANY
+      : SYSTEM_PROMPT_ORIGINAL;
 
     let rawResponse =
       provider === 'claude'
-        ? await generateWithClaude(
-            prompt,
-            shouldTailorCompanies ? SYSTEM_PROMPT_RESUME_WITH_TITLES : SYSTEM_PROMPT_RESUME,
-            RESUME_OUTPUT_SCHEMA,
-            MAX_RESUME_OUTPUT_TOKENS
-          )
-        : await generateWithOpenAI(
-            prompt,
-            shouldTailorCompanies ? SYSTEM_PROMPT_RESUME_WITH_TITLES : SYSTEM_PROMPT_RESUME,
-            MAX_RESUME_OUTPUT_TOKENS
-          );
+        ? await generateWithClaude(prompt, systemPrompt, RESUME_OUTPUT_SCHEMA, MAX_RESUME_OUTPUT_TOKENS)
+        : await generateWithOpenAI(prompt, systemPrompt, MAX_RESUME_OUTPUT_TOKENS);
 
     if (!rawResponse?.trim()) {
       return res.status(502).json({
@@ -560,26 +555,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let parsed = normalizeParsedResume(parseJsonLoose(rawResponse));
 
     if (!experienceHasAllDescriptions(parsed.experience)) {
-      console.warn('Resume missing bullet points — running repair pass');
+      console.warn('Resume missing bullet points - running repair pass');
       parsed = await repairMissingDescriptions(parsed, profileForGeneration, jd, provider, {
         stressIndustryLast2: shouldTailorCompanies,
         industry: companyPick?.industry || '',
       });
     }
 
-    if (companyPick?.replacements?.length) {
+    if (shouldTailorCompanies && companyPick?.replacements?.length) {
       parsed = forceCompaniesOnParsed(parsed, companyPick.replacements, profile);
+      parsed = applyTitleProgression(parsed);
     } else {
       parsed = normalizeParsedResume(parsed);
-    }
-
-    if (shouldTailorCompanies) {
-      parsed = applyTitleProgression(parsed);
-    } else if (parsed) {
-      parsed = {
-        ...parsed,
-        jobTitle: cleanJobTitle(parsed.jobTitle, parsed.companyName) || parsed.jobTitle || '',
-      };
     }
 
     if (!experienceHasAllDescriptions(parsed.experience)) {
@@ -643,7 +630,7 @@ ${roles
     (role: any) => `
 [${role.index}] ${role.position} at ${role.company} (${role.start_date} - ${role.end_date})
 Original notes: ${role.originalDescription || '(none)'}
-Existing bullets: ${role.existingDescriptions.length ? JSON.stringify(role.existingDescriptions) : '(MISSING — generate 5-8 bullets)'}
+Existing bullets: ${role.existingDescriptions.length ? JSON.stringify(role.existingDescriptions) : '(MISSING - generate 5-8 bullets)'}
 `
   )
   .join('\n')}
@@ -656,8 +643,8 @@ RULES:
 ${
   options.stressIndustryLast2
     ? `- For the two most recent roles only, stress industry/field experience: ${options.industry || 'infer from JD'}
-- For all older roles, stress ONLY technical skills — do NOT mention industry domain experience
-- Do NOT change company names for older roles — leave them as provided`
+- For all older roles, stress ONLY technical skills - do NOT mention industry domain experience
+- Do NOT change company names for older roles - leave them as provided`
     : ''
 }
 - Do not change company names or dates
@@ -697,12 +684,12 @@ async function pickSubstituteCompanies(
   const prompt = `
 From this job description, identify the hiring company and its industry/field.
 
-IMPORTANT: Infer industry ONLY from the JOB DESCRIPTION / hiring company — ignore the candidate's past employers when deciding industry.
+IMPORTANT: Infer industry ONLY from the JOB DESCRIPTION / hiring company - ignore the candidate's past employers when deciding industry.
 
 Propose exactly ${needed} REAL mid-sized, lesser-known peer companies in that SAME industry (from the JD) for the candidate's most recent employer(s).
 
 SIZE & FAME RULES (STRICT):
-- Prefer roughly 50–500 employees / niche mid-market firms
+- Prefer roughly 50-500 employees / niche mid-market firms
 - Prefer obscure / regional / lesser-known companies
 - DO NOT use FAANG, Big Tech, Fortune 500 household names, mega insurers, or mega EHR vendors (Epic, Oracle Health/Cerner, Optum, UnitedHealth, Google, Amazon, Microsoft, Apple, Meta, IBM, Salesforce, etc.)
 - DO NOT use the target hiring company itself
@@ -714,7 +701,7 @@ JOB DESCRIPTION:
 ${jobDescription}
 
 CANDIDATE CURRENT MOST RECENT EMPLOYERS (replace these):
-${recent.map((exp: any, i: number) => `${i + 1}. ${exp.company || 'Unknown'} — ${exp.position || ''}`).join('\n')}
+${recent.map((exp: any, i: number) => `${i + 1}. ${exp.company || 'Unknown'} - ${exp.position || ''}`).join('\n')}
 
 Return ONLY JSON:
 {
@@ -803,52 +790,142 @@ async function generateWithClaude(
     .join('');
 }
 
-const createAIPrompt = (
+/** Original main-branch user prompt — used when tailor-company checkbox is OFF. */
+const createOriginalAIPrompt = (profile: any, jobDescription: string): string => {
+  const experience = Array.isArray(profile.experience) ? profile.experience : [];
+  const education = Array.isArray(profile.education) ? profile.education : [];
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+
+  return `
+Please create a highly tailored resume for the following job description. The goal is to position the candidate as an ideal fit for this specific role, even if their original experience doesn't perfectly match.
+
+JOB DESCRIPTION:
+${jobDescription}
+
+CANDIDATE INFORMATION:
+Name: ${profile.first_name} ${profile.last_name}
+Current Summary: ${profile.summary || ''}
+
+ORIGINAL EXPERIENCE (Use as inspiration but don't be limited by it):
+${experience.map((exp: any) => `
+- ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
+  Address: ${exp.address || ''}
+  Original Description: ${exp.description || ''}
+`).join('\n')}
+
+EDUCATION:
+${education.map((edu: any) => `
+- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
+`).join('\n')}
+
+CURRENT SKILLS:
+${skills.filter((skill: string) => skill.trim()).join(', ')}
+
+CRITICAL INSTRUCTIONS FOR TAILORING:
+1. ANALYZE the job description thoroughly to identify:
+   - Job title and company name
+   - Required technical skills and technologies
+   - Key responsibilities and duties
+   - Industry-specific terminology
+   - Desired qualifications and experience level
+   - Company culture and values mentioned
+
+2. TRANSFORM each work experience to align with the target role:
+   - Adjust job titles to show progression toward the target position
+   - Rewrite bullet points to emphasize relevant skills and achievements
+   - Include specific technologies, tools, and methodologies mentioned in the job description
+   - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
+   - Focus on transferable skills that apply to the target role
+   - Use industry-specific language and terminology from the job description
+
+3. CREATIVE TAILORING APPROACH:
+   - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
+   - Emphasize similar frameworks, methodologies, or problem-solving approaches
+   - Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
+   - Highlight leadership, project management, and collaboration skills that are universally valuable
+   - Show how past experiences demonstrate the ability to learn and adapt to new technologies
+   - Create bullet points that showcase the candidate's potential to excel in the target role
+
+4. JOB TITLE STRATEGY:
+   - Most recent position: Make it closely match or be one step below the target job title
+   - Previous positions: Show clear career progression toward the target role
+   - Use industry-standard titles that align with the target position
+   - Keep company names exactly as provided
+
+Please provide the following in JSON format:
+
+1. Extract the job title and company name from the job description
+2. A compelling professional summary that positions the candidate for this specific role
+3. Enhanced work experience with 7-12 bullet points per position that:
+   - Are specifically tailored to the job description requirements
+   - Include relevant technologies, tools, and methodologies from the job description
+   - Show quantifiable achievements and measurable impact
+   - Demonstrate transferable skills and adaptability
+   - Use action verbs and industry-specific terminology from the job description
+   - Vary bullet point count based on role complexity and duration
+4. Enhanced skills list that includes both current skills and skills mentioned in the job description
+
+5. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
+   - In every experience bullet point, wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b> tags
+   - Examples: <b>React</b>, <b>Node.js</b>, <b>PostgreSQL</b>, <b>AWS</b>, <b>Docker</b>, <b>CI/CD</b>, <b>TypeScript</b>
+   - Only wrap the skill/technology token itself — not entire sentences
+   - Do not bold soft skills or generic words
+   - Keep the <b> tags inside the JSON string values (valid JSON)
+
+EXAMPLE OF TAILORING:
+If applying for "Ruby on Rails Developer" and original experience was in "Web Development":
+- Adjust title to "Ruby on Rails Developer"
+- Include bullet points about web development, database management, API development
+- Emphasize experience with similar frameworks (if any) or rapid learning abilities
+- Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
+
+IMPORTANT JSON FORMATTING RULES:
+- Respond with ONLY valid JSON - no markdown code blocks, no extra text
+- Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
+- Must follow the response format exactly.
+
+Response format:
+{
+  "jobTitle": "extracted or inferred job title from the job description",
+  "companyName": "extracted or inferred company name from the job description",
+  "summary": "Professional summary tailored to this specific role...",
+  "experience": [
+    {
+      "position": "Tailored Job Title",
+      "company": "Company Name",
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "address": "Company Address",
+      "descriptions": [
+        "Built scalable APIs with <b>Node.js</b> and <b>TypeScript</b> on <b>AWS</b>...",
+        "Led frontend delivery using <b>React</b> and <b>Next.js</b>...",
+        "Optimized <b>PostgreSQL</b> queries and improved system reliability...",
+        "Technical accomplishment using relevant technologies or methodologies...",
+        "Leadership or collaboration experience valuable for the target position...",
+        "Problem-solving or innovation that shows adaptability...",
+        "Project management or delivery experience relevant to target role...",
+        "Cross-functional collaboration demonstrating team skills...",
+        "Process improvement or optimization relevant to target position...",
+        "Strategic thinking or planning experience valuable for the role...",
+        "Measurable outcome that demonstrates impact and results...",
+        "Technical expertise or specialization relevant to target position..."
+      ]
+    }
+  ],
+  "skills": ["skill1", "skill2", "skill3"]
+}
+`;
+};
+
+/** Tailor-company mode user prompt — used when checkbox is ON. */
+const createTailorCompanyAIPrompt = (
   profile: any,
   jobDescription: string,
-  options: {
-    tailorRoleTitles: boolean;
-    stressIndustryLast2: boolean;
-    industry: string;
-  }
+  industry: string
 ): string => {
   const experience = Array.isArray(profile.experience) ? profile.experience : [];
   const education = Array.isArray(profile.education) ? profile.education : [];
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
-  const { tailorRoleTitles, stressIndustryLast2, industry } = options;
-
-  const roleInstructions = tailorRoleTitles
-    ? `
-4. ROLE TITLES — EVERY COMPANY IN CAREER HISTORY (REQUIRED):
-   - Rewrite "position" for EVERY experience entry — never keep profile titles
-   - Grow junior → senior by employment dates (aligned to the JD title):
-     - Chronologically FIRST / oldest company = Junior-level title
-     - Middle companies = Associate / mid-level titles
-     - Chronologically LAST / newest company = Senior-level title matching the JD
-   - Example for JD "Senior Java Developer" with 4 jobs (newest listed first):
-     newest → Senior Java Developer
-     next → Java Developer
-     next → Associate Java Developer
-     oldest → Junior Java Developer
-   - Use clean titles only — do NOT append industry/domain phrases
-   - COMPANY NAMES: keep EXACTLY as listed in ORIGINAL EXPERIENCE (only the two most recent employers may already be substituted)
-   - Keep dates and number of experience entries identical
-`
-    : `
-4. NAMES:
-   - Keep EVERY company name and position EXACTLY as in ORIGINAL EXPERIENCE
-   - Keep addresses and dates as provided
-`;
-
-  const industryInstructions = stressIndustryLast2
-    ? `
-5. EXPERIENCE FOCUS BY ROLE (STRICT):
-   - Industry/field for context: ${industry || 'infer from the job description (NOT from older employers)'}
-   - TWO MOST RECENT roles only: stress industry-related experience (domain workflows, regulations, business problems, industry terminology) AND technical skills with <b>...</b>
-   - ALL OLDER roles (not among the two most recent): stress ONLY technical skills, tools, and engineering work with <b>...</b> — do NOT mention industry domain experience, healthcare/fintech/etc. terminology, or industry-specific workflows
-   - Do NOT change company names for older employers
-`
-    : '';
 
   return `
 Create a tailored resume JSON for this job.
@@ -860,7 +937,7 @@ CANDIDATE:
 Name: ${profile.first_name} ${profile.last_name}
 Summary: ${profile.summary || ''}
 
-ORIGINAL EXPERIENCE (keep company names/addresses exactly):
+ORIGINAL EXPERIENCE (keep company names/addresses exactly as listed — two most recent may already be substituted peers):
 ${experience
   .map(
     (exp: any) => `
@@ -891,7 +968,27 @@ INSTRUCTIONS:
 3. For EACH of the ${experience.length} roles, write 5-8 bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
 4. In experience bullet "descriptions" only, wrap tech skills with <b>...</b> tags (e.g. <b>React</b>). Do NOT put <b> tags in the skills array, summary, jobTitle, companyName, or position fields.
 5. skills must be a flat array of plain skill name strings with NO HTML/markup (e.g. ["Node.js", "TypeScript"] not ["<b>Node.js</b>"])
-${roleInstructions}${industryInstructions}
+
+6. ROLE TITLES — EVERY COMPANY IN CAREER HISTORY (REQUIRED):
+   - Rewrite "position" for EVERY experience entry — never keep profile titles
+   - Grow junior → senior by employment dates (aligned to the JD title):
+     - Chronologically FIRST / oldest company = Junior-level title
+     - Middle companies = Associate / mid-level titles
+     - Chronologically LAST / newest company = Senior-level title matching the JD
+   - Example for JD "Senior Java Developer" with 4 jobs (newest listed first):
+     newest → Senior Java Developer
+     next → Java Developer
+     next → Associate Java Developer
+     oldest → Junior Java Developer
+   - Use clean titles only — do NOT append industry/domain phrases
+   - COMPANY NAMES: keep EXACTLY as listed in ORIGINAL EXPERIENCE (only the two most recent employers may already be substituted)
+   - Keep dates and number of experience entries identical
+
+7. EXPERIENCE FOCUS BY ROLE (STRICT):
+   - Industry/field for context: ${industry || 'infer from the job description (NOT from older employers)'}
+   - TWO MOST RECENT roles only: stress industry-related experience (domain workflows, regulations, business problems, industry terminology) AND technical skills with <b>...</b>
+   - ALL OLDER roles (not among the two most recent): stress ONLY technical skills, tools, and engineering work with <b>...</b> — do NOT mention industry domain experience, healthcare/fintech/etc. terminology, or industry-specific workflows
+   - Do NOT change company names for older employers
 
 Return ONLY this JSON shape:
 {
@@ -912,10 +1009,7 @@ Return ONLY this JSON shape:
 }
 
 CRITICAL: experience length must be ${experience.length}. Every item needs non-empty descriptions[].
-${
-  tailorRoleTitles
-    ? 'CRITICAL: Rewrite position titles for EVERY role into a junior→senior ladder from the JD (oldest company=Junior, newest=Senior). Never keep profile titles. Only the two most recent company names may differ from the profile.'
-    : ''
-}
+CRITICAL: Rewrite position titles for EVERY role into a junior→senior ladder from the JD (oldest company=Junior, newest=Senior). Never keep profile titles. Only the two most recent company names may differ from the profile.
 `;
 };
+
