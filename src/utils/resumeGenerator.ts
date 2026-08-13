@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
+import { applyCareerTitleProgression, mostRecentIndices } from './careerProgression';
 
 type Profile = ProfileWithDetailsRPC;
 
@@ -128,34 +129,45 @@ const parseAIResponse = (
       throw new Error('AI response did not include any experience entries');
     }
 
-    // Always merge by index so company renames never wipe bullets
     const rowCount = Math.max(aiExperience.length, originalExperience.length);
     const experience: GeneratedResume['experience'] = [];
+
+    const dateSource = (originalExperience.length ? originalExperience : aiExperience).slice(
+      0,
+      rowCount
+    );
+    // Two most recent roles by date — only those get company name swaps
+    const recentOrdered = mostRecentIndices(dateSource, 2);
+    const recentIdx = new Set(recentOrdered);
 
     for (let index = 0; index < rowCount; index++) {
       const original = originalExperience[index];
       const aiExp = aiExperience[index] || {};
-      const replacement = tailorCompanyNames && index < 2 ? replacements[index] : undefined;
+      const isRecentForCompany = tailorCompanyNames && recentIdx.has(index);
+      const replacementForIndex = isRecentForCompany
+        ? replacements[recentOrdered.indexOf(index)]
+        : undefined;
+
       const descriptions = normalizeDescriptions(aiExp);
       const fallbackDescriptions = normalizeDescriptions(original);
-      const isOlderCompany = tailorCompanyNames && index >= 2;
 
       experience.push({
-        // When tailor is on: use AI positions for ALL roles (never keep profile titles)
+        // Positions from AI when tailor is on; career ladder applied to ALL roles below
         position: tailorCompanyNames
           ? aiExp.position || original?.position || ''
           : original?.position || aiExp.position || '',
-        // Company names: only last 2 (index 0-1) may change; older stay original
-        company: isOlderCompany
-          ? original?.company || ''
-          : replacement?.company
-            || (tailorCompanyNames ? aiExp.company || original?.company || '' : original?.company || aiExp.company || ''),
+        company: isRecentForCompany
+          ? replacementForIndex?.company || aiExp.company || original?.company || ''
+          : tailorCompanyNames
+            ? original?.company || aiExp.company || ''
+            : original?.company || aiExp.company || '',
         start_date: original?.start_date || aiExp.start_date || '',
         end_date: original?.end_date || aiExp.end_date || '',
-        address: isOlderCompany
-          ? original?.address || ''
-          : replacement?.address
-            || (tailorCompanyNames ? aiExp.address || original?.address || '' : original?.address || aiExp.address || ''),
+        address: isRecentForCompany
+          ? replacementForIndex?.address || aiExp.address || original?.address || ''
+          : tailorCompanyNames
+            ? original?.address || aiExp.address || ''
+            : original?.address || aiExp.address || '',
         descriptions: descriptions.length ? descriptions : fallbackDescriptions,
       });
     }
@@ -167,11 +179,18 @@ const parseAIResponse = (
       );
     }
 
+    const jobTitle = (parsed.jobTitle as string) || '';
+
+    // Junior (oldest company) → Senior (newest company) for EVERY role
+    const finalExperience = tailorCompanyNames
+      ? applyCareerTitleProgression(experience, jobTitle)
+      : experience;
+
     const enhancedData: GeneratedResume = {
       summary: (parsed.summary as string) || originalProfile.summary || '',
-      experience,
+      experience: finalExperience,
       skills: (parsed.skills as string[]) || originalProfile.skills || [],
-      jobTitle: (parsed.jobTitle as string) || '',
+      jobTitle,
       companyName: (parsed.companyName as string) || '',
     };
 

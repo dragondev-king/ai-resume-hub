@@ -22,6 +22,9 @@ const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const SYSTEM_PROMPT_RESUME =
   'You are an expert resume writer. Return ONLY complete valid JSON. Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) — always "descriptions" (array of strings). Wrap tech skills in <b>...</b>.';
 
+const SYSTEM_PROMPT_RESUME_WITH_TITLES =
+  `${SYSTEM_PROMPT_RESUME} When role-title tailoring is enabled: rewrite EVERY experience "position" for the target JD. Experience is newest-first — index 0 must be a senior-level title matching the JD; the oldest/last entry must be junior-level; middle roles must show clear progression. Never reuse the candidate's original profile titles.`;
+
 const SYSTEM_PROMPT_COMPANY_PICK =
   'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself.';
 
@@ -134,16 +137,151 @@ function cloneProfile(profile: any) {
 function applyCompanyReplacements(profile: any, replacements: CompanyReplacement[]): any {
   const next = cloneProfile(profile);
   const experience = Array.isArray(next.experience) ? next.experience : [];
-  const count = Math.min(2, replacements.length, experience.length);
+  const recentOrdered = mostRecentExperienceIndices(experience, 2);
+  const count = Math.min(replacements.length, recentOrdered.length);
   for (let i = 0; i < count; i++) {
-    experience[i] = {
-      ...experience[i],
+    const expIndex = recentOrdered[i];
+    experience[expIndex] = {
+      ...experience[expIndex],
       company: replacements[i].company,
-      address: replacements[i].address || experience[i].address || '',
+      address: replacements[i].address || experience[expIndex].address || '',
     };
   }
   next.experience = experience;
   return next;
+}
+
+function parseSortDate(value?: string): string {
+  if (!value) return '';
+  const trimmed = String(value).trim();
+  if (!trimmed || /^present$/i.test(trimmed) || /^current$/i.test(trimmed)) {
+    return '9999-12';
+  }
+  return trimmed.slice(0, 7);
+}
+
+/** Indices sorted oldest → newest by start_date. */
+function chronologicalExperienceIndices(experience: any[]): number[] {
+  return experience
+    .map((_, index) => index)
+    .sort((a, b) => {
+      const startA = parseSortDate(experience[a]?.start_date);
+      const startB = parseSortDate(experience[b]?.start_date);
+      if (startA !== startB) return startA.localeCompare(startB);
+      return parseSortDate(experience[a]?.end_date).localeCompare(
+        parseSortDate(experience[b]?.end_date)
+      );
+    });
+}
+
+/** Two most recent role indices, newest first. */
+function mostRecentExperienceIndices(experience: any[], count = 2): number[] {
+  const chrono = chronologicalExperienceIndices(experience);
+  return chrono.slice(-count).reverse();
+}
+
+function forceCompaniesOnParsed(
+  parsed: any,
+  replacements: CompanyReplacement[],
+  originalProfile?: any
+): any {
+  if (!Array.isArray(parsed?.experience)) return parsed;
+  const originalExperience = Array.isArray(originalProfile?.experience)
+    ? originalProfile.experience
+    : [];
+  const next = { ...parsed, experience: [...parsed.experience] };
+  const recentOrdered = mostRecentExperienceIndices(
+    originalExperience.length ? originalExperience : next.experience,
+    2
+  );
+  const recentSet = new Set(recentOrdered);
+
+  for (let i = 0; i < next.experience.length; i++) {
+    const original = originalExperience[i];
+    const recentSlot = recentOrdered.indexOf(i);
+    if (recentSet.has(i) && recentSlot >= 0 && replacements[recentSlot]) {
+      next.experience[i] = {
+        ...next.experience[i],
+        company: replacements[recentSlot].company,
+        address: replacements[recentSlot].address || next.experience[i].address || '',
+        descriptions: normalizeDescriptions(next.experience[i]),
+      };
+    } else {
+      next.experience[i] = {
+        ...next.experience[i],
+        company: original?.company || next.experience[i].company,
+        address: original?.address || next.experience[i].address || '',
+        start_date: original?.start_date || next.experience[i].start_date,
+        end_date: original?.end_date || next.experience[i].end_date,
+        descriptions: normalizeDescriptions(next.experience[i]),
+      };
+    }
+  }
+  return next;
+}
+
+/**
+ * Titles by chronology: oldest company = Junior … newest company = Senior (JD).
+ * Returns titles aligned to experience array indices.
+ */
+function buildCareerTitleLadder(targetTitle: string, experience: any[]): string[] {
+  const count = experience.length;
+  if (count <= 0) return [];
+
+  const cleaned = (targetTitle || '').trim() || 'Software Engineer';
+  const base =
+    cleaned
+      .replace(
+        /^(Senior|Sr\.?|Lead|Principal|Staff|Junior|Jr\.?|Associate|Mid-Level|Mid Level|Entry[- ]Level)\s+/i,
+        ''
+      )
+      .trim() || cleaned;
+
+  const seniorTitle = /^(Senior|Sr\.?|Lead|Principal|Staff)\b/i.test(cleaned)
+    ? cleaned
+    : `Senior ${base}`;
+
+  const oldestToNewest: string[] = new Array(count);
+  if (count === 1) {
+    oldestToNewest[0] = seniorTitle;
+  } else {
+    oldestToNewest[0] = `Junior ${base}`;
+    oldestToNewest[count - 1] = seniorTitle;
+    for (let step = 1; step < count - 1; step++) {
+      if (count === 3) {
+        oldestToNewest[step] = base;
+      } else if (step === count - 2) {
+        oldestToNewest[step] = base;
+      } else if (step === 1) {
+        oldestToNewest[step] = `Associate ${base}`;
+      } else {
+        oldestToNewest[step] = base;
+      }
+    }
+  }
+
+  const chrono = chronologicalExperienceIndices(experience);
+  const byIndex: string[] = new Array(count);
+  chrono.forEach((expIndex, careerStep) => {
+    byIndex[expIndex] = oldestToNewest[careerStep];
+  });
+  return byIndex;
+}
+
+/** Force junior→senior titles on EVERY role based on employment dates. */
+function applyTitleProgression(parsed: any): any {
+  if (!parsed || !Array.isArray(parsed.experience) || parsed.experience.length === 0) {
+    return parsed;
+  }
+  const ladder = buildCareerTitleLadder(String(parsed.jobTitle || ''), parsed.experience);
+  return {
+    ...parsed,
+    experience: parsed.experience.map((exp: any, index: number) => ({
+      ...exp,
+      position: ladder[index] || exp.position,
+      descriptions: normalizeDescriptions(exp),
+    })),
+  };
 }
 
 function stripCodeFences(text: string): string {
@@ -215,36 +353,6 @@ function experienceHasAllDescriptions(experience: any[]): boolean {
     experience.length > 0 &&
     experience.every((exp) => normalizeDescriptions(exp).length > 0)
   );
-}
-
-function forceCompaniesOnParsed(parsed: any, replacements: CompanyReplacement[], originalProfile?: any): any {
-  if (!Array.isArray(parsed?.experience)) return parsed;
-  const originalExperience = Array.isArray(originalProfile?.experience) ? originalProfile.experience : [];
-  const next = { ...parsed, experience: [...parsed.experience] };
-
-  const count = Math.min(2, replacements.length, next.experience.length);
-  for (let i = 0; i < count; i++) {
-    next.experience[i] = {
-      ...next.experience[i],
-      company: replacements[i]?.company || next.experience[i].company,
-      address: replacements[i]?.address || next.experience[i].address || '',
-      descriptions: normalizeDescriptions(next.experience[i]),
-    };
-  }
-
-  // Older roles (index 2+): keep original company/address/dates, but allow tailored position titles
-  for (let i = count; i < next.experience.length; i++) {
-    const original = originalExperience[i];
-    next.experience[i] = {
-      ...next.experience[i],
-      company: original?.company || next.experience[i].company,
-      address: original?.address || next.experience[i].address || '',
-      start_date: original?.start_date || next.experience[i].start_date,
-      end_date: original?.end_date || next.experience[i].end_date,
-      descriptions: normalizeDescriptions(next.experience[i]),
-    };
-  }
-  return next;
 }
 
 function normalizeParsedResume(parsed: any): any {
@@ -331,8 +439,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let rawResponse =
       provider === 'claude'
-        ? await generateWithClaude(prompt, SYSTEM_PROMPT_RESUME, RESUME_OUTPUT_SCHEMA, MAX_RESUME_OUTPUT_TOKENS)
-        : await generateWithOpenAI(prompt, SYSTEM_PROMPT_RESUME, MAX_RESUME_OUTPUT_TOKENS);
+        ? await generateWithClaude(
+            prompt,
+            shouldTailorCompanies ? SYSTEM_PROMPT_RESUME_WITH_TITLES : SYSTEM_PROMPT_RESUME,
+            RESUME_OUTPUT_SCHEMA,
+            MAX_RESUME_OUTPUT_TOKENS
+          )
+        : await generateWithOpenAI(
+            prompt,
+            shouldTailorCompanies ? SYSTEM_PROMPT_RESUME_WITH_TITLES : SYSTEM_PROMPT_RESUME,
+            MAX_RESUME_OUTPUT_TOKENS
+          );
 
     if (!rawResponse?.trim()) {
       return res.status(502).json({
@@ -355,6 +472,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parsed = forceCompaniesOnParsed(parsed, companyPick.replacements, profile);
     } else {
       parsed = normalizeParsedResume(parsed);
+    }
+
+    // When tailor is on: force JD-based junior→senior title ladder for every role
+    if (shouldTailorCompanies) {
+      parsed = applyTitleProgression(parsed);
     }
 
     if (!experienceHasAllDescriptions(parsed.experience)) {
@@ -593,12 +715,19 @@ const createAIPrompt = (
 
   const roleInstructions = tailorRoleTitles
     ? `
-4. ROLE TITLES (ALL ROLES):
-   - Tailor "position" for EVERY experience entry toward the target role — do NOT keep profile position titles
-   - Most recent: closely match or sit one step below the target job title
-   - Earlier roles: show clear progression toward the target role using industry-standard titles
-   - Use clean job titles only (e.g. "Software Engineer") — do NOT append industry/domain phrases to the title
-   - COMPANY NAMES: keep EXACTLY as in ORIGINAL EXPERIENCE (last 2 most recent are already substituted when needed; older companies stay original)
+4. ROLE TITLES — EVERY COMPANY IN CAREER HISTORY (REQUIRED):
+   - Rewrite "position" for EVERY experience entry — never keep profile titles
+   - Grow junior → senior by employment dates (aligned to the JD title):
+     - Chronologically FIRST / oldest company = Junior-level title
+     - Middle companies = Associate / mid-level titles
+     - Chronologically LAST / newest company = Senior-level title matching the JD
+   - Example for JD "Senior Java Developer" with 4 jobs (newest listed first):
+     newest → Senior Java Developer
+     next → Java Developer
+     next → Associate Java Developer
+     oldest → Junior Java Developer
+   - Use clean titles only — do NOT append industry/domain phrases
+   - COMPANY NAMES: keep EXACTLY as listed in ORIGINAL EXPERIENCE (only the two most recent employers may already be substituted)
    - Keep dates and number of experience entries identical
 `
     : `
@@ -609,10 +738,10 @@ const createAIPrompt = (
 
   const industryInstructions = stressIndustryLast2
     ? `
-5. INDUSTRY FOR LAST 2 COMPANIES ONLY:
+5. INDUSTRY FOR THE TWO MOST RECENT COMPANIES ONLY:
    - Industry/field: ${industry || 'infer from the job description (NOT from older employers)'}
-   - Put that industry context into MOST bullets for experience entries [0] and [1] only
-   - Do NOT change company names for older roles (index 2+)
+   - Put that industry context into MOST bullets for the two most recent roles only
+   - Do NOT change company names for older employers
 `
     : '';
 
@@ -676,7 +805,7 @@ Return ONLY this JSON shape:
 CRITICAL: experience length must be ${experience.length}. Every item needs non-empty descriptions[].
 ${
   tailorRoleTitles
-    ? 'CRITICAL: Tailor position titles for ALL roles (do not use original profile titles). Only the first two company names may differ from the profile; older company names must stay exact.'
+    ? 'CRITICAL: Rewrite position titles for EVERY role into a junior→senior ladder from the JD (oldest company=Junior, newest=Senior). Never keep profile titles. Only the two most recent company names may differ from the profile.'
     : ''
 }
 `;
