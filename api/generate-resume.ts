@@ -232,13 +232,12 @@ function forceCompaniesOnParsed(parsed: any, replacements: CompanyReplacement[],
     };
   }
 
-  // Lock older roles (index 2+) to original company + position — never append industry to titles
+  // Older roles (index 2+): keep original company/address/dates, but allow tailored position titles
   for (let i = count; i < next.experience.length; i++) {
     const original = originalExperience[i];
     next.experience[i] = {
       ...next.experience[i],
       company: original?.company || next.experience[i].company,
-      position: original?.position || next.experience[i].position,
       address: original?.address || next.experience[i].address || '',
       start_date: original?.start_date || next.experience[i].start_date,
       end_date: original?.end_date || next.experience[i].end_date,
@@ -432,7 +431,7 @@ RULES:
 ${
   options.stressIndustryLast2
     ? `- For roles [0] and [1] only, stress industry/field experience: ${options.industry || 'infer from JD'}
-- Do NOT change position titles or company names for roles [2+] — leave them as provided`
+- Do NOT change company names for roles [2+] — leave them as provided`
     : ''
 }
 - Do not change company names or dates
@@ -594,10 +593,12 @@ const createAIPrompt = (
 
   const roleInstructions = tailorRoleTitles
     ? `
-4. ROLE TITLES (STRICT SCOPE):
-   - ONLY tailor "position" for the FIRST TWO experience entries (most recent / last 2 companies)
-   - For experience index 2 and beyond (older roles): keep "position" EXACTLY as in ORIGINAL EXPERIENCE — do NOT append industry names, domain phrases, or extra qualifiers (e.g. do NOT turn "Software Engineer" into "Software Engineer - Healthcare Software")
-   - Keep EVERY company name and address EXACTLY as in ORIGINAL EXPERIENCE
+4. ROLE TITLES (ALL ROLES):
+   - Tailor "position" for EVERY experience entry toward the target role — do NOT keep profile position titles
+   - Most recent: closely match or sit one step below the target job title
+   - Earlier roles: show clear progression toward the target role using industry-standard titles
+   - Use clean job titles only (e.g. "Software Engineer") — do NOT append industry/domain phrases to the title
+   - COMPANY NAMES: keep EXACTLY as in ORIGINAL EXPERIENCE (last 2 most recent are already substituted when needed; older companies stay original)
    - Keep dates and number of experience entries identical
 `
     : `
@@ -608,10 +609,10 @@ const createAIPrompt = (
 
   const industryInstructions = stressIndustryLast2
     ? `
-5. INDUSTRY FOR LAST 2 ROLES ONLY:
+5. INDUSTRY FOR LAST 2 COMPANIES ONLY:
    - Industry/field: ${industry || 'infer from the job description (NOT from older employers)'}
    - Put that industry context into MOST bullets for experience entries [0] and [1] only
-   - Do NOT rewrite older roles (index 2+) to match that industry in titles or company names
+   - Do NOT change company names for older roles (index 2+)
 `
     : '';
 
@@ -675,7 +676,7 @@ Return ONLY this JSON shape:
 CRITICAL: experience length must be ${experience.length}. Every item needs non-empty descriptions[].
 ${
   tailorRoleTitles
-    ? 'CRITICAL: Only the first two roles may have tailored position titles. All older roles must keep their original position strings character-for-character.'
+    ? 'CRITICAL: Tailor position titles for ALL roles (do not use original profile titles). Only the first two company names may differ from the profile; older company names must stay exact.'
     : ''
 }
 `;

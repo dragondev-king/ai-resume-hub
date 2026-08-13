@@ -138,22 +138,21 @@ const parseAIResponse = (
       const replacement = tailorCompanyNames && index < 2 ? replacements[index] : undefined;
       const descriptions = normalizeDescriptions(aiExp);
       const fallbackDescriptions = normalizeDescriptions(original);
-      const isOlderRole = tailorCompanyNames && index >= 2;
+      const isOlderCompany = tailorCompanyNames && index >= 2;
 
       experience.push({
-        // Older roles: lock original title/company/address — only last 2 (index 0-1) may change
-        position: isOlderRole
-          ? original?.position || aiExp.position || ''
-          : tailorCompanyNames
-            ? aiExp.position || original?.position || ''
-            : original?.position || aiExp.position || '',
-        company: isOlderRole
+        // When tailor is on: use AI positions for ALL roles (never keep profile titles)
+        position: tailorCompanyNames
+          ? aiExp.position || original?.position || ''
+          : original?.position || aiExp.position || '',
+        // Company names: only last 2 (index 0-1) may change; older stay original
+        company: isOlderCompany
           ? original?.company || ''
           : replacement?.company
             || (tailorCompanyNames ? aiExp.company || original?.company || '' : original?.company || aiExp.company || ''),
         start_date: original?.start_date || aiExp.start_date || '',
         end_date: original?.end_date || aiExp.end_date || '',
-        address: isOlderRole
+        address: isOlderCompany
           ? original?.address || ''
           : replacement?.address
             || (tailorCompanyNames ? aiExp.address || original?.address || '' : original?.address || aiExp.address || ''),
