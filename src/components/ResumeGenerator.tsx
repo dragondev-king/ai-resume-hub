@@ -578,7 +578,6 @@ const ResumeGenerator: React.FC = () => {
 
   const currentResume = isEditing ? editingResume : generatedResume;
   console.log(currentResume, '=== currentResume')
-  const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
   /** Generator preview shows the generated payload as-is (export still uses resolveResumeExperience). */
   const previewExperience = currentResume?.experience ?? [];
 
