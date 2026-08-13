@@ -425,10 +425,28 @@ function cleanJobTitle(raw: unknown, companyName?: string): string {
     .replace(/^position\s*[:\-–—]\s*/i, '')
     .trim();
 
+  // Browser / ATS page-title junk: "Cloud Platform Engineer Job Details | Farmers Insurance Careers"
+  title = title
+    .replace(/\bjob\s*details\b.*$/i, '')
+    .replace(/\bcareers?\b.*$/i, '')
+    .replace(/\b(?:job|role|position)\s+posting\b.*$/i, '')
+    .replace(/\s*[|].*$/, '') // anything after a pipe is usually company/site chrome
+    .replace(/\s+/g, ' ')
+    .trim();
+
   // Drop unfinished parenthetical fragments: "(React.js"
   title = title.replace(/\([^)]*$/g, '').trim();
   // Drop complete tech stacks in parentheses: "(React.js / Next.js)"
   title = title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Cut trailing prose: "The Cloud Platform Engineer will design..."
+  title = title
+    .replace(/\s+will\b.*$/i, '')
+    .replace(/\s+is responsible\b.*$/i, '')
+    .replace(/\s+responsible for\b.*$/i, '')
+    .trim();
+  // If line starts with "The <Title>", drop leading The
+  title = title.replace(/^the\s+/i, '').trim();
 
   // Prefer the segment that looks most like a job title when pipe/newline delimited
   const segments = title
@@ -484,6 +502,9 @@ function cleanJobTitle(raw: unknown, companyName?: string): string {
 
   if (title.length > 3 && title === title.toUpperCase()) {
     title = title.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  } else if (title.length > 3 && title === title.toLowerCase()) {
+    // "cloud platform engineer" → "Cloud Platform Engineer"
+    title = title.replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   // Final sanity: must look like a real title
@@ -546,14 +567,25 @@ function extractJobTitleFromDescription(
     const line = lines[i];
     if (line.length < 3 || line.length > 100) continue;
     if (
-      /^(location|employment|department|compensation|about|overview|application|description|requirements|primary requirements|preferred|benefits|powered by|equal opportunity|apply|privacy|help|accessibility|view website|view all jobs|india|remote\s*engineering)$/i.test(
+      /^(location|employment|department|compensation|about|overview|application|description|requirements|primary requirements|preferred|benefits|powered by|equal opportunity|apply|privacy|help|accessibility|view website|view all jobs|india|remote\s*engineering|company[- ]?logo|position|time|remote|seniority|money|date|fair match|experience level|skill|industry exp\.?|insider connection|responsibilities|qualification|required|note|find any email|beyond your network|from your previous company|from your school|get \d|property & casualty|health insurance|auto insurance|life insurance)$/i.test(
         line
       )
     ) {
       continue;
     }
+    // Skip match-% / UI chrome lines
+    if (/^\d+%\s*$/.test(line) || /^\$\d/.test(line) || /^\d+\+?\s*years?\s*exp/i.test(line)) {
+      continue;
+    }
     // Never use body prose as the title
-    if (/^as an?\b/i.test(line) || /\byou will\b/i.test(line)) continue;
+    if (/^as an?\b/i.test(line) || /\byou will\b/i.test(line) || /\bwill design\b/i.test(line)) {
+      continue;
+    }
+    if (/\bjob\s*details\b/i.test(line) && TITLE_ROLE_WORD.test(line)) {
+      // Still usable after cleaning — don't skip entirely
+    } else if (/\bjob\s*details\b/i.test(line)) {
+      continue;
+    }
     if (companyName && line.toLowerCase() === companyName.trim().toLowerCase()) continue;
     if (!TITLE_ROLE_WORD.test(line) && !/\b(senior|junior|staff|principal|lead|associate)\b/i.test(line)) {
       continue;
@@ -586,6 +618,8 @@ function looksLikeBrokenTitle(title: string): boolean {
   if (!t) return true;
   if (/^as an?\b/i.test(t)) return true;
   if (/\byou will\b/i.test(t)) return true;
+  if (/\bjob\s*details\b/i.test(t)) return true;
+  if (/\bcareers?\b/i.test(t)) return true;
   if (/\([^)]*$/.test(t)) return true; // unclosed paren
   if (/\($/.test(t)) return true;
   if (/\/\s*$/.test(t)) return true;
@@ -746,6 +780,8 @@ function scoreTitleSegment(segment: string, companyName?: string): number {
     score += 2;
   }
   if (NOISE_TOKEN.test(segment)) score -= 4;
+  if (/\bjob\s*details\b/i.test(segment)) score -= 8;
+  if (/\bcareers?\b/i.test(segment)) score -= 6;
   if (companyName && new RegExp(escapeRegExp(companyName), 'i').test(segment)) score -= 3;
   if (/^https?:\/\//i.test(segment)) score -= 10;
   if (segment.length > 80) score -= 2;
@@ -1488,9 +1524,9 @@ ${skills.filter((skill: string) => skill.trim()).join(', ')}
 INSTRUCTIONS:
 1. Extract jobTitle and companyName from the JD
    - jobTitle must be a clean professional title only (e.g. "Senior JavaScript Developer", "Senior Android Engineer", "Senior Software Engineer")
-   - Use the posted title near the top of the JD (e.g. "Senior Javascript Developer - React" → "Senior JavaScript Developer")
+   - Use the posted title near the top of the JD (e.g. "Senior Javascript Developer - React" → "Senior JavaScript Developer"; "Cloud Platform Engineer Job Details | Farmers Insurance Careers" → "Cloud Platform Engineer")
    - NEVER extract from body prose like "As a Senior Frontend Developer (React.js / Next.js), you will"
-   - Never return incomplete titles with leftover parentheses or stacks (bad: "As a Senior Frontend Developer (React.js")
+   - Never return incomplete titles or ATS/page chrome (bad: "Cloud Platform Engineer Job Details", "As a Senior Frontend Developer (React.js")
    - Convert posted specialties into normal titles when needed: "Senior Software Engineer, Android" → "Senior Android Engineer"
    - Never return comma specialties like "Senior Software Engineer, Android" or glued forms like "Senior Software Engineer Android"
    - Strip company name, location, remote/hybrid, full-time/part-time, seniority badges, match %, and other marketing/UI noise
