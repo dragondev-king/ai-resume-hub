@@ -217,21 +217,31 @@ function experienceHasAllDescriptions(experience: any[]): boolean {
   );
 }
 
-function forceCompaniesOnParsed(parsed: any, replacements: CompanyReplacement[]): any {
-  if (!replacements.length || !Array.isArray(parsed?.experience)) return parsed;
+function forceCompaniesOnParsed(parsed: any, replacements: CompanyReplacement[], originalProfile?: any): any {
+  if (!Array.isArray(parsed?.experience)) return parsed;
+  const originalExperience = Array.isArray(originalProfile?.experience) ? originalProfile.experience : [];
   const next = { ...parsed, experience: [...parsed.experience] };
+
   const count = Math.min(2, replacements.length, next.experience.length);
   for (let i = 0; i < count; i++) {
     next.experience[i] = {
       ...next.experience[i],
-      company: replacements[i].company,
-      address: replacements[i].address || next.experience[i].address || '',
+      company: replacements[i]?.company || next.experience[i].company,
+      address: replacements[i]?.address || next.experience[i].address || '',
       descriptions: normalizeDescriptions(next.experience[i]),
     };
   }
+
+  // Lock older roles (index 2+) to original company + position — never append industry to titles
   for (let i = count; i < next.experience.length; i++) {
+    const original = originalExperience[i];
     next.experience[i] = {
       ...next.experience[i],
+      company: original?.company || next.experience[i].company,
+      position: original?.position || next.experience[i].position,
+      address: original?.address || next.experience[i].address || '',
+      start_date: original?.start_date || next.experience[i].start_date,
+      end_date: original?.end_date || next.experience[i].end_date,
       descriptions: normalizeDescriptions(next.experience[i]),
     };
   }
@@ -343,7 +353,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (companyPick?.replacements?.length) {
-      parsed = forceCompaniesOnParsed(parsed, companyPick.replacements);
+      parsed = forceCompaniesOnParsed(parsed, companyPick.replacements, profile);
     } else {
       parsed = normalizeParsedResume(parsed);
     }
@@ -421,7 +431,8 @@ RULES:
 - Include relevant technologies from the JD with <b>...</b> tags
 ${
   options.stressIndustryLast2
-    ? `- For roles [0] and [1] (most recent two), heavily stress industry/field experience: ${options.industry || 'infer from JD'}`
+    ? `- For roles [0] and [1] only, stress industry/field experience: ${options.industry || 'infer from JD'}
+- Do NOT change position titles or company names for roles [2+] — leave them as provided`
     : ''
 }
 - Do not change company names or dates
@@ -461,7 +472,9 @@ async function pickSubstituteCompanies(
   const prompt = `
 From this job description, identify the hiring company and its industry/field.
 
-Propose exactly ${needed} REAL mid-sized, lesser-known peer companies in that SAME industry for the candidate's most recent employer(s).
+IMPORTANT: Infer industry ONLY from the JOB DESCRIPTION / hiring company — ignore the candidate's past employers when deciding industry.
+
+Propose exactly ${needed} REAL mid-sized, lesser-known peer companies in that SAME industry (from the JD) for the candidate's most recent employer(s).
 
 SIZE & FAME RULES (STRICT):
 - Prefer roughly 50–500 employees / niche mid-market firms
@@ -581,8 +594,9 @@ const createAIPrompt = (
 
   const roleInstructions = tailorRoleTitles
     ? `
-4. ROLE TITLES:
-   - Tailor position titles toward the target role
+4. ROLE TITLES (STRICT SCOPE):
+   - ONLY tailor "position" for the FIRST TWO experience entries (most recent / last 2 companies)
+   - For experience index 2 and beyond (older roles): keep "position" EXACTLY as in ORIGINAL EXPERIENCE — do NOT append industry names, domain phrases, or extra qualifiers (e.g. do NOT turn "Software Engineer" into "Software Engineer - Healthcare Software")
    - Keep EVERY company name and address EXACTLY as in ORIGINAL EXPERIENCE
    - Keep dates and number of experience entries identical
 `
@@ -594,9 +608,10 @@ const createAIPrompt = (
 
   const industryInstructions = stressIndustryLast2
     ? `
-5. INDUSTRY FOR LAST 2 ROLES:
-   - Industry/field: ${industry || 'infer from the job description'}
-   - For the first two experience entries, put that industry context into MOST bullets
+5. INDUSTRY FOR LAST 2 ROLES ONLY:
+   - Industry/field: ${industry || 'infer from the job description (NOT from older employers)'}
+   - Put that industry context into MOST bullets for experience entries [0] and [1] only
+   - Do NOT rewrite older roles (index 2+) to match that industry in titles or company names
 `
     : '';
 
@@ -658,5 +673,10 @@ Return ONLY this JSON shape:
 }
 
 CRITICAL: experience length must be ${experience.length}. Every item needs non-empty descriptions[].
+${
+  tailorRoleTitles
+    ? 'CRITICAL: Only the first two roles may have tailored position titles. All older roles must keep their original position strings character-for-character.'
+    : ''
+}
 `;
 };

@@ -571,7 +571,7 @@ const ResumeGenerator: React.FC = () => {
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
     setIncludeLinkedIn(true);
-    setTailorCompanyNames(false);
+    // Keep tailorCompanyNames checked/unchecked as the user left it
     setGeneratedWithTailoredCompanies(false);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };

@@ -138,17 +138,25 @@ const parseAIResponse = (
       const replacement = tailorCompanyNames && index < 2 ? replacements[index] : undefined;
       const descriptions = normalizeDescriptions(aiExp);
       const fallbackDescriptions = normalizeDescriptions(original);
+      const isOlderRole = tailorCompanyNames && index >= 2;
 
       experience.push({
-        position: tailorCompanyNames
-          ? aiExp.position || original?.position || ''
-          : original?.position || aiExp.position || '',
-        company: replacement?.company
-          || (tailorCompanyNames ? aiExp.company || original?.company || '' : original?.company || aiExp.company || ''),
+        // Older roles: lock original title/company/address — only last 2 (index 0-1) may change
+        position: isOlderRole
+          ? original?.position || aiExp.position || ''
+          : tailorCompanyNames
+            ? aiExp.position || original?.position || ''
+            : original?.position || aiExp.position || '',
+        company: isOlderRole
+          ? original?.company || ''
+          : replacement?.company
+            || (tailorCompanyNames ? aiExp.company || original?.company || '' : original?.company || aiExp.company || ''),
         start_date: original?.start_date || aiExp.start_date || '',
         end_date: original?.end_date || aiExp.end_date || '',
-        address: replacement?.address
-          || (tailorCompanyNames ? aiExp.address || original?.address || '' : original?.address || aiExp.address || ''),
+        address: isOlderRole
+          ? original?.address || ''
+          : replacement?.address
+            || (tailorCompanyNames ? aiExp.address || original?.address || '' : original?.address || aiExp.address || ''),
         descriptions: descriptions.length ? descriptions : fallbackDescriptions,
       });
     }
