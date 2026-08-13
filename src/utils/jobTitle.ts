@@ -1,14 +1,13 @@
 /**
  * Normalize extracted job titles into a clean professional title.
- * Strips company/location/employment noise and comma specialties.
  * Examples:
+ *  "Senior Javascript Developer - React" → "Senior JavaScript Developer"
+ *  "As a Senior Frontend Developer (React.js / Next.js), you will:" → "Senior Frontend Developer"
  *  "Senior Software Engineer, Android" → "Senior Android Engineer"
- *  "Senior Software Engineer Android" → "Senior Android Engineer"
- *  "Senior Java Developer | Remote" → "Senior Java Developer"
  */
 
 const NOISE_TOKEN =
-  /^(remote|hybrid|onsite|on-site|full[- ]?time|part[- ]?time|contract|temporary|internship|urgent|hiring|immediately|new|open|posted|ago|hours?|days?|weeks?|good match|seniority|senior level|mid level|junior level|entry level|united states|usa|u\.s\.?|canada|uk|worldwide|atlanta|location|employment type|location type|department|compensation|offers equity|offers bonus)$/i;
+  /^(remote|hybrid|onsite|on-site|full[- ]?time|part[- ]?time|contract|temporary|internship|urgent|hiring|immediately|new|open|posted|ago|hours?|days?|weeks?|good match|seniority|senior level|mid level|junior level|entry level|united states|usa|u\.s\.?|canada|uk|india|worldwide|atlanta|location|employment type|location type|department|compensation|offers equity|offers bonus|engineering|overview|application|description)$/i;
 
 const TITLE_ROLE_WORD =
   /\b(engineer|developer|manager|analyst|architect|designer|scientist|consultant|specialist|director|lead|administrator|technician|officer|programmer|sre)\b/i;
@@ -18,14 +17,17 @@ const ROLE_WORD =
 
 /** Platform/domain specialties that fold into "Senior Android Engineer" style titles. */
 const PLATFORM_SPECIALTY =
-  /^(Android|iOS|Backend|Back[- ]?End|Front[- ]?End|Frontend|Full[- ]?Stack|Fullstack|Mobile|Web|Platform|Infrastructure|Security|DevOps|Cloud|Data|Embedded|Firmware|QA|Growth|Payments|Search|Networking|Graphics)$/i;
+  /^(Android|iOS|Backend|Back[- ]?End|Front[- ]?End|Frontend|Full[- ]?Stack|Fullstack|Mobile|Web|Platform|Infrastructure|Security|DevOps|Cloud|Data|Embedded|Firmware|QA|Growth|Payments|Search|Networking|Graphics|React|Vue|Angular|Next\.?js|Node\.?js)$/i;
 
 /** Language specialties that fold into "Senior Java Developer" style titles. */
 const LANGUAGE_SPECIALTY =
-  /^(Kotlin|Java|Swift|Go|Rust|Python|TypeScript|JavaScript|C\+\+|C#|Node\.?js|Ruby|PHP|Scala)$/i;
+  /^(Kotlin|Java|Swift|Go|Rust|Python|TypeScript|JavaScript|Javascript|C\+\+|C#|Ruby|PHP|Scala)$/i;
 
 const SENIORITY_PREFIX =
   /^(Senior|Sr\.?|Staff|Principal|Lead|Junior|Jr\.?|Associate|Mid-Level|Mid Level|Entry[- ]Level)\s+/i;
+
+const TECH_AFTER_DASH =
+  /^(Android|iOS|React|Vue|Angular|Next\.?js|Node\.?js|Backend|Frontend|Full[- ]?Stack|Mobile|Web|Kotlin|Java|Swift|Python|TypeScript|JavaScript|Javascript)$/i;
 
 /**
  * Extract a concise professional job title from raw AI / JD text.
@@ -41,15 +43,31 @@ export function cleanJobTitle(raw: unknown, companyName?: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 
+  // Strip JD prose wrappers ("As a …, you will")
+  title = title
+    .replace(
+      /^(?:as an?|we are (?:looking for|hiring)|looking for|join us as|seeking|hiring)\s+/i,
+      ''
+    )
+    .replace(/,?\s*you will\b.*$/i, '')
+    .replace(/,?\s*you(?:'ll| will) be\b.*$/i, '')
+    .replace(/:\s*$/, '')
+    .trim();
+
   title = title
     .replace(/^company[- ]?logo\s*/i, '')
     .replace(/^job\s*title\s*[:\-–—]\s*/i, '')
     .replace(/^position\s*[:\-–—]\s*/i, '')
     .trim();
 
+  // Drop unfinished parenthetical fragments: "(React.js"
+  title = title.replace(/\([^)]*$/g, '').trim();
+  // Drop complete tech stacks in parentheses: "(React.js / Next.js)"
+  title = title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+
   // Prefer the segment that looks most like a job title when pipe/newline delimited
   const segments = title
-    .split(/\s*[|/\n]+\s*/)
+    .split(/\s*[|/\n]+|\s{2,}\s*/)
     .map((s) => s.trim())
     .filter(Boolean);
 
@@ -70,28 +88,52 @@ export function cleanJobTitle(raw: unknown, companyName?: string): string {
       .trim();
   }
 
-  title = title
-    .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
-    .replace(/\s+(?:at|@)\s+[A-Z][\w.&'"\s-]{1,60}$/gi, '')
-    .trim();
+  // "Senior Javascript Developer - React" → keep core title (React is a focus, not employer)
+  {
+    const dashSpecialty = title.match(/\s+[-–—]\s+(.+)$/);
+    if (dashSpecialty && TECH_AFTER_DASH.test(dashSpecialty[1].trim().split(/[|/]/)[0].trim())) {
+      // Prefer the posted role name without trailing tech focus for clarity
+      title = title.replace(/\s+[-–—]\s+.+$/, '').trim();
+    } else {
+      title = title
+        .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
+        .replace(/\s+(?:at|@)\s+[A-Z][\w.&'"\s-]{1,60}$/gi, '')
+        .trim();
+    }
+  }
 
   title = stripTrailingNoiseClauses(title);
 
-  // "Senior Software Engineer, Android" / "... Android" → "Senior Android Engineer"
+  // "Senior Software Engineer, Android" → "Senior Android Engineer"
   title = normalizeSpecialtyTitle(title);
 
   title = title.replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, '').trim();
   title = title.replace(/\s+/g, ' ').trim();
 
+  // Canonical casing for common tokens
+  title = title
+    .replace(/\bJavascript\b/gi, 'JavaScript')
+    .replace(/\bTypescript\b/gi, 'TypeScript')
+    .replace(/\bNextjs\b/gi, 'Next.js')
+    .replace(/\bNodejs\b/gi, 'Node.js');
+
   if (title.length > 3 && title === title.toUpperCase()) {
     title = title.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  // Final sanity: must look like a real title
+  if (!TITLE_ROLE_WORD.test(title) && !/\b(senior|junior|staff|principal|lead)\b/i.test(title)) {
+    return '';
+  }
+  if (/\bas an?\b/i.test(title) || /\byou will\b/i.test(title) || /\($/.test(title)) {
+    return '';
   }
 
   return title;
 }
 
 /**
- * Prefer a clean title from the JD when available; always run through cleanJobTitle.
+ * Prefer a clean title from the JD header when available; always run through cleanJobTitle.
  */
 export function resolveJobTitle(
   rawAiTitle: unknown,
@@ -106,18 +148,20 @@ export function resolveJobTitle(
   if (!fromJd) return fromAi;
   if (!fromAi) return fromJd;
 
-  // Prefer the more specific clean title (e.g. Senior Android Engineer over Senior Software Engineer)
-  const jdSpecific = isSpecificTitle(fromJd);
-  const aiSpecific = isSpecificTitle(fromAi);
-  if (jdSpecific && !aiSpecific) return fromJd;
-  if (aiSpecific && !jdSpecific) return fromAi;
+  // Prefer JD when AI result looks like scraped prose / incomplete
+  if (looksLikeBrokenTitle(String(rawAiTitle || '')) || looksLikeBrokenTitle(fromAi)) {
+    return fromJd;
+  }
 
-  const jdScore = scoreTitleSegment(fromJd, companyName);
+  // Prefer the clearer header-style title from the JD
+  const jdScore = scoreTitleSegment(fromJd, companyName) + 2; // slight JD bias
   const aiScore = scoreTitleSegment(fromAi, companyName);
+  if (isSpecificTitle(fromJd) && !isSpecificTitle(fromAi)) return fromJd;
+  if (isSpecificTitle(fromAi) && !isSpecificTitle(fromJd) && aiScore > jdScore + 2) return fromAi;
   return jdScore >= aiScore ? fromJd : fromAi;
 }
 
-/** Scan early JD lines for the official role title, then normalize professionally. */
+/** Scan early JD lines for the official posted role title. */
 export function extractJobTitleFromDescription(
   jobDescription: string,
   companyName?: string
@@ -128,30 +172,41 @@ export function extractJobTitleFromDescription(
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .slice(0, 30);
+    .slice(0, 40);
 
   let best = '';
   let bestScore = 0;
 
-  for (const line of lines) {
-    if (line.length < 3 || line.length > 90) continue;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.length < 3 || line.length > 100) continue;
     if (
-      /^(location|employment|department|compensation|about|overview|application|powered by|equal opportunity|apply|privacy|benefits|nice to have|what you.?ll need|key responsibilities|the benefits)/i.test(
+      /^(location|employment|department|compensation|about|overview|application|description|requirements|primary requirements|preferred|benefits|powered by|equal opportunity|apply|privacy|help|accessibility|view website|view all jobs|india|remote\s*engineering)$/i.test(
         line
       )
     ) {
       continue;
     }
+    // Never use body prose as the title
+    if (/^as an?\b/i.test(line) || /\byou will\b/i.test(line)) continue;
     if (companyName && line.toLowerCase() === companyName.trim().toLowerCase()) continue;
     if (!TITLE_ROLE_WORD.test(line) && !/\b(senior|junior|staff|principal|lead|associate)\b/i.test(line)) {
       continue;
     }
 
     const cleaned = cleanJobTitle(line, companyName);
-    if (!cleaned) continue;
+    if (!cleaned || looksLikeBrokenTitle(cleaned)) continue;
 
     let score = scoreTitleSegment(cleaned, companyName);
-    if (isSpecificTitle(cleaned)) score += 2;
+    // Prefer early header lines (posted title usually near top after company name)
+    if (i <= 4) score += 4;
+    else if (i <= 10) score += 1;
+    // Prefer concise title lines
+    if (cleaned.split(/\s+/).length <= 5) score += 2;
+    if (isSpecificTitle(cleaned)) score += 1;
+    // Prefer lines that look like "Senior X Developer - React" headers
+    if (/\b(developer|engineer)\b/i.test(line) && line.length < 60) score += 2;
+
     if (score > bestScore) {
       bestScore = score;
       best = cleaned;
@@ -161,10 +216,21 @@ export function extractJobTitleFromDescription(
   return bestScore > 0 ? best : '';
 }
 
+function looksLikeBrokenTitle(title: string): boolean {
+  const t = title.trim();
+  if (!t) return true;
+  if (/^as an?\b/i.test(t)) return true;
+  if (/\byou will\b/i.test(t)) return true;
+  if (/\([^)]*$/.test(t)) return true; // unclosed paren
+  if (/\($/.test(t)) return true;
+  if (/\/\s*$/.test(t)) return true;
+  if (t.length > 70) return true;
+  return false;
+}
+
 /**
- * Fold comma / trailing specialties into a normal professional title.
+ * Fold comma specialties into a normal professional title.
  * "Senior Software Engineer, Android" → "Senior Android Engineer"
- * "Software Engineer, Backend" → "Backend Engineer"
  * Unknown specialties are dropped → keep core title only.
  */
 function normalizeSpecialtyTitle(title: string): string {
@@ -179,7 +245,10 @@ function normalizeSpecialtyTitle(title: string): string {
     specialty = parts.slice(1).join(' ').trim();
   } else {
     const trail = title.match(
-      new RegExp(`^(.+?\\b(?:Engineer|Developer|Manager|Analyst|Architect|Designer|Scientist|Consultant|Specialist|Director|Lead|Administrator|Technician|Officer|Programmer|SRE))\\s+(.+)$`, 'i')
+      new RegExp(
+        `^(.+?\\b(?:Engineer|Developer|Manager|Analyst|Architect|Designer|Scientist|Consultant|Specialist|Director|Lead|Administrator|Technician|Officer|Programmer|SRE))\\s+(.+)$`,
+        'i'
+      )
     );
     if (trail) {
       const tail = trail[2].trim();
@@ -194,7 +263,6 @@ function normalizeSpecialtyTitle(title: string): string {
     return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
   }
 
-  // Take first specialty token if multiple leaked in
   const specialtyHead = specialty.split(/[|/]/)[0].trim();
   if (!specialtyHead || NOISE_TOKEN.test(specialtyHead)) {
     return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
@@ -202,7 +270,6 @@ function normalizeSpecialtyTitle(title: string): string {
 
   const seniorityMatch = core.match(SENIORITY_PREFIX);
   const seniority = seniorityMatch ? seniorityMatch[1].replace(/\.$/, '') : '';
-  // Normalize Sr/Jr
   const seniorityLabel = /^sr\.?$/i.test(seniority)
     ? 'Senior'
     : /^jr\.?$/i.test(seniority)
@@ -212,8 +279,18 @@ function normalizeSpecialtyTitle(title: string): string {
   const roleMatch = core.match(ROLE_WORD);
   const role = roleMatch ? roleMatch[0] : 'Engineer';
 
+  // For language already in the core title ("Senior JavaScript Developer"), drop trailing specialty
+  if (LANGUAGE_SPECIALTY.test(specialtyHead) && /\b(JavaScript|Javascript|TypeScript|Python|Java|Kotlin)\b/i.test(core)) {
+    return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
+  }
+
   if (PLATFORM_SPECIALTY.test(specialtyHead)) {
     const label = canonicalSpecialty(specialtyHead);
+    // Don't turn "Senior JavaScript Developer" into "Senior React Developer" via comma path only;
+    // for "Software Engineer, Android" folding is desired.
+    if (/\b(JavaScript|Javascript|TypeScript)\s+Developer\b/i.test(core) && /^(React|Vue|Angular|Next)/i.test(label)) {
+      return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
+    }
     return [seniorityLabel, label, role].filter(Boolean).join(' ');
   }
 
@@ -223,7 +300,6 @@ function normalizeSpecialtyTitle(title: string): string {
     return [seniorityLabel, label, langRole].filter(Boolean).join(' ');
   }
 
-  // Unknown specialty: drop it, keep clean core without commas
   return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
 }
 
@@ -234,24 +310,19 @@ function canonicalSpecialty(raw: string): string {
     ios: 'iOS',
     backend: 'Backend',
     'back-end': 'Backend',
-    'back–end': 'Backend',
     frontend: 'Frontend',
     'front-end': 'Frontend',
-    'front–end': 'Frontend',
     fullstack: 'Full Stack',
     'full-stack': 'Full Stack',
-    'full–stack': 'Full Stack',
     mobile: 'Mobile',
     web: 'Web',
-    platform: 'Platform',
-    infrastructure: 'Infrastructure',
-    security: 'Security',
-    devops: 'DevOps',
-    cloud: 'Cloud',
-    data: 'Data',
-    embedded: 'Embedded',
-    firmware: 'Firmware',
-    qa: 'QA',
+    react: 'React',
+    vue: 'Vue',
+    angular: 'Angular',
+    nextjs: 'Next.js',
+    'next.js': 'Next.js',
+    nodejs: 'Node.js',
+    'node.js': 'Node.js',
     kotlin: 'Kotlin',
     java: 'Java',
     swift: 'Swift',
@@ -262,15 +333,13 @@ function canonicalSpecialty(raw: string): string {
     javascript: 'JavaScript',
     'c++': 'C++',
     'c#': 'C#',
-    nodejs: 'Node.js',
-    'node.js': 'Node.js',
   };
   return map[lower] || raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 function isSpecificTitle(title: string): boolean {
   return (
-    /\b(Android|iOS|Backend|Frontend|Full Stack|Mobile|Web|Platform|Kotlin|Java|Swift|Python|TypeScript)\b/i.test(
+    /\b(Android|iOS|Backend|Frontend|Full Stack|Mobile|Web|Platform|Kotlin|Java|Swift|Python|TypeScript|JavaScript|React|Vue|Angular)\b/i.test(
       title
     ) && !/,/.test(title)
   );
@@ -283,6 +352,7 @@ function stripTrailingNoiseClauses(title: string): string {
     .replace(/\s+Location Type\b.*$/i, '')
     .replace(/\s+Department\b.*$/i, '')
     .replace(/\s+Compensation\b.*$/i, '')
+    .replace(/\s+RemoteEngineering\b.*$/i, '')
     .trim();
 
   if (title.includes(',')) {
@@ -291,7 +361,7 @@ function stripTrailingNoiseClauses(title: string): string {
       if (index === 0) return true;
       if (NOISE_TOKEN.test(part)) return false;
       if (/^(remote|hybrid|onsite)/i.test(part)) return false;
-      if (/\b(atlanta|san francisco|washington|new york|seattle|austin|boston)\b/i.test(part)) {
+      if (/\b(atlanta|san francisco|washington|new york|seattle|austin|boston|india)\b/i.test(part)) {
         return false;
       }
       return part.length <= 40;
@@ -316,10 +386,11 @@ function scoreTitleSegment(segment: string, companyName?: string): number {
   if (segment.length > 80) score -= 2;
   if (segment.length < 3) score -= 5;
   if (/^\d+%/.test(segment) || /match/i.test(lower)) score -= 5;
-  if (/\b(location|compensation|department|overview|about the position)\b/i.test(segment)) {
+  if (/\b(location|compensation|department|overview|about the position|description)\b/i.test(segment)) {
     score -= 5;
   }
-  // Prefer titles without leftover commas
+  if (/^as an?\b/i.test(segment) || /\byou will\b/i.test(segment)) score -= 10;
+  if (/\([^)]*$/.test(segment) || /\($/.test(segment)) score -= 8;
   if (/,/.test(segment)) score -= 1;
 
   return score;
@@ -328,7 +399,7 @@ function scoreTitleSegment(segment: string, companyName?: string): number {
 function guessCompanyFromTitle(raw: unknown): string | undefined {
   if (typeof raw !== 'string') return undefined;
   const first = raw.trim().split(/\s+/)[0];
-  if (first && first.length <= 24 && !TITLE_ROLE_WORD.test(first) && !/^(senior|junior|staff)/i.test(first)) {
+  if (first && first.length <= 24 && !TITLE_ROLE_WORD.test(first) && !/^(senior|junior|staff|as)$/i.test(first)) {
     return first;
   }
   return undefined;
