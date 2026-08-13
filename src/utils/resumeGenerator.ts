@@ -1,6 +1,7 @@
 import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { applyCareerTitleProgression, mostRecentIndices } from './careerProgression';
+import { cleanJobTitle } from './jobTitle';
 
 type Profile = ProfileWithDetailsRPC;
 
@@ -179,7 +180,8 @@ const parseAIResponse = (
       );
     }
 
-    const jobTitle = (parsed.jobTitle as string) || '';
+    const jobTitle = cleanJobTitle(parsed.jobTitle, parsed.companyName as string | undefined);
+    const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
 
     // Junior (oldest company) → Senior (newest company) for EVERY role
     const finalExperience = tailorCompanyNames
@@ -191,7 +193,7 @@ const parseAIResponse = (
       experience: finalExperience,
       skills: (parsed.skills as string[]) || originalProfile.skills || [],
       jobTitle,
-      companyName: (parsed.companyName as string) || '',
+      companyName,
     };
 
     console.log(enhancedData, '=== enhancedData');

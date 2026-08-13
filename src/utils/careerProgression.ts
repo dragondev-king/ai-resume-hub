@@ -53,7 +53,13 @@ export function buildCareerTitleLadder(
   const count = experience.length;
   if (count <= 0) return [];
 
-  const cleaned = (targetTitle || '').trim() || 'Software Engineer';
+  // Expect callers to pass a cleaned title; still strip leftover company/noise suffixes lightly
+  const cleaned =
+    (targetTitle || '')
+      .trim()
+      .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Software Engineer';
   const base =
     cleaned
       .replace(

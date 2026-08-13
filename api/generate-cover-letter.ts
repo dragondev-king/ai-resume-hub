@@ -147,18 +147,22 @@ const extractJobInfo = async (jobDescription: string): Promise<{ jobTitle: strin
       messages: [
         {
           role: 'system',
-          content: 'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
+          content: 'You are an expert at extracting job information from job descriptions. Extract ONLY the exact professional job title and company name. The job title must be clean — no company name, location, remote/hybrid, full-time, or other noise (e.g. use "Senior Java Developer" not "Senior Java Developer - Acme | Remote"). You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
         },
         {
           role: 'user',
-          content: `Please extract the job title and company name from this job description. If not explicitly stated, infer from context:
+          content: `Extract the exact professional job title and company name from this job description.
+Rules for jobTitle:
+- Return only the clean role title (e.g. "Senior Java Developer")
+- Remove company name, location, employment type, seniority badges, and UI/marketing text
+- Do not include dashes or pipes with extra info after the title
 
 ${jobDescription}
 
 Respond with ONLY valid JSON in this exact format:
 {
-  "jobTitle": "extracted or inferred job title",
-  "companyName": "extracted or inferred company name"
+  "jobTitle": "exact clean job title",
+  "companyName": "company name"
 }`
         }
       ],
@@ -177,9 +181,24 @@ Respond with ONLY valid JSON in this exact format:
 
     const parsed = JSON.parse(jsonMatch[0]);
 
+    const rawTitle = parsed.jobTitle || '';
+    const companyName = parsed.companyName || '';
+    // Lightweight clean (keep API self-contained)
+    let jobTitle = String(rawTitle).trim()
+      .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
+      .replace(/\s*[|].*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (companyName) {
+      const company = String(companyName).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      jobTitle = jobTitle
+        .replace(new RegExp(`\\s*[-–—|/]?\\s*${company}\\s*$`, 'i'), '')
+        .trim();
+    }
+
     return {
-      jobTitle: parsed.jobTitle || '',
-      companyName: parsed.companyName || ''
+      jobTitle,
+      companyName
     };
   } catch (error) {
     console.error('Error extracting job info:', error);

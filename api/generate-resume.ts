@@ -20,7 +20,7 @@ const MAX_REPAIR_TOKENS = 6000;
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 const SYSTEM_PROMPT_RESUME =
-  'You are an expert resume writer. Return ONLY complete valid JSON. Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) — always "descriptions" (array of strings). Wrap tech skills in <b>...</b>.';
+  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY the exact professional job title with no company name, location, or employment-type noise (e.g. "Senior Java Developer"). Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) — always "descriptions" (array of strings). Wrap tech skills in <b>...</b>.';
 
 const SYSTEM_PROMPT_RESUME_WITH_TITLES =
   `${SYSTEM_PROMPT_RESUME} When role-title tailoring is enabled: rewrite EVERY experience "position" for the target JD. Experience is newest-first — index 0 must be a senior-level title matching the JD; the oldest/last entry must be junior-level; middle roles must show clear progression. Never reuse the candidate's original profile titles.`;
@@ -273,9 +273,11 @@ function applyTitleProgression(parsed: any): any {
   if (!parsed || !Array.isArray(parsed.experience) || parsed.experience.length === 0) {
     return parsed;
   }
-  const ladder = buildCareerTitleLadder(String(parsed.jobTitle || ''), parsed.experience);
+  const jobTitle = cleanJobTitle(parsed.jobTitle, parsed.companyName);
+  const ladder = buildCareerTitleLadder(jobTitle || String(parsed.jobTitle || ''), parsed.experience);
   return {
     ...parsed,
+    jobTitle: jobTitle || parsed.jobTitle || '',
     experience: parsed.experience.map((exp: any, index: number) => ({
       ...exp,
       position: ladder[index] || exp.position,
@@ -292,6 +294,76 @@ function stripCodeFences(text: string): string {
     jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
   }
   return jsonString;
+}
+
+/** Clean professional job title — strip company, location, employment-type noise. */
+function cleanJobTitle(raw: unknown, companyName?: string): string {
+  if (typeof raw !== 'string') return '';
+  let title = raw.trim();
+  if (!title) return '';
+
+  title = title
+    .replace(/[\u00b7\u2022]/g, ' | ')
+    .replace(/\s+/g, ' ')
+    .replace(/^company[- ]?logo\s*/i, '')
+    .replace(/^job\s*title\s*[:\-–—]\s*/i, '')
+    .replace(/^position\s*[:\-–—]\s*/i, '')
+    .trim();
+
+  const noise =
+    /\b(remote|hybrid|onsite|on-site|full[- ]?time|part[- ]?time|contract|temporary|internship|urgent|hiring|immediately|good match|seniority|senior level|united states|usa|u\.s\.?)\b/i;
+
+  const segments = title
+    .split(/\s*[|/\n]+\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (segments.length > 1) {
+    const best = segments
+      .map((segment) => {
+        let score = 0;
+        if (/\b(engineer|developer|manager|analyst|architect|designer|scientist|consultant|specialist|director|lead|administrator|technician|officer|programmer)\b/i.test(segment)) {
+          score += 5;
+        }
+        if (/\b(senior|junior|staff|principal|lead|associate|sr\.?|jr\.?)\b/i.test(segment)) score += 2;
+        if (noise.test(segment)) score -= 4;
+        if (companyName && new RegExp(companyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(segment)) {
+          score -= 3;
+        }
+        if (segment.length > 60) score -= 2;
+        return { segment, score };
+      })
+      .sort((a, b) => b.score - a.score)[0];
+    if (best && best.score > 0) title = best.segment;
+  }
+
+  title = title
+    .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
+    .replace(/\s+(?:at|@)\s+[A-Z][\w.&'"\s-]{1,60}$/gi, '')
+    .trim();
+
+  if (companyName && companyName.trim()) {
+    const company = companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    title = title
+      .replace(new RegExp(`\\s*[-–—|/]?\\s*${company}\\s*$`, 'i'), '')
+      .replace(new RegExp(`^${company}\\s*[-–—|/:]?\\s*`, 'i'), '')
+      .trim();
+  }
+
+  title = title
+    .split(/\s*[|,]\s*/)
+    .map((part) => part.trim())
+    .filter((part) => part && !noise.test(part))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, '')
+    .trim();
+
+  if (title.length > 3 && title === title.toUpperCase()) {
+    title = title.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  return title;
 }
 
 function parseJsonLoose(text: string): any {
@@ -474,9 +546,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parsed = normalizeParsedResume(parsed);
     }
 
-    // When tailor is on: force JD-based junior→senior title ladder for every role
     if (shouldTailorCompanies) {
       parsed = applyTitleProgression(parsed);
+    } else if (parsed) {
+      parsed = {
+        ...parsed,
+        jobTitle: cleanJobTitle(parsed.jobTitle, parsed.companyName) || parsed.jobTitle || '',
+      };
     }
 
     if (!experienceHasAllDescriptions(parsed.experience)) {
@@ -779,6 +855,9 @@ ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 INSTRUCTIONS:
 1. Extract jobTitle and companyName from the JD
+   - jobTitle must be ONLY the exact professional job title (e.g. "Senior Java Developer")
+   - Strip company name, location, remote/hybrid, full-time/part-time, seniority badges, match %, and other marketing/UI noise
+   - Do NOT return titles like "Senior Java Developer - Chordline Health" or "Senior Java Developer | Remote"
 2. Write a tailored summary
 3. For EACH of the ${experience.length} roles, write 5-8 bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
 4. Include JD-relevant tech with <b>...</b> tags; keep wording simple
@@ -786,8 +865,8 @@ ${roleInstructions}${industryInstructions}
 
 Return ONLY this JSON shape:
 {
-  "jobTitle": "...",
-  "companyName": "...",
+  "jobTitle": "exact clean job title only, e.g. Senior Java Developer",
+  "companyName": "company name only",
   "summary": "...",
   "experience": [
     {
