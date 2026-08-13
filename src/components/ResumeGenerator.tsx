@@ -8,7 +8,7 @@ import { generateDocx } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
-import { parseBoldMarkup } from '../utils/resumeLayout';
+import { parseBoldMarkup, stripBoldMarkup } from '../utils/resumeLayout';
 import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from '../resumeTemplates';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -665,7 +665,7 @@ const ResumeGenerator: React.FC = () => {
                 Tailor company names and role titles
               </label>
               <p className="text-gray-500">
-                When enabled, replaces only the two most recent company names with mid-sized industry peers, rewrites every role title into a junior→senior progression matching the JD, and stresses that industry in the two most recent roles’ bullets. When disabled, only experience bullet points are tailored.
+                When enabled, replaces only the two most recent company names with mid-sized industry peers, rewrites every role title into a junior→senior progression matching the JD, stresses industry experience only in those two recent roles, and keeps older roles technical-skills focused. When disabled, only experience bullet points are tailored.
               </p>
             </div>
           </div>
@@ -994,7 +994,7 @@ const ResumeGenerator: React.FC = () => {
                         key={index}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800"
                       >
-                        {skill}
+                        {stripBoldMarkup(skill)}
                         <button
                           onClick={() => handleRemoveSkill(index)}
                           className="ml-2 text-primary-600 hover:text-primary-800"
@@ -1012,7 +1012,7 @@ const ResumeGenerator: React.FC = () => {
                       key={index}
                       className="px-3 py-1 bg-primary-100 text-primary-800 text-sm font-medium rounded-full"
                     >
-                      {skill}
+                      {stripBoldMarkup(skill)}
                     </span>
                   ))}
                 </div>

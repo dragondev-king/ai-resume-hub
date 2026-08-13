@@ -2,6 +2,7 @@ import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { applyCareerTitleProgression, mostRecentIndices } from './careerProgression';
 import { cleanJobTitle } from './jobTitle';
+import { stripBoldMarkup } from './resumeLayout';
 
 type Profile = ProfileWithDetailsRPC;
 
@@ -188,10 +189,17 @@ const parseAIResponse = (
       ? applyCareerTitleProgression(experience, jobTitle)
       : experience;
 
+    const rawSkills = Array.isArray(parsed.skills)
+      ? (parsed.skills as string[])
+      : originalProfile.skills || [];
+    const skills = rawSkills
+      .map((skill) => stripBoldMarkup(String(skill || '')).trim())
+      .filter(Boolean);
+
     const enhancedData: GeneratedResume = {
       summary: (parsed.summary as string) || originalProfile.summary || '',
       experience: finalExperience,
-      skills: (parsed.skills as string[]) || originalProfile.skills || [],
+      skills: skills.length ? skills : originalProfile.skills || [],
       jobTitle,
       companyName,
     };

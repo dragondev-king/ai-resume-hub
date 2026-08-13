@@ -20,7 +20,7 @@ const MAX_REPAIR_TOKENS = 6000;
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 const SYSTEM_PROMPT_RESUME =
-  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY the exact professional job title with no company name, location, or employment-type noise (e.g. "Senior Java Developer"). Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) — always "descriptions" (array of strings). Wrap tech skills in <b>...</b>.';
+  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY the exact professional job title with no company name, location, or employment-type noise (e.g. "Senior Java Developer"). Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) — always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets — never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>").';
 
 const SYSTEM_PROMPT_RESUME_WITH_TITLES =
   `${SYSTEM_PROMPT_RESUME} When role-title tailoring is enabled: rewrite EVERY experience "position" for the target JD. Experience is newest-first — index 0 must be a senior-level title matching the JD; the oldest/last entry must be junior-level; middle roles must show clear progression. Never reuse the candidate's original profile titles.`;
@@ -427,6 +427,29 @@ function experienceHasAllDescriptions(experience: any[]): boolean {
   );
 }
 
+function normalizeSkillName(skill: unknown): string {
+  if (typeof skill !== 'string') return '';
+  return skill
+    .replace(/<\/?(?:b|bold)>/gi, '')
+    .replace(/\*\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeSkillsList(skills: unknown): string[] {
+  if (!Array.isArray(skills)) return [];
+  const cleaned = skills.map(normalizeSkillName).filter(Boolean);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const skill of cleaned) {
+    const key = skill.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(skill);
+  }
+  return unique;
+}
+
 function normalizeParsedResume(parsed: any): any {
   if (!parsed || typeof parsed !== 'object') return parsed;
   const experience = Array.isArray(parsed.experience)
@@ -435,7 +458,11 @@ function normalizeParsedResume(parsed: any): any {
         descriptions: normalizeDescriptions(exp),
       }))
     : [];
-  return { ...parsed, experience };
+  return {
+    ...parsed,
+    experience,
+    skills: normalizeSkillsList(parsed.skills),
+  };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -625,11 +652,12 @@ RULES:
 - Return one experience entry per role, same order
 - Each MUST have "descriptions": string[] with 5-8 bullets
 - If bullets already exist, you may improve them but keep them non-empty
-- Include relevant technologies from the JD with <b>...</b> tags
+- Include relevant technologies from the JD with <b>...</b> tags inside description bullets only
 ${
   options.stressIndustryLast2
-    ? `- For roles [0] and [1] only, stress industry/field experience: ${options.industry || 'infer from JD'}
-- Do NOT change company names for roles [2+] — leave them as provided`
+    ? `- For the two most recent roles only, stress industry/field experience: ${options.industry || 'infer from JD'}
+- For all older roles, stress ONLY technical skills — do NOT mention industry domain experience
+- Do NOT change company names for older roles — leave them as provided`
     : ''
 }
 - Do not change company names or dates
@@ -814,9 +842,10 @@ const createAIPrompt = (
 
   const industryInstructions = stressIndustryLast2
     ? `
-5. INDUSTRY FOR THE TWO MOST RECENT COMPANIES ONLY:
-   - Industry/field: ${industry || 'infer from the job description (NOT from older employers)'}
-   - Put that industry context into MOST bullets for the two most recent roles only
+5. EXPERIENCE FOCUS BY ROLE (STRICT):
+   - Industry/field for context: ${industry || 'infer from the job description (NOT from older employers)'}
+   - TWO MOST RECENT roles only: stress industry-related experience (domain workflows, regulations, business problems, industry terminology) AND technical skills with <b>...</b>
+   - ALL OLDER roles (not among the two most recent): stress ONLY technical skills, tools, and engineering work with <b>...</b> — do NOT mention industry domain experience, healthcare/fintech/etc. terminology, or industry-specific workflows
    - Do NOT change company names for older employers
 `
     : '';
@@ -860,7 +889,8 @@ INSTRUCTIONS:
    - Do NOT return titles like "Senior Java Developer - Chordline Health" or "Senior Java Developer | Remote"
 2. Write a tailored summary
 3. For EACH of the ${experience.length} roles, write 5-8 bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
-4. Include JD-relevant tech with <b>...</b> tags; keep wording simple
+4. In experience bullet "descriptions" only, wrap tech skills with <b>...</b> tags (e.g. <b>React</b>). Do NOT put <b> tags in the skills array, summary, jobTitle, companyName, or position fields.
+5. skills must be a flat array of plain skill name strings with NO HTML/markup (e.g. ["Node.js", "TypeScript"] not ["<b>Node.js</b>"])
 ${roleInstructions}${industryInstructions}
 
 Return ONLY this JSON shape:
@@ -878,7 +908,7 @@ Return ONLY this JSON shape:
       "descriptions": ["bullet 1 with <b>Tech</b>", "bullet 2", "bullet 3", "bullet 4", "bullet 5"]
     }
   ],
-  "skills": ["..."]
+  "skills": ["Node.js", "TypeScript", "Python"]
 }
 
 CRITICAL: experience length must be ${experience.length}. Every item needs non-empty descriptions[].
