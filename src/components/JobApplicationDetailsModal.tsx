@@ -123,6 +123,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
           useAiEnhancedJobTitle:
             getTailorCompanyNamesForApplication(application) ||
             getUseAiEnhancedJobTitleForProfile(applicationProfile),
+          includeLinkedIn: !getTailorCompanyNamesForApplication(application),
           templateId: template.id,
         };
         if (format === 'docx') {

@@ -255,7 +255,8 @@ const ResumeGenerator: React.FC = () => {
     const opts = {
       useAiEnhancedJobTitle:
         generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile),
-      includeLinkedIn,
+      // Tailored company names = omit LinkedIn even if the checkbox is on
+      includeLinkedIn: includeLinkedIn && !generatedWithTailoredCompanies,
       templateId: template.id,
     };
     const fileName = buildResumeFileName(
@@ -858,14 +859,27 @@ const ResumeGenerator: React.FC = () => {
               </div>
             </fieldset>
             <div className="flex flex-col items-stretch gap-3 sm:items-end">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <label
+                className={`flex items-center gap-2 text-sm cursor-pointer select-none ${
+                  generatedWithTailoredCompanies ? 'text-gray-400' : 'text-gray-700'
+                }`}
+                title={
+                  generatedWithTailoredCompanies
+                    ? 'LinkedIn is omitted when company names are tailored'
+                    : undefined
+                }
+              >
                 <input
                   type="checkbox"
-                  checked={includeLinkedIn}
+                  checked={includeLinkedIn && !generatedWithTailoredCompanies}
+                  disabled={generatedWithTailoredCompanies}
                   onChange={(e) => setIncludeLinkedIn(e.target.checked)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
-                <span>Include LinkedIn link</span>
+                <span>
+                  Include LinkedIn link
+                  {generatedWithTailoredCompanies ? ' — omitted for tailored companies' : ''}
+                </span>
               </label>
               <div className="flex flex-wrap gap-2 justify-end">
                 <button
