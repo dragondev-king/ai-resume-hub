@@ -25,13 +25,13 @@ const SYSTEM_PROMPT_ORIGINAL =
 
 /** Tailor-company mode system prompt - used when checkbox is ON. */
 const SYSTEM_PROMPT_TAILOR_COMPANY =
-  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY a clean professional job title with no company name, location, or employment-type noise (e.g. "Senior Android Engineer" or "Senior Software Engineer" — never comma specialties like "Senior Software Engineer, Android"). Every experience item MUST include a non-empty "descriptions" array with 5-8 bullet strings. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate\'s original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.';
+  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY a clean professional job title with no company name, location, or employment-type noise (e.g. "Senior Android Engineer" or "Senior Software Engineer" — never comma specialties like "Senior Software Engineer, Android"). Every experience item MUST include a non-empty "descriptions" array with 5-8 contentful bullet strings. Bullet tone MUST match that role\'s seniority: Junior/entry roles must NOT lead teams, own architecture, or mentor; use contribute/implement/build language. Mid roles own features; Senior roles may lead and mentor. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate\'s original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.';
 
 const SYSTEM_PROMPT_COMPANY_PICK =
-  'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself.';
+  'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself. CRITICAL: replacements must have NO business relationship with the hiring company (not partners, customers, vendors, subsidiaries, parents, affiliates, investors, portfolio companies, contractors, or companies named in the JD). The ONLY allowed relationship is being a direct rival/competitor.';
 
 const SYSTEM_PROMPT_REPAIR =
-  'You fill missing resume bullet points. Return ONLY valid JSON: { "experience": [ { "descriptions": ["bullet", ...] } ] } with one entry per input role, each having 5-8 non-empty description strings. Wrap tech skills in <b>...</b>.';
+  'You fill missing resume bullet points. Return ONLY valid JSON: { "experience": [ { "descriptions": ["bullet", ...] } ] } with one entry per input role, each having 5-8 non-empty contentful description strings. Bullet seniority MUST match the role title (Junior never Led/Owned architecture/Mentored). Wrap tech skills in <b>...</b>.';
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -280,12 +280,74 @@ function applyTitleProgression(parsed: any, jobDescription?: string): any {
   return {
     ...parsed,
     jobTitle: jobTitle || parsed.jobTitle || '',
-    experience: parsed.experience.map((exp: any, index: number) => ({
-      ...exp,
-      position: ladder[index] || exp.position,
-      descriptions: normalizeDescriptions(exp),
-    })),
+    experience: parsed.experience.map((exp: any, index: number) => {
+      const position = ladder[index] || exp.position;
+      const descriptions = toneDescriptionsForTitle(position, normalizeDescriptions(exp));
+      return {
+        ...exp,
+        position,
+        descriptions,
+      };
+    }),
   };
+}
+
+/** Soften leadership claims that don't fit Junior / early-career titles. */
+function toneDescriptionsForTitle(position: string, descriptions: string[]): string[] {
+  const title = String(position || '');
+  if (!descriptions.length) return descriptions;
+
+  if (/\b(Junior|Jr\.?|Entry[- ]Level|Intern)\b/i.test(title)) {
+    return descriptions.map((line) => softenJuniorBullet(String(line || '')));
+  }
+
+  if (
+    /\b(Associate|Mid-Level|Mid Level)\b/i.test(title) ||
+    !/\b(Senior|Staff|Principal|Lead)\b/i.test(title)
+  ) {
+    return descriptions.map((line) => softenMidBullet(String(line || '')));
+  }
+
+  return descriptions;
+}
+
+function softenJuniorBullet(line: string): string {
+  const openers: Array<[RegExp, string]> = [
+    [/^Led design and deployment of/i, 'Helped implement'],
+    [/^Led the design of/i, 'Contributed to the design of'],
+    [/^Led design of/i, 'Contributed to design of'],
+    [/^Led development of/i, 'Built'],
+    [/^Led the development of/i, 'Built'],
+    [/^Led deployment of/i, 'Supported deployment of'],
+    [/^Led\b/i, 'Contributed to'],
+    [/^Owned\b/i, 'Worked on'],
+    [/^Architected\b/i, 'Implemented'],
+    [/^Mentored\b/i, 'Collaborated with'],
+    [/^Directed\b/i, 'Assisted with'],
+    [/^Spearheaded\b/i, 'Contributed to'],
+    [/^Drove\b/i, 'Supported'],
+    [/^Established\b/i, 'Helped establish'],
+    [/^Set technical direction\b/i, 'Followed technical guidance for'],
+    [/^Managed a team\b/i, 'Collaborated with teammates on'],
+    [/^Managed the team\b/i, 'Collaborated with teammates on'],
+  ];
+  let next = line.trim();
+  for (const [pattern, replacement] of openers) {
+    if (pattern.test(next)) {
+      next = next.replace(pattern, replacement);
+      break;
+    }
+  }
+  return next.replace(/^\s*[a-z]/, (c) => c.toUpperCase());
+}
+
+function softenMidBullet(line: string): string {
+  let next = line.trim();
+  next = next
+    .replace(/^Mentored (?:a |the )?team\b/i, 'Collaborated with teammates')
+    .replace(/^Set technical direction\b/i, 'Improved technical approach for')
+    .replace(/^Managed (?:a |the )?team\b/i, 'Worked with teammates on');
+  return next.replace(/^\s*[a-z]/, (c) => c.toUpperCase());
 }
 
 /** Always normalize extracted jobTitle into a clean professional title. */
@@ -789,8 +851,13 @@ Existing bullets: ${role.existingDescriptions.length ? JSON.stringify(role.exist
 
 RULES:
 - Return one experience entry per role, same order
-- Each MUST have "descriptions": string[] with 5-8 bullets
+- Each MUST have "descriptions": string[] with 5-8 contentful bullets
 - If bullets already exist, you may improve them but keep them non-empty
+- Match bullet seniority to that role's position title:
+  - Junior/Jr/Entry: Contribute, Implement, Build, Assist, Debug, Write — NEVER Led, Owned architecture, Mentored, Spearheaded, Directed
+  - Associate/mid (no Junior/Senior): Own features/components; avoid team leadership claims
+  - Senior/Staff/Principal/Lead: May lead projects, mentor, set technical direction
+- Each bullet must be specific and substantive: what you built/changed + tech (<b>...</b>) + concrete detail (scope, dataset, feature, performance, users, or measurable outcome). No vague one-liners.
 - Include relevant technologies from the JD with <b>...</b> tags inside description bullets only
 ${
   options.stressIndustryLast2
@@ -833,21 +900,30 @@ async function pickSubstituteCompanies(
   const experience = Array.isArray(profile.experience) ? profile.experience : [];
   const recent = experience.slice(0, 2);
   const needed = Math.min(2, Math.max(1, recent.length));
-  const prompt = `
+
+  const attempt = async (extraGuard: string): Promise<CompanyPickResult> => {
+    const prompt = `
 From this job description, identify the hiring company and its industry/field.
 
 IMPORTANT: Infer industry ONLY from the JOB DESCRIPTION / hiring company - ignore the candidate's past employers when deciding industry.
 
-Propose exactly ${needed} REAL mid-sized, lesser-known peer companies in that SAME industry (from the JD) for the candidate's most recent employer(s).
+Propose exactly ${needed} REAL mid-sized, lesser-known companies in that SAME industry (from the JD) for the candidate's most recent employer(s).
 
 SIZE & FAME RULES (STRICT):
 - Prefer roughly 50-500 employees / niche mid-market firms
 - Prefer obscure / regional / lesser-known companies
 - DO NOT use FAANG, Big Tech, Fortune 500 household names, mega insurers, or mega EHR vendors (Epic, Oracle Health/Cerner, Optum, UnitedHealth, Google, Amazon, Microsoft, Apple, Meta, IBM, Salesforce, etc.)
 - DO NOT use the target hiring company itself
-- First replacement = preferably a lesser-known mid-market rival
-- Second = a different mid-sized peer in the same industry
 - Real company names only; include plausible HQ city
+
+RELATIONSHIP RULES (STRICT — MOST IMPORTANT):
+- Substitutes must have NO relationship with the hiring/target company
+- Forbidden relationships include: partners, customers, clients, vendors, suppliers, subsidiaries, parent companies, sister brands, affiliates, contractors, resellers, integrators, investors, portfolio companies, acquisitions, spin-offs, joint ventures, or any company named/mentioned in the JD as a customer/partner/user
+- The ONLY acceptable relationship is being a direct rival/competitor in the same market
+- First replacement = preferably a lesser-known mid-market rival of the hiring company
+- Second = a different company that is either another rival OR a completely unrelated mid-sized peer in the same industry (still no partnership/customer/vendor ties)
+- If unsure whether a company is related to the hiring company, do NOT use it — pick a clearly independent peer instead
+${extraGuard}
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -860,34 +936,103 @@ Return ONLY JSON:
   "targetCompany": "hiring company from the JD",
   "industry": "short industry/field label",
   "replacements": [
-    { "company": "Mid-sized lesser-known peer", "address": "City, State" }
+    { "company": "Independent mid-sized rival or unrelated peer", "address": "City, State" }
   ]
 }
 `;
 
-  const raw =
-    provider === 'claude'
-      ? await generateWithClaude(prompt, SYSTEM_PROMPT_COMPANY_PICK, COMPANY_PICK_SCHEMA, MAX_COMPANY_PICK_TOKENS)
-      : await generateWithOpenAI(prompt, SYSTEM_PROMPT_COMPANY_PICK, MAX_COMPANY_PICK_TOKENS);
+    const raw =
+      provider === 'claude'
+        ? await generateWithClaude(prompt, SYSTEM_PROMPT_COMPANY_PICK, COMPANY_PICK_SCHEMA, MAX_COMPANY_PICK_TOKENS)
+        : await generateWithOpenAI(prompt, SYSTEM_PROMPT_COMPANY_PICK, MAX_COMPANY_PICK_TOKENS);
 
-  const parsed = parseJsonLoose(raw) as CompanyPickResult;
-  const replacements = (parsed.replacements || [])
-    .slice(0, needed)
-    .map((r) => ({
-      company: String(r?.company || '').trim(),
-      address: String(r?.address || '').trim(),
-    }))
-    .filter((r) => r.company);
+    const parsed = parseJsonLoose(raw) as CompanyPickResult;
+    const targetCompany = String(parsed.targetCompany || '').trim();
+    const replacements = (parsed.replacements || [])
+      .slice(0, needed)
+      .map((r) => ({
+        company: String(r?.company || '').trim(),
+        address: String(r?.address || '').trim(),
+      }))
+      .filter((r) => r.company);
 
-  if (replacements.length < needed) {
-    throw new Error(`Expected ${needed} company replacements, got ${replacements.length}`);
+    if (replacements.length < needed) {
+      throw new Error(`Expected ${needed} company replacements, got ${replacements.length}`);
+    }
+
+    return {
+      targetCompany,
+      industry: String(parsed.industry || ''),
+      replacements,
+    };
+  };
+
+  let result = await attempt('');
+  const rejected = replacementsRelatedToTarget(result, jobDescription);
+  if (rejected.length) {
+    console.warn('Rejected related substitute companies:', rejected.join(', '));
+    result = await attempt(
+      `\nRETRY GUARD: Do NOT use these rejected companies (related or named in the JD): ${rejected.join(', ')}. Pick different independent rivals/peers.`
+    );
+    const stillBad = replacementsRelatedToTarget(result, jobDescription);
+    if (stillBad.length) {
+      throw new Error(
+        `Substitute companies still related to the hiring company or named in the JD: ${stillBad.join(', ')}`
+      );
+    }
   }
 
-  return {
-    targetCompany: String(parsed.targetCompany || ''),
-    industry: String(parsed.industry || ''),
-    replacements,
-  };
+  return result;
+}
+
+/** True if a proposed substitute looks related to the hiring company / appears in the JD. */
+function replacementsRelatedToTarget(
+  pick: CompanyPickResult,
+  jobDescription: string
+): string[] {
+  const target = (pick.targetCompany || '').trim();
+  const jd = jobDescription || '';
+  const bad: string[] = [];
+
+  for (const r of pick.replacements || []) {
+    const company = (r.company || '').trim();
+    if (!company) continue;
+
+    if (target && company.toLowerCase() === target.toLowerCase()) {
+      bad.push(company);
+      continue;
+    }
+    if (target && companyNamesOverlap(company, target)) {
+      bad.push(company);
+      continue;
+    }
+    // Companies named in the JD are usually customers/partners/examples — not allowed as substitutes.
+    // (Direct rivals are almost never listed that way in a posting.)
+    if (companyMentionedInText(company, jd)) {
+      bad.push(company);
+    }
+  }
+
+  return [...new Set(bad)];
+}
+
+function companyMentionedInText(company: string, text: string): boolean {
+  if (!company || company.length < 3 || !text) return false;
+  const escaped = company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+}
+
+function companyNamesOverlap(a: string, b: string): boolean {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/\b(inc|llc|ltd|corp|corporation|company|co|technologies|technology|labs|lab)\b\.?/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  const na = norm(a);
+  const nb = norm(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
 }
 
 async function generateWithOpenAI(
@@ -989,6 +1134,8 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
    - Focus on transferable skills that apply to the target role
    - Use industry-specific language and terminology from the job description
+   - Match bullet seniority to that role's title: Junior/entry roles contribute/implement/build — never Led/Owned architecture/Mentored; Senior roles may lead
+   - Make each bullet contentful: action + what changed + tech + concrete detail (scope, feature, or measurable outcome) — avoid vague one-liners
 
 3. CREATIVE TAILORING APPROACH:
    - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
@@ -1119,7 +1266,10 @@ INSTRUCTIONS:
    - Strip company name, location, remote/hybrid, full-time/part-time, seniority badges, match %, and other marketing/UI noise
    - Do NOT return titles like "Senior Java Developer - Chordline Health" or "Senior Java Developer | Remote"
 2. Write a tailored summary
-3. For EACH of the ${experience.length} roles, write 5-8 bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
+3. For EACH of the ${experience.length} roles, write 5-8 contentful bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
+   - Each bullet must be specific: action + what was built/changed + technologies with <b>...</b> + concrete detail (scope, feature, data volume, latency, users, accuracy, or other measurable outcome when plausible)
+   - Cover different facets of the work (implementation, debugging, collaboration, testing/delivery) — not repetitive generic lines
+   - Avoid vague filler ("worked on projects", "helped the team", "used various tools")
 4. In experience bullet "descriptions" only, wrap tech skills with <b>...</b> tags (e.g. <b>React</b>). Do NOT put <b> tags in the skills array, summary, jobTitle, companyName, or position fields.
 5. skills must be a flat array of plain skill name strings with NO HTML/markup (e.g. ["Node.js", "TypeScript"] not ["<b>Node.js</b>"])
 
@@ -1138,7 +1288,21 @@ INSTRUCTIONS:
    - COMPANY NAMES: keep EXACTLY as listed in ORIGINAL EXPERIENCE (only the two most recent employers may already be substituted)
    - Keep dates and number of experience entries identical
 
-7. EXPERIENCE FOCUS BY ROLE (STRICT):
+7. BULLET SENIORITY MUST MATCH THE POSITION AT THAT COMPANY (STRICT):
+   - Write bullets appropriate to the title you assign for THAT role — a Junior cannot sound like a tech lead
+   - Junior / Jr / Entry-level titles:
+     - Use: Developed, Implemented, Built, Contributed, Assisted, Collaborated, Wrote, Debugged, Supported, Integrated, Tested
+     - NEVER use: Led, Owned, Architected, Mentored, Directed, Spearheaded, Drove strategy, Set technical direction, Managed a team, Established standards for the org
+     - Scope = individual contributor work on features/modules under guidance, not end-to-end ownership of strategy
+   - Associate / mid-level titles (no Junior/Senior prefix):
+     - Own features or components; collaborate with seniors; improve reliability/performance of your area
+     - Avoid org-wide leadership, mentoring programs, or architecture ownership claims
+   - Senior / Staff / Principal / Lead titles:
+     - May lead delivery, mentor others, drive design decisions, and own technical direction for an area
+   - Example BAD for Junior Data Engineer: "Led design and deployment of multi-tenant ML modules..."
+   - Example GOOD for Junior Data Engineer: "Implemented data transformation pipelines in <b>Python</b> and <b>PyTorch</b> for classification features, collaborating with senior engineers on deployment and testing"
+
+8. EXPERIENCE FOCUS BY ROLE (STRICT):
    - Industry/field for context: ${industry || 'infer from the job description (NOT from older employers)'}
    - TWO MOST RECENT roles only: stress industry-related experience (domain workflows, regulations, business problems, industry terminology) AND technical skills with <b>...</b>
    - ALL OLDER roles (not among the two most recent): stress ONLY technical skills, tools, and engineering work with <b>...</b> — do NOT mention industry domain experience, healthcare/fintech/etc. terminology, or industry-specific workflows
@@ -1162,8 +1326,9 @@ Return ONLY this JSON shape:
   "skills": ["Node.js", "TypeScript", "Python"]
 }
 
-CRITICAL: experience length must be ${experience.length}. Every item needs non-empty descriptions[].
+CRITICAL: experience length must be ${experience.length}. Every item needs non-empty contentful descriptions[].
 CRITICAL: Rewrite position titles for EVERY role into a junior→senior ladder from the JD (oldest company=Junior, newest=Senior). Never keep profile titles. Only the two most recent company names may differ from the profile.
+CRITICAL: Descriptions for each role must match that role's seniority. Junior roles must never claim leading teams, owning architecture, or mentoring.
 `;
 };
 

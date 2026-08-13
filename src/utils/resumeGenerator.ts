@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
-import { applyCareerTitleProgression, mostRecentIndices } from './careerProgression';
+import { applyCareerTitleProgression, mostRecentIndices, toneDescriptionsToSeniority } from './careerProgression';
 import { resolveJobTitle } from './jobTitle';
 import { stripBoldMarkup } from './resumeLayout';
 
@@ -198,7 +198,7 @@ const parseAIResponse = (
 
     // Junior→senior ladder only when tailor-company checkbox is on
     const finalExperience = tailorCompanyNames
-      ? applyCareerTitleProgression(experience, jobTitle)
+      ? toneDescriptionsToSeniority(applyCareerTitleProgression(experience, jobTitle))
       : experience;
 
     const rawSkills = Array.isArray(parsed.skills)

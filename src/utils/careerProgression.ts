@@ -111,3 +111,77 @@ export function applyCareerTitleProgression<T extends DatedExperience>(
     position: ladder[index] || exp.position || '',
   }));
 }
+
+const JUNIOR_TITLE = /\b(Junior|Jr\.?|Entry[- ]Level|Intern)\b/i;
+const ASSOCIATE_OR_MID_TITLE =
+  /\b(Associate|Mid-Level|Mid Level)\b/i;
+
+const JUNIOR_LEADERSHIP_OPENERS: Array<[RegExp, string]> = [
+  [/^Led design and deployment of/i, 'Helped implement'],
+  [/^Led the design of/i, 'Contributed to the design of'],
+  [/^Led design of/i, 'Contributed to design of'],
+  [/^Led development of/i, 'Built'],
+  [/^Led the development of/i, 'Built'],
+  [/^Led deployment of/i, 'Supported deployment of'],
+  [/^Led\b/i, 'Contributed to'],
+  [/^Owned\b/i, 'Worked on'],
+  [/^Architected\b/i, 'Implemented'],
+  [/^Mentored\b/i, 'Collaborated with'],
+  [/^Directed\b/i, 'Assisted with'],
+  [/^Spearheaded\b/i, 'Contributed to'],
+  [/^Drove\b/i, 'Supported'],
+  [/^Established\b/i, 'Helped establish'],
+  [/^Set technical direction\b/i, 'Followed technical guidance for'],
+  [/^Managed a team\b/i, 'Collaborated with teammates on'],
+  [/^Managed the team\b/i, 'Collaborated with teammates on'],
+];
+
+/** Soften leadership claims that don't fit Junior / early-career titles. */
+export function toneDescriptionsToSeniority<T extends DatedExperience & { descriptions?: string[] }>(
+  experience: T[]
+): T[] {
+  return experience.map((exp) => {
+    const position = String(exp.position || '');
+    const descriptions = Array.isArray(exp.descriptions) ? exp.descriptions : [];
+    if (!descriptions.length) return exp;
+
+    if (JUNIOR_TITLE.test(position)) {
+      return {
+        ...exp,
+        descriptions: descriptions.map((line) => softenJuniorBullet(String(line || ''))),
+      };
+    }
+
+    if (ASSOCIATE_OR_MID_TITLE.test(position) || !/\b(Senior|Staff|Principal|Lead)\b/i.test(position)) {
+      // Mid titles (and bare "X Engineer"): block only strong org-leadership openers
+      return {
+        ...exp,
+        descriptions: descriptions.map((line) =>
+          softenMidBullet(String(line || ''))
+        ),
+      };
+    }
+
+    return exp;
+  });
+}
+
+function softenJuniorBullet(line: string): string {
+  let next = line.trim();
+  for (const [pattern, replacement] of JUNIOR_LEADERSHIP_OPENERS) {
+    if (pattern.test(next)) {
+      next = next.replace(pattern, replacement);
+      break;
+    }
+  }
+  return next.replace(/^\s*[a-z]/, (c) => c.toUpperCase());
+}
+
+function softenMidBullet(line: string): string {
+  let next = line.trim();
+  next = next
+    .replace(/^Mentored (?:a |the )?team\b/i, 'Collaborated with teammates')
+    .replace(/^Set technical direction\b/i, 'Improved technical approach for')
+    .replace(/^Managed (?:a |the )?team\b/i, 'Worked with teammates on');
+  return next.replace(/^\s*[a-z]/, (c) => c.toUpperCase());
+}
