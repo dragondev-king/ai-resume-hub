@@ -1,7 +1,7 @@
 import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { applyCareerTitleProgression, mostRecentIndices } from './careerProgression';
-import { cleanJobTitle } from './jobTitle';
+import { resolveJobTitle } from './jobTitle';
 import { stripBoldMarkup } from './resumeLayout';
 
 type Profile = ProfileWithDetailsRPC;
@@ -107,14 +107,15 @@ export const generateResume = async (
     throw new Error('The AI returned an empty resume response. Please try again.');
   }
 
-  return parseAIResponse(profile, aiResponse, tailorCompanyNames, replacements);
+  return parseAIResponse(profile, aiResponse, tailorCompanyNames, replacements, jobDescription);
 };
 
 const parseAIResponse = (
   originalProfile: Profile,
   aiResponse: string | Record<string, unknown>,
   tailorCompanyNames: boolean = false,
-  replacements: CompanyReplacement[] = []
+  replacements: CompanyReplacement[] = [],
+  jobDescription: string = ''
 ): GeneratedResume => {
   try {
     const parsed =
@@ -192,8 +193,8 @@ const parseAIResponse = (
       );
     }
 
-    const jobTitle = cleanJobTitle(parsed.jobTitle, parsed.companyName as string | undefined);
     const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
+    const jobTitle = resolveJobTitle(parsed.jobTitle, companyName, jobDescription);
 
     // Junior→senior ladder only when tailor-company checkbox is on
     const finalExperience = tailorCompanyNames
