@@ -651,24 +651,17 @@ const ResumeGenerator: React.FC = () => {
           </div>
 
           {/* Tailor company / role names */}
-          <div className="flex items-start">
-            <div className="flex items-center h-5">
-              <input
-                type="checkbox"
-                id="tailor_company_names"
-                checked={tailorCompanyNames}
-                onChange={(e) => setTailorCompanyNames(e.target.checked)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-            </div>
-            <div className="ml-3 text-sm">
-              <label htmlFor="tailor_company_names" className="font-medium text-gray-700">
-                Tailor company names and role titles
-              </label>
-              <p className="text-gray-500">
-                When enabled, replaces only the two most recent company names with mid-sized industry peers, rewrites every role title into a junior→senior progression matching the JD, stresses industry experience only in those two recent roles, and keeps older roles technical-skills focused. When disabled, only experience bullet points are tailored.
-              </p>
-            </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="tailor_company_names"
+              checked={tailorCompanyNames}
+              onChange={(e) => setTailorCompanyNames(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label htmlFor="tailor_company_names" className="ml-3 text-sm font-medium text-gray-700">
+              Tailor company names and role titles
+            </label>
           </div>
 
           {/* Job Description Link */}
