@@ -81,20 +81,44 @@ export function resolveResumeExperience(
   useAiEnhancedJobTitle: boolean
 ): ExperienceEntry[] {
   if (useAiEnhancedJobTitle && aiExperience.length > 0) {
-    return aiExperience;
+    return aiExperience.map((ai, index) => ({
+      ...ai,
+      descriptions: normalizeExperienceDescriptions(ai, originalExperience[index]),
+    }));
   }
 
-  return originalExperience.map((exp) => {
-    const aiMatch = findMatchingAiExperience(exp, aiExperience);
+  return originalExperience.map((exp, index) => {
+    const aiMatch = findMatchingAiExperience(exp, aiExperience) || aiExperience[index];
     return {
       company: exp.company,
       position: exp.position,
       start_date: exp.start_date,
       end_date: exp.end_date,
       address: exp.address,
-      descriptions: aiMatch?.descriptions ?? [],
+      descriptions: normalizeExperienceDescriptions(aiMatch, exp),
     };
   });
+}
+
+function normalizeExperienceDescriptions(
+  aiExp?: ExperienceEntry | null,
+  originalExp?: ExperienceEntry | null
+): string[] {
+  const fromAi = Array.isArray(aiExp?.descriptions)
+    ? aiExp!.descriptions.filter((d) => typeof d === 'string' && d.trim())
+    : [];
+  if (fromAi.length) return fromAi;
+
+  const originalDescs = Array.isArray(originalExp?.descriptions)
+    ? originalExp!.descriptions.filter((d) => typeof d === 'string' && d.trim())
+    : [];
+  if (originalDescs.length) return originalDescs;
+
+  if (typeof (originalExp as any)?.description === 'string' && (originalExp as any).description.trim()) {
+    return [(originalExp as any).description.trim()];
+  }
+
+  return [];
 }
 
 const noBorder = {

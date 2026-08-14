@@ -109,14 +109,14 @@ const STATIC_SKILL_SECTIONS: SkillSectionDef[] = [
 ];
 
 function normalizeSkillKey(skill: string): string {
-  return skill.trim().toLowerCase().replace(/\s+/g, ' ');
+  return stripBoldMarkup(skill).trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function mergeUnique(base: string[], extras: string[]): string[] {
   const seen = new Set(base.map(normalizeSkillKey));
   const result = [...base];
   for (const skill of extras) {
-    const trimmed = skill.trim();
+    const trimmed = stripBoldMarkup(skill).trim();
     if (!trimmed) continue;
     const key = normalizeSkillKey(trimmed);
     if (seen.has(key)) continue;
@@ -131,7 +131,7 @@ function mergeUnique(base: string[], extras: string[]): string[] {
  * job-requirement / AI skills that fit each category.
  */
 export function buildResumeSkillSections(jobSkills: string[] = []): CategorizedSkills {
-  const extras = jobSkills.map((s) => s.trim()).filter(Boolean);
+  const extras = jobSkills.map((s) => stripBoldMarkup(s).trim()).filter(Boolean);
   const used = new Set<string>();
 
   return STATIC_SKILL_SECTIONS.map(({ label, base, pattern }) => {

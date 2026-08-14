@@ -4,11 +4,11 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume, AIProvider } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
-import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
+import { generateDocx } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
-import { parseBoldMarkup } from '../utils/resumeLayout';
+import { parseBoldMarkup, stripBoldMarkup } from '../utils/resumeLayout';
 import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from '../resumeTemplates';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -49,6 +49,9 @@ const ResumeGenerator: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
+  const [tailorCompanyNames, setTailorCompanyNames] = useState(false);
+  /** True when the current generated resume used company/role name tailoring. */
+  const [generatedWithTailoredCompanies, setGeneratedWithTailoredCompanies] = useState(false);
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [loading, setLoading] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
@@ -111,12 +114,16 @@ const ResumeGenerator: React.FC = () => {
     setLoading(true);
     try {
       // Generate AI resume with job title and company name extraction
-      const generated = await generateResume(profile, jobDescription, aiProvider);
+      const generated = await generateResume(profile, jobDescription, aiProvider, tailorCompanyNames);
 
       console.log(generated, '=== generated')
 
-      // Check if this profile can apply to this company before showing the resume
-      // Only check if the profile has duplicate checking enabled (defaults to true)
+      setGeneratedWithTailoredCompanies(tailorCompanyNames);
+      setGeneratedResume(generated);
+      setEditingResume(generated);
+      setIsEditing(false);
+
+      // Duplicate check after we have a result so the user can still see tailored content
       if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
         const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
           p_profile_id: selectedProfile,
@@ -126,25 +133,17 @@ const ResumeGenerator: React.FC = () => {
         if (checkError) {
           console.error('Error checking application eligibility:', checkError);
           toast.error('Error checking application eligibility');
-          setLoading(false);
-          return;
-        }
-
-        if (!canApply) {
+          setIsApplicationEligible(false);
+        } else if (!canApply) {
           setIsApplicationEligible(false);
           toast.error(`This profile already has an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
-          setLoading(false);
-          return;
+        } else {
+          setIsApplicationEligible(true);
         }
-        setIsApplicationEligible(true);
       } else {
-        // If duplicate checking is disabled, always allow
         setIsApplicationEligible(true);
       }
 
-      setGeneratedResume(generated);
-      setEditingResume(generated);
-      setIsEditing(false);
       setTimeout(() => {
         document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
       }, 300);
@@ -254,8 +253,10 @@ const ResumeGenerator: React.FC = () => {
     const template =
       (templateId && getResumeTemplate(templateId)) || pickRandomResumeTemplate();
     const opts = {
-      useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
-      includeLinkedIn,
+      useAiEnhancedJobTitle:
+        generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile),
+      // Tailored company names = omit LinkedIn even if the checkbox is on
+      includeLinkedIn: includeLinkedIn && !generatedWithTailoredCompanies,
       templateId: template.id,
     };
     const fileName = buildResumeFileName(
@@ -275,6 +276,11 @@ const ResumeGenerator: React.FC = () => {
   const handleDownload = async (format: ResumeDownloadFormat) => {
     if (!generatedResume) {
       toast.error('No resume to download');
+      return;
+    }
+
+    if (!isApplicationEligible) {
+      toast.error('Cannot save: this profile already has an active application to that company');
       return;
     }
 
@@ -305,7 +311,10 @@ const ResumeGenerator: React.FC = () => {
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
-          p_metadata: { resumeTemplateId: template.id },
+          p_metadata: {
+            resumeTemplateId: template.id,
+            tailorCompanyNames: generatedWithTailoredCompanies,
+          },
         });
 
         if (saveError) {
@@ -563,13 +572,15 @@ const ResumeGenerator: React.FC = () => {
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
     setIncludeLinkedIn(true);
+    // Keep tailorCompanyNames checked/unchecked as the user left it
+    setGeneratedWithTailoredCompanies(false);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
   console.log(currentResume, '=== currentResume')
-  const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
+  /** Generator preview shows the generated payload as-is (export still uses resolveResumeExperience). */
+  const previewExperience = currentResume?.experience ?? [];
 
   if (profilesLoading) {
     return (
@@ -639,7 +650,19 @@ const ResumeGenerator: React.FC = () => {
             )}
           </div>
 
-
+          {/* Tailor company / role names */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="tailor_company_names"
+              checked={tailorCompanyNames}
+              onChange={(e) => setTailorCompanyNames(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label htmlFor="tailor_company_names" className="ml-3 text-sm font-medium text-gray-700">
+              Tailor company names and role titles
+            </label>
+          </div>
 
           {/* Job Description Link */}
           <div>
@@ -738,7 +761,7 @@ const ResumeGenerator: React.FC = () => {
       </div>
 
       {/* Generated Resume */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div id="generated-resume" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
@@ -771,6 +794,12 @@ const ResumeGenerator: React.FC = () => {
               )}
             </div>
           </div>
+
+          {!isApplicationEligible && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              This profile already has an active application to the extracted company. You can review the generated resume below, but saving a new application is blocked until you reset or choose a different company.
+            </div>
+          )}
 
           <div className="mb-6 flex flex-col items-stretch gap-3">
             <fieldset className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
@@ -823,20 +852,34 @@ const ResumeGenerator: React.FC = () => {
               </div>
             </fieldset>
             <div className="flex flex-col items-stretch gap-3 sm:items-end">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <label
+                className={`flex items-center gap-2 text-sm cursor-pointer select-none ${
+                  generatedWithTailoredCompanies ? 'text-gray-400' : 'text-gray-700'
+                }`}
+                title={
+                  generatedWithTailoredCompanies
+                    ? 'LinkedIn is omitted when company names are tailored'
+                    : undefined
+                }
+              >
                 <input
                   type="checkbox"
-                  checked={includeLinkedIn}
+                  checked={includeLinkedIn && !generatedWithTailoredCompanies}
+                  disabled={generatedWithTailoredCompanies}
                   onChange={(e) => setIncludeLinkedIn(e.target.checked)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
-                <span>Include LinkedIn link</span>
+                <span>
+                  Include LinkedIn link
+                  {generatedWithTailoredCompanies ? ' — omitted for tailored companies' : ''}
+                </span>
               </label>
               <div className="flex flex-wrap gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => handleDownload('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Save & Download Word (.docx)</span>
@@ -844,7 +887,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Save & Download PDF (.pdf)</span>
@@ -854,7 +898,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Download Word (.docx) only</span>
@@ -862,7 +907,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  disabled={!isApplicationEligible}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download PDF (.pdf) only</span>
@@ -955,7 +1001,7 @@ const ResumeGenerator: React.FC = () => {
                         key={index}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800"
                       >
-                        {skill}
+                        {stripBoldMarkup(skill)}
                         <button
                           onClick={() => handleRemoveSkill(index)}
                           className="ml-2 text-primary-600 hover:text-primary-800"
@@ -973,7 +1019,7 @@ const ResumeGenerator: React.FC = () => {
                       key={index}
                       className="px-3 py-1 bg-primary-100 text-primary-800 text-sm font-medium rounded-full"
                     >
-                      {skill}
+                      {stripBoldMarkup(skill)}
                     </span>
                   ))}
                 </div>
@@ -984,10 +1030,7 @@ const ResumeGenerator: React.FC = () => {
             <div>
               <h4 className="font-medium text-gray-900 mb-2">Experience</h4>
               <div className="space-y-3">
-                {(isEditing
-                  ? currentResume.experience
-                  : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle)
-                ).map((exp, index) => (
+                {previewExperience.map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
                     {isEditing ? (
                       <div className="space-y-2">

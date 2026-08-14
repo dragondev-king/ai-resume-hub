@@ -10,8 +10,8 @@ import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
-import { parseBoldMarkup } from '../utils/resumeLayout';
-import { getResumeTemplateIdForApplication } from '../utils/applicationMetadata';
+import { parseBoldMarkup, stripBoldMarkup } from '../utils/resumeLayout';
+import { getResumeTemplateIdForApplication, getTailorCompanyNamesForApplication } from '../utils/applicationMetadata';
 import { getResumeTemplate, pickRandomResumeTemplate } from '../resumeTemplates';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -51,7 +51,9 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(applicationProfile);
+  const tailoredCompanyNames = getTailorCompanyNamesForApplication(application ?? undefined);
+  const useAiEnhancedJobTitle =
+    tailoredCompanyNames || getUseAiEnhancedJobTitleForProfile(applicationProfile);
 
   useEffect(() => {
     setSessionTemplateId(getResumeTemplateIdForApplication(application ?? undefined));
@@ -118,7 +120,10 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         }
 
         const opts = {
-          useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile),
+          useAiEnhancedJobTitle:
+            getTailorCompanyNamesForApplication(application) ||
+            getUseAiEnhancedJobTitleForProfile(applicationProfile),
+          includeLinkedIn: !getTailorCompanyNamesForApplication(application),
           templateId: template.id,
         };
         if (format === 'docx') {
@@ -493,7 +498,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                         key={index}
                         className="px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm font-medium"
                       >
-                        {skill}
+                        {stripBoldMarkup(skill)}
                       </span>
                     ))}
                   </div>

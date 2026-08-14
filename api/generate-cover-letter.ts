@@ -147,18 +147,23 @@ const extractJobInfo = async (jobDescription: string): Promise<{ jobTitle: strin
       messages: [
         {
           role: 'system',
-          content: 'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
+          content: 'You are an expert at extracting job information from job descriptions. Extract ONLY a clean professional job title and company name. Use normal titles like "Senior Android Engineer" or "Senior Software Engineer" — never comma specialties like "Senior Software Engineer, Android". No location/remote/full-time noise. Respond with ONLY valid JSON.'
         },
         {
           role: 'user',
-          content: `Please extract the job title and company name from this job description. If not explicitly stated, infer from context:
+          content: `Extract the clean professional job title and company name from this job description.
+Rules for jobTitle:
+- Return a normal professional title (e.g. "Senior Android Engineer" or "Senior Software Engineer")
+- Convert "Senior Software Engineer, Android" → "Senior Android Engineer"
+- Never return comma specialties or glued forms like "Senior Software Engineer Android"
+- Remove company name, location, employment type, and UI/marketing text
 
 ${jobDescription}
 
 Respond with ONLY valid JSON in this exact format:
 {
-  "jobTitle": "extracted or inferred job title",
-  "companyName": "extracted or inferred company name"
+  "jobTitle": "exact clean job title",
+  "companyName": "company name"
 }`
         }
       ],
@@ -177,9 +182,56 @@ Respond with ONLY valid JSON in this exact format:
 
     const parsed = JSON.parse(jsonMatch[0]);
 
+    const rawTitle = parsed.jobTitle || '';
+    const companyName = parsed.companyName || '';
+    let jobTitle = String(rawTitle).trim()
+      .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
+      .replace(/\s*[|].*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (companyName) {
+      const company = String(companyName).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      jobTitle = jobTitle
+        .replace(new RegExp(`\\s*[-–—|/]?\\s*${company}\\s*$`, 'i'), '')
+        .trim();
+    }
+    // Fold "Software Engineer, Android" → "Senior Android Engineer"
+    if (/,/.test(jobTitle) || /\b(?:Engineer|Developer)\s+(Android|iOS|Backend|Frontend|Mobile|Kotlin|Java|Swift)\b/i.test(jobTitle)) {
+      let core = jobTitle;
+      let specialty = '';
+      if (jobTitle.includes(',')) {
+        const parts = jobTitle.split(',').map((p) => p.trim()).filter(Boolean);
+        core = parts[0] || jobTitle;
+        specialty = parts[1] || '';
+      } else {
+        const m = jobTitle.match(
+          /\b(?:Engineer|Developer)\s+(Android|iOS|Backend|Frontend|Mobile|Kotlin|Java|Swift)\b/i
+        );
+        if (m) {
+          specialty = m[1];
+          core = jobTitle.replace(new RegExp(`\\s+${m[1]}$`, 'i'), '').trim();
+        }
+      }
+      if (/^(Android|iOS|Backend|Frontend|Mobile|Kotlin|Java|Swift)$/i.test(specialty)) {
+        const seniority = core.match(/^(Senior|Staff|Principal|Lead|Junior|Associate)\b/i)?.[1] || '';
+        const role = /\bDeveloper\b/i.test(core) ? 'Developer' : 'Engineer';
+        const label = /^ios$/i.test(specialty)
+          ? 'iOS'
+          : specialty.charAt(0).toUpperCase() + specialty.slice(1).toLowerCase();
+        const niceLabel = /^android$/i.test(specialty)
+          ? 'Android'
+          : /^ios$/i.test(specialty)
+            ? 'iOS'
+            : label;
+        jobTitle = [seniority, niceLabel, role].filter(Boolean).join(' ');
+      } else {
+        jobTitle = core.replace(/,/g, '').trim();
+      }
+    }
+
     return {
-      jobTitle: parsed.jobTitle || '',
-      companyName: parsed.companyName || ''
+      jobTitle,
+      companyName
     };
   } catch (error) {
     console.error('Error extracting job info:', error);
