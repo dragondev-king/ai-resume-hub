@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-import { JOB_TITLE_EXTRACTION_INSTRUCTIONS, normalizeJobTitle } from '../src/utils/jobTitlePrompt';
+import { JOB_TITLE_EXTRACTION_INSTRUCTIONS, normalizeJobTitle } from './_lib/jobTitlePrompt';
 
 // Initialize OpenAI client (server-side, safe to use API key)
 const openai = new OpenAI({

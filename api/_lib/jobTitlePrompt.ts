@@ -1,5 +1,5 @@
 /**
- * Client-side job-title prompt rules (mirrored in api/_lib/jobTitlePrompt.ts for Vercel).
+ * Shared prompt rules for extracting a clear professional job title from a JD.
  * Prefer teaching the model over post-processing heuristics.
  */
 export const JOB_TITLE_EXTRACTION_INSTRUCTIONS = `
