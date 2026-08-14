@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-import { JOB_TITLE_EXTRACTION_INSTRUCTIONS, normalizeJobTitle } from './_lib/jobTitlePrompt';
+import { JOB_TITLE_EXTRACTION_INSTRUCTIONS, normalizeJobTitle } from './_lib/jobTitlePrompt.js';
 
 // Initialize OpenAI client (server-side, safe to use API key)
 const openai = new OpenAI({
@@ -167,7 +167,7 @@ Respond with ONLY valid JSON in this exact format:
       ],
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 200,
+      max_completion_tokens: 200,
     });
 
     const aiResponse = completion.choices[0]?.message?.content || '';

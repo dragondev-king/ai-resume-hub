@@ -1,26 +1,48 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-import { JOB_TITLE_EXTRACTION_INSTRUCTIONS, normalizeJobTitle } from './_lib/jobTitlePrompt';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const JOB_TITLE_EXTRACTION_INSTRUCTIONS = `
+JOB TITLE EXTRACTION (STRICT):
+- Return ONLY a clear professional role title people would put on a resume.
+- Prefer the official posted title near the top of the JD (page/header title), not body sentences.
+- Good examples: "Cloud Platform Engineer", "Senior JavaScript Developer", "Senior Android Engineer", "Senior Software Engineer"
+- Convert specialty postings into normal titles:
+  - "Senior Javascript Developer - React" → "Senior JavaScript Developer"
+  - "Senior Software Engineer, Android" → "Senior Android Engineer"
+  - "Cloud Platform Engineer Job Details | Farmers Insurance Careers" → "Cloud Platform Engineer"
+- NEVER return:
+  - Body prose ("As a Senior Frontend Developer (React.js / Next.js), you will…")
+  - Incomplete fragments with leftover parentheses ("… (React.js")
+  - ATS/page chrome ("Job Details", "| Company Careers", "FAIR MATCH", locations, salary, remote/full-time badges)
+  - Company name glued onto the title
+- Keep Title Case. No pipes, dashes to company names, or marketing suffixes.
+`.trim();
 
 const MAX_JOB_DESCRIPTION_CHARS = 8000;
 
-/**
- * Lightweight job title + company extraction used for pre-generate duplicate checks.
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not configured');
+      return res.status(500).json({
+        error: 'Server configuration error',
+        details:
+          'OpenAI API key is not configured. Please set OPENAI_API_KEY in the Vercel dashboard.',
+      });
+    }
+
     const { jobDescription } = req.body || {};
     if (!jobDescription || typeof jobDescription !== 'string' || !jobDescription.trim()) {
       return res.status(400).json({ error: 'Missing required field: jobDescription' });
     }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
     const jd = jobDescription.trim().slice(0, MAX_JOB_DESCRIPTION_CHARS);
 
@@ -53,7 +75,7 @@ Respond with ONLY JSON:
       ],
       response_format: { type: 'json_object' },
       temperature: 0.2,
-      max_tokens: 200,
+      max_completion_tokens: 200,
     });
 
     const raw = completion.choices[0]?.message?.content || '';
@@ -64,7 +86,8 @@ Respond with ONLY JSON:
 
     const parsed = JSON.parse(match[0]);
     const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
-    const jobTitle = normalizeJobTitle(parsed.jobTitle);
+    const jobTitle =
+      typeof parsed.jobTitle === 'string' ? parsed.jobTitle.replace(/\s+/g, ' ').trim() : '';
 
     return res.status(200).json({
       success: true,

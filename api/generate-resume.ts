@@ -1,12 +1,12 @@
 ﻿import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { normalizeJobTitle, JOB_TITLE_EXTRACTION_INSTRUCTIONS } from './_lib/jobTitlePrompt';
+import { normalizeJobTitle, JOB_TITLE_EXTRACTION_INSTRUCTIONS } from './_lib/jobTitlePrompt.js';
 import {
   applyCareerTitleProgression,
   mostRecentIndices,
   toneDescriptionsToSeniority,
-} from './_lib/careerProgression';
+} from './_lib/careerProgression.js';
 
 type AIProvider = 'openai' | 'claude';
 
@@ -746,7 +746,7 @@ async function generateWithOpenAI(
     ],
     response_format: { type: 'json_object' },
     temperature: 0.7,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
   });
 
   const content = completion.choices[0]?.message?.content || '';
