@@ -1,6 +1,12 @@
 ﻿import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { normalizeJobTitle, JOB_TITLE_EXTRACTION_INSTRUCTIONS } from '../src/utils/jobTitlePrompt';
+import {
+  applyCareerTitleProgression,
+  mostRecentIndices,
+  toneDescriptionsToSeniority,
+} from '../src/utils/careerProgression';
 
 type AIProvider = 'openai' | 'claude';
 
@@ -21,11 +27,11 @@ const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 /** Original main-branch system prompt - used when tailor-company checkbox is OFF. */
 const SYSTEM_PROMPT_ORIGINAL =
-  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract a clean professional job title from the posted JD header (e.g. "Senior JavaScript Developer" — never body prose like "As a Senior Frontend Developer (React.js…"). CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).';
+  `You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate's experience to make them appear as an ideal fit for the target position, even if their original experience doesn't perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. ${JOB_TITLE_EXTRACTION_INSTRUCTIONS} Also extract companyName. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).`;
 
 /** Tailor-company mode system prompt - used when checkbox is ON. */
 const SYSTEM_PROMPT_TAILOR_COMPANY =
-  'You are an expert resume writer. Return ONLY complete valid JSON. Extract jobTitle as ONLY a clean professional job title from the posted JD header (e.g. "Senior JavaScript Developer" from "Senior Javascript Developer - React"). NEVER use body prose like "As a Senior Frontend Developer (React.js…". Never return incomplete titles with leftover parentheses. Never use comma specialties like "Senior Software Engineer, Android". Every experience item MUST include a non-empty "descriptions" array. The TWO MOST RECENT roles need PLENTY of content: 8-10 long, detailed bullets each covering industry/field experience, technical delivery, AND remote/distributed-team collaboration. Older roles: 5-7 technical-focused bullets. Bullet tone MUST match that role\'s seniority: Junior/entry roles must NOT lead teams, own architecture, or mentor; use contribute/implement/build language. Mid roles own features; Senior roles may lead and mentor. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate\'s original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.';
+  `You are an expert resume writer. Return ONLY complete valid JSON. ${JOB_TITLE_EXTRACTION_INSTRUCTIONS} Also extract companyName. Every experience item MUST include a non-empty "descriptions" array. The TWO MOST RECENT roles need PLENTY of content: 8-10 long, detailed bullets each covering industry/field experience, technical delivery, AND remote/distributed-team collaboration. Older roles: 5-7 technical-focused bullets. Bullet tone MUST match that role's seniority: Junior/entry roles must NOT lead teams, own architecture, or mentor; use contribute/implement/build language. Mid roles own features; Senior roles may lead and mentor. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate's original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.`;
 
 const SYSTEM_PROMPT_COMPANY_PICK =
   'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself. CRITICAL: replacements must have NO business relationship with the hiring company (not partners, customers, vendors, subsidiaries, parents, affiliates, investors, portfolio companies, contractors, or companies named in the JD). The ONLY allowed relationship is being a direct rival/competitor.';
@@ -139,7 +145,7 @@ function cloneProfile(profile: any) {
 function applyCompanyReplacements(profile: any, replacements: CompanyReplacement[]): any {
   const next = cloneProfile(profile);
   const experience = Array.isArray(next.experience) ? next.experience : [];
-  const recentOrdered = mostRecentExperienceIndices(experience, 2);
+  const recentOrdered = mostRecentIndices(experience, 2);
   const count = Math.min(replacements.length, recentOrdered.length);
   for (let i = 0; i < count; i++) {
     const expIndex = recentOrdered[i];
@@ -153,35 +159,6 @@ function applyCompanyReplacements(profile: any, replacements: CompanyReplacement
   return next;
 }
 
-function parseSortDate(value?: string): string {
-  if (!value) return '';
-  const trimmed = String(value).trim();
-  if (!trimmed || /^present$/i.test(trimmed) || /^current$/i.test(trimmed)) {
-    return '9999-12';
-  }
-  return trimmed.slice(0, 7);
-}
-
-/** Indices sorted oldest -> newest by start_date. */
-function chronologicalExperienceIndices(experience: any[]): number[] {
-  return experience
-    .map((_, index) => index)
-    .sort((a, b) => {
-      const startA = parseSortDate(experience[a]?.start_date);
-      const startB = parseSortDate(experience[b]?.start_date);
-      if (startA !== startB) return startA.localeCompare(startB);
-      return parseSortDate(experience[a]?.end_date).localeCompare(
-        parseSortDate(experience[b]?.end_date)
-      );
-    });
-}
-
-/** Two most recent role indices, newest first. */
-function mostRecentExperienceIndices(experience: any[], count = 2): number[] {
-  const chrono = chronologicalExperienceIndices(experience);
-  return chrono.slice(-count).reverse();
-}
-
 function forceCompaniesOnParsed(
   parsed: any,
   replacements: CompanyReplacement[],
@@ -192,7 +169,7 @@ function forceCompaniesOnParsed(
     ? originalProfile.experience
     : [];
   const next = { ...parsed, experience: [...parsed.experience] };
-  const recentOrdered = mostRecentExperienceIndices(
+  const recentOrdered = mostRecentIndices(
     originalExperience.length ? originalExperience : next.experience,
     2
   );
@@ -222,138 +199,31 @@ function forceCompaniesOnParsed(
   return next;
 }
 
-/**
- * Titles by chronology: oldest company = Junior ... newest company = Senior (JD).
- * Returns titles aligned to experience array indices.
- */
-function buildCareerTitleLadder(targetTitle: string, experience: any[]): string[] {
-  const count = experience.length;
-  if (count <= 0) return [];
-
-  const cleaned = (targetTitle || '').trim() || 'Software Engineer';
-  const base =
-    cleaned
-      .replace(
-        /^(Senior|Sr\.?|Lead|Principal|Staff|Junior|Jr\.?|Associate|Mid-Level|Mid Level|Entry[- ]Level)\s+/i,
-        ''
-      )
-      .trim() || cleaned;
-
-  const seniorTitle = /^(Senior|Sr\.?|Lead|Principal|Staff)\b/i.test(cleaned)
-    ? cleaned
-    : `Senior ${base}`;
-
-  const oldestToNewest: string[] = new Array(count);
-  if (count === 1) {
-    oldestToNewest[0] = seniorTitle;
-  } else {
-    oldestToNewest[0] = `Junior ${base}`;
-    oldestToNewest[count - 1] = seniorTitle;
-    for (let step = 1; step < count - 1; step++) {
-      if (count === 3) {
-        oldestToNewest[step] = base;
-      } else if (step === count - 2) {
-        oldestToNewest[step] = base;
-      } else if (step === 1) {
-        oldestToNewest[step] = `Associate ${base}`;
-      } else {
-        oldestToNewest[step] = base;
-      }
-    }
-  }
-
-  const chrono = chronologicalExperienceIndices(experience);
-  const byIndex: string[] = new Array(count);
-  chrono.forEach((expIndex, careerStep) => {
-    byIndex[expIndex] = oldestToNewest[careerStep];
-  });
-  return byIndex;
-}
-
-/** Force junior->senior titles on EVERY role based on employment dates. */
+/** Force junior->senior titles and seniority-matched bullet tone. */
 function applyTitleProgression(parsed: any, jobDescription?: string): any {
   if (!parsed || !Array.isArray(parsed.experience) || parsed.experience.length === 0) {
     return parsed;
   }
-  const jobTitle = resolveJobTitle(parsed.jobTitle, parsed.companyName, jobDescription);
-  const ladder = buildCareerTitleLadder(jobTitle || String(parsed.jobTitle || ''), parsed.experience);
+  const jobTitle = normalizeJobTitle(parsed.jobTitle);
+  const normalized = parsed.experience.map((exp: any) => ({
+    ...exp,
+    descriptions: normalizeDescriptions(exp),
+  }));
+  const withLadder = applyCareerTitleProgression(
+    normalized,
+    jobTitle || 'Software Engineer'
+  );
   return {
     ...parsed,
     jobTitle: jobTitle || parsed.jobTitle || '',
-    experience: parsed.experience.map((exp: any, index: number) => {
-      const position = ladder[index] || exp.position;
-      const descriptions = toneDescriptionsForTitle(position, normalizeDescriptions(exp));
-      return {
-        ...exp,
-        position,
-        descriptions,
-      };
-    }),
+    experience: toneDescriptionsToSeniority(withLadder),
   };
 }
 
-/** Soften leadership claims that don't fit Junior / early-career titles. */
-function toneDescriptionsForTitle(position: string, descriptions: string[]): string[] {
-  const title = String(position || '');
-  if (!descriptions.length) return descriptions;
-
-  if (/\b(Junior|Jr\.?|Entry[- ]Level|Intern)\b/i.test(title)) {
-    return descriptions.map((line) => softenJuniorBullet(String(line || '')));
-  }
-
-  if (
-    /\b(Associate|Mid-Level|Mid Level)\b/i.test(title) ||
-    !/\b(Senior|Staff|Principal|Lead)\b/i.test(title)
-  ) {
-    return descriptions.map((line) => softenMidBullet(String(line || '')));
-  }
-
-  return descriptions;
-}
-
-function softenJuniorBullet(line: string): string {
-  const openers: Array<[RegExp, string]> = [
-    [/^Led design and deployment of/i, 'Helped implement'],
-    [/^Led the design of/i, 'Contributed to the design of'],
-    [/^Led design of/i, 'Contributed to design of'],
-    [/^Led development of/i, 'Built'],
-    [/^Led the development of/i, 'Built'],
-    [/^Led deployment of/i, 'Supported deployment of'],
-    [/^Led\b/i, 'Contributed to'],
-    [/^Owned\b/i, 'Worked on'],
-    [/^Architected\b/i, 'Implemented'],
-    [/^Mentored\b/i, 'Collaborated with'],
-    [/^Directed\b/i, 'Assisted with'],
-    [/^Spearheaded\b/i, 'Contributed to'],
-    [/^Drove\b/i, 'Supported'],
-    [/^Established\b/i, 'Helped establish'],
-    [/^Set technical direction\b/i, 'Followed technical guidance for'],
-    [/^Managed a team\b/i, 'Collaborated with teammates on'],
-    [/^Managed the team\b/i, 'Collaborated with teammates on'],
-  ];
-  let next = line.trim();
-  for (const [pattern, replacement] of openers) {
-    if (pattern.test(next)) {
-      next = next.replace(pattern, replacement);
-      break;
-    }
-  }
-  return next.replace(/^\s*[a-z]/, (c) => c.toUpperCase());
-}
-
-function softenMidBullet(line: string): string {
-  let next = line.trim();
-  next = next
-    .replace(/^Mentored (?:a |the )?team\b/i, 'Collaborated with teammates')
-    .replace(/^Set technical direction\b/i, 'Improved technical approach for')
-    .replace(/^Managed (?:a |the )?team\b/i, 'Worked with teammates on');
-  return next.replace(/^\s*[a-z]/, (c) => c.toUpperCase());
-}
-
 /** Always normalize extracted jobTitle into a clean professional title. */
-function finalizeJobTitle(parsed: any, jobDescription?: string): any {
+function finalizeJobTitle(parsed: any, _jobDescription?: string): any {
   if (!parsed) return parsed;
-  const jobTitle = resolveJobTitle(parsed.jobTitle, parsed.companyName, jobDescription);
+  const jobTitle = normalizeJobTitle(parsed.jobTitle);
   return {
     ...parsed,
     jobTitle: jobTitle || parsed.jobTitle || '',
@@ -370,445 +240,6 @@ function stripCodeFences(text: string): string {
   return jsonString;
 }
 
-/** Job title cleaning (synced with src/utils/jobTitle.ts). */
-const NOISE_TOKEN =
-  /^(remote|hybrid|onsite|on-site|full[- ]?time|part[- ]?time|contract|temporary|internship|urgent|hiring|immediately|new|open|posted|ago|hours?|days?|weeks?|good match|seniority|senior level|mid level|junior level|entry level|united states|usa|u\.s\.?|canada|uk|india|worldwide|atlanta|location|employment type|location type|department|compensation|offers equity|offers bonus|engineering|overview|application|description)$/i;
-
-const TITLE_ROLE_WORD =
-  /\b(engineer|developer|manager|analyst|architect|designer|scientist|consultant|specialist|director|lead|administrator|technician|officer|programmer|sre)\b/i;
-
-const ROLE_WORD =
-  /\b(Engineer|Developer|Manager|Analyst|Architect|Designer|Scientist|Consultant|Specialist|Director|Lead|Administrator|Technician|Officer|Programmer|SRE)\b/i;
-
-/** Platform/domain specialties that fold into "Senior Android Engineer" style titles. */
-const PLATFORM_SPECIALTY =
-  /^(Android|iOS|Backend|Back[- ]?End|Front[- ]?End|Frontend|Full[- ]?Stack|Fullstack|Mobile|Web|Platform|Infrastructure|Security|DevOps|Cloud|Data|Embedded|Firmware|QA|Growth|Payments|Search|Networking|Graphics|React|Vue|Angular|Next\.?js|Node\.?js)$/i;
-
-/** Language specialties that fold into "Senior Java Developer" style titles. */
-const LANGUAGE_SPECIALTY =
-  /^(Kotlin|Java|Swift|Go|Rust|Python|TypeScript|JavaScript|Javascript|C\+\+|C#|Ruby|PHP|Scala)$/i;
-
-const SENIORITY_PREFIX =
-  /^(Senior|Sr\.?|Staff|Principal|Lead|Junior|Jr\.?|Associate|Mid-Level|Mid Level|Entry[- ]Level)\s+/i;
-
-const TECH_AFTER_DASH =
-  /^(Android|iOS|React|Vue|Angular|Next\.?js|Node\.?js|Backend|Frontend|Full[- ]?Stack|Mobile|Web|Kotlin|Java|Swift|Python|TypeScript|JavaScript|Javascript)$/i;
-
-/**
- * Extract a concise professional job title from raw AI / JD text.
- */
-function cleanJobTitle(raw: unknown, companyName?: string): string {
-  if (typeof raw !== 'string') return '';
-
-  let title = raw.trim();
-  if (!title) return '';
-
-  title = title
-    .replace(/[\u00b7\u2022]/g, ' | ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Strip JD prose wrappers ("As a …, you will")
-  title = title
-    .replace(
-      /^(?:as an?|we are (?:looking for|hiring)|looking for|join us as|seeking|hiring)\s+/i,
-      ''
-    )
-    .replace(/,?\s*you will\b.*$/i, '')
-    .replace(/,?\s*you(?:'ll| will) be\b.*$/i, '')
-    .replace(/:\s*$/, '')
-    .trim();
-
-  title = title
-    .replace(/^company[- ]?logo\s*/i, '')
-    .replace(/^job\s*title\s*[:\-–—]\s*/i, '')
-    .replace(/^position\s*[:\-–—]\s*/i, '')
-    .trim();
-
-  // Browser / ATS page-title junk: "Cloud Platform Engineer Job Details | Farmers Insurance Careers"
-  title = title
-    .replace(/\bjob\s*details\b.*$/i, '')
-    .replace(/\bcareers?\b.*$/i, '')
-    .replace(/\b(?:job|role|position)\s+posting\b.*$/i, '')
-    .replace(/\s*[|].*$/, '') // anything after a pipe is usually company/site chrome
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Drop unfinished parenthetical fragments: "(React.js"
-  title = title.replace(/\([^)]*$/g, '').trim();
-  // Drop complete tech stacks in parentheses: "(React.js / Next.js)"
-  title = title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-
-  // Cut trailing prose: "The Cloud Platform Engineer will design..."
-  title = title
-    .replace(/\s+will\b.*$/i, '')
-    .replace(/\s+is responsible\b.*$/i, '')
-    .replace(/\s+responsible for\b.*$/i, '')
-    .trim();
-  // If line starts with "The <Title>", drop leading The
-  title = title.replace(/^the\s+/i, '').trim();
-
-  // Prefer the segment that looks most like a job title when pipe/newline delimited
-  const segments = title
-    .split(/\s*[|/\n]+|\s{2,}\s*/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  if (segments.length > 1) {
-    const scored = segments
-      .map((segment) => ({ segment, score: scoreTitleSegment(segment, companyName) }))
-      .sort((a, b) => b.score - a.score);
-    if (scored[0].score > 0) {
-      title = scored[0].segment;
-    }
-  }
-
-  if (companyName && companyName.trim()) {
-    const company = escapeRegExp(companyName.trim());
-    title = title
-      .replace(new RegExp(`^${company}\\s*[-–—|/:]?\\s*`, 'i'), '')
-      .replace(new RegExp(`\\s*[-–—|/]?\\s*${company}\\s*$`, 'i'), '')
-      .trim();
-  }
-
-  // "Senior Javascript Developer - React" → keep core title (React is a focus, not employer)
-  {
-    const dashSpecialty = title.match(/\s+[-–—]\s+(.+)$/);
-    if (dashSpecialty && TECH_AFTER_DASH.test(dashSpecialty[1].trim().split(/[|/]/)[0].trim())) {
-      // Prefer the posted role name without trailing tech focus for clarity
-      title = title.replace(/\s+[-–—]\s+.+$/, '').trim();
-    } else {
-      title = title
-        .replace(/\s+[-–—]\s+[A-Z][\w.&'"\s-]{1,60}$/g, '')
-        .replace(/\s+(?:at|@)\s+[A-Z][\w.&'"\s-]{1,60}$/gi, '')
-        .trim();
-    }
-  }
-
-  title = stripTrailingNoiseClauses(title);
-
-  // "Senior Software Engineer, Android" → "Senior Android Engineer"
-  title = normalizeSpecialtyTitle(title);
-
-  title = title.replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, '').trim();
-  title = title.replace(/\s+/g, ' ').trim();
-
-  // Canonical casing for common tokens
-  title = title
-    .replace(/\bJavascript\b/gi, 'JavaScript')
-    .replace(/\bTypescript\b/gi, 'TypeScript')
-    .replace(/\bNextjs\b/gi, 'Next.js')
-    .replace(/\bNodejs\b/gi, 'Node.js');
-
-  if (title.length > 3 && title === title.toUpperCase()) {
-    title = title.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-  } else if (title.length > 3 && title === title.toLowerCase()) {
-    // "cloud platform engineer" → "Cloud Platform Engineer"
-    title = title.replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  // Final sanity: must look like a real title
-  if (!TITLE_ROLE_WORD.test(title) && !/\b(senior|junior|staff|principal|lead)\b/i.test(title)) {
-    return '';
-  }
-  if (/\bas an?\b/i.test(title) || /\byou will\b/i.test(title) || /\($/.test(title)) {
-    return '';
-  }
-
-  return title;
-}
-
-/**
- * Prefer a clean title from the JD header when available; always run through cleanJobTitle.
- */
-function resolveJobTitle(
-  rawAiTitle: unknown,
-  companyName?: string,
-  jobDescription?: string
-): string {
-  const fromAi = cleanJobTitle(rawAiTitle, companyName);
-  const fromJd = jobDescription
-    ? extractJobTitleFromDescription(jobDescription, companyName || guessCompanyFromTitle(rawAiTitle))
-    : '';
-
-  if (!fromJd) return fromAi;
-  if (!fromAi) return fromJd;
-
-  // Prefer JD when AI result looks like scraped prose / incomplete
-  if (looksLikeBrokenTitle(String(rawAiTitle || '')) || looksLikeBrokenTitle(fromAi)) {
-    return fromJd;
-  }
-
-  // Prefer the clearer header-style title from the JD
-  const jdScore = scoreTitleSegment(fromJd, companyName) + 2; // slight JD bias
-  const aiScore = scoreTitleSegment(fromAi, companyName);
-  if (isSpecificTitle(fromJd) && !isSpecificTitle(fromAi)) return fromJd;
-  if (isSpecificTitle(fromAi) && !isSpecificTitle(fromJd) && aiScore > jdScore + 2) return fromAi;
-  return jdScore >= aiScore ? fromJd : fromAi;
-}
-
-/** Scan early JD lines for the official posted role title. */
-function extractJobTitleFromDescription(
-  jobDescription: string,
-  companyName?: string
-): string {
-  if (!jobDescription?.trim()) return '';
-
-  const lines = jobDescription
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 40);
-
-  let best = '';
-  let bestScore = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.length < 3 || line.length > 100) continue;
-    if (
-      /^(location|employment|department|compensation|about|overview|application|description|requirements|primary requirements|preferred|benefits|powered by|equal opportunity|apply|privacy|help|accessibility|view website|view all jobs|india|remote\s*engineering|company[- ]?logo|position|time|remote|seniority|money|date|fair match|experience level|skill|industry exp\.?|insider connection|responsibilities|qualification|required|note|find any email|beyond your network|from your previous company|from your school|get \d|property & casualty|health insurance|auto insurance|life insurance)$/i.test(
-        line
-      )
-    ) {
-      continue;
-    }
-    // Skip match-% / UI chrome lines
-    if (/^\d+%\s*$/.test(line) || /^\$\d/.test(line) || /^\d+\+?\s*years?\s*exp/i.test(line)) {
-      continue;
-    }
-    // Never use body prose as the title
-    if (/^as an?\b/i.test(line) || /\byou will\b/i.test(line) || /\bwill design\b/i.test(line)) {
-      continue;
-    }
-    if (/\bjob\s*details\b/i.test(line) && TITLE_ROLE_WORD.test(line)) {
-      // Still usable after cleaning — don't skip entirely
-    } else if (/\bjob\s*details\b/i.test(line)) {
-      continue;
-    }
-    if (companyName && line.toLowerCase() === companyName.trim().toLowerCase()) continue;
-    if (!TITLE_ROLE_WORD.test(line) && !/\b(senior|junior|staff|principal|lead|associate)\b/i.test(line)) {
-      continue;
-    }
-
-    const cleaned = cleanJobTitle(line, companyName);
-    if (!cleaned || looksLikeBrokenTitle(cleaned)) continue;
-
-    let score = scoreTitleSegment(cleaned, companyName);
-    // Prefer early header lines (posted title usually near top after company name)
-    if (i <= 4) score += 4;
-    else if (i <= 10) score += 1;
-    // Prefer concise title lines
-    if (cleaned.split(/\s+/).length <= 5) score += 2;
-    if (isSpecificTitle(cleaned)) score += 1;
-    // Prefer lines that look like "Senior X Developer - React" headers
-    if (/\b(developer|engineer)\b/i.test(line) && line.length < 60) score += 2;
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = cleaned;
-    }
-  }
-
-  return bestScore > 0 ? best : '';
-}
-
-function looksLikeBrokenTitle(title: string): boolean {
-  const t = title.trim();
-  if (!t) return true;
-  if (/^as an?\b/i.test(t)) return true;
-  if (/\byou will\b/i.test(t)) return true;
-  if (/\bjob\s*details\b/i.test(t)) return true;
-  if (/\bcareers?\b/i.test(t)) return true;
-  if (/\([^)]*$/.test(t)) return true; // unclosed paren
-  if (/\($/.test(t)) return true;
-  if (/\/\s*$/.test(t)) return true;
-  if (t.length > 70) return true;
-  return false;
-}
-
-/**
- * Fold comma specialties into a normal professional title.
- * "Senior Software Engineer, Android" → "Senior Android Engineer"
- * Unknown specialties are dropped → keep core title only.
- */
-function normalizeSpecialtyTitle(title: string): string {
-  if (!title) return title;
-
-  let core = title;
-  let specialty = '';
-
-  if (title.includes(',')) {
-    const parts = title.split(',').map((p) => p.trim()).filter(Boolean);
-    core = parts[0] || title;
-    specialty = parts.slice(1).join(' ').trim();
-  } else {
-    const trail = title.match(
-      new RegExp(
-        `^(.+?\\b(?:Engineer|Developer|Manager|Analyst|Architect|Designer|Scientist|Consultant|Specialist|Director|Lead|Administrator|Technician|Officer|Programmer|SRE))\\s+(.+)$`,
-        'i'
-      )
-    );
-    if (trail) {
-      const tail = trail[2].trim();
-      if (PLATFORM_SPECIALTY.test(tail) || LANGUAGE_SPECIALTY.test(tail)) {
-        core = trail[1].trim();
-        specialty = tail;
-      }
-    }
-  }
-
-  if (!specialty || NOISE_TOKEN.test(specialty)) {
-    return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  }
-
-  const specialtyHead = specialty.split(/[|/]/)[0].trim();
-  if (!specialtyHead || NOISE_TOKEN.test(specialtyHead)) {
-    return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  }
-
-  const seniorityMatch = core.match(SENIORITY_PREFIX);
-  const seniority = seniorityMatch ? seniorityMatch[1].replace(/\.$/, '') : '';
-  const seniorityLabel = /^sr\.?$/i.test(seniority)
-    ? 'Senior'
-    : /^jr\.?$/i.test(seniority)
-      ? 'Junior'
-      : seniority;
-
-  const roleMatch = core.match(ROLE_WORD);
-  const role = roleMatch ? roleMatch[0] : 'Engineer';
-
-  // For language already in the core title ("Senior JavaScript Developer"), drop trailing specialty
-  if (LANGUAGE_SPECIALTY.test(specialtyHead) && /\b(JavaScript|Javascript|TypeScript|Python|Java|Kotlin)\b/i.test(core)) {
-    return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  }
-
-  if (PLATFORM_SPECIALTY.test(specialtyHead)) {
-    const label = canonicalSpecialty(specialtyHead);
-    // Don't turn "Senior JavaScript Developer" into "Senior React Developer" via comma path only;
-    // for "Software Engineer, Android" folding is desired.
-    if (/\b(JavaScript|Javascript|TypeScript)\s+Developer\b/i.test(core) && /^(React|Vue|Angular|Next)/i.test(label)) {
-      return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-    }
-    return [seniorityLabel, label, role].filter(Boolean).join(' ');
-  }
-
-  if (LANGUAGE_SPECIALTY.test(specialtyHead)) {
-    const label = canonicalSpecialty(specialtyHead);
-    const langRole = /\bDeveloper\b/i.test(core) ? 'Developer' : role;
-    return [seniorityLabel, label, langRole].filter(Boolean).join(' ');
-  }
-
-  return core.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function canonicalSpecialty(raw: string): string {
-  const lower = raw.toLowerCase().replace(/\s+/g, '');
-  const map: Record<string, string> = {
-    android: 'Android',
-    ios: 'iOS',
-    backend: 'Backend',
-    'back-end': 'Backend',
-    frontend: 'Frontend',
-    'front-end': 'Frontend',
-    fullstack: 'Full Stack',
-    'full-stack': 'Full Stack',
-    mobile: 'Mobile',
-    web: 'Web',
-    react: 'React',
-    vue: 'Vue',
-    angular: 'Angular',
-    nextjs: 'Next.js',
-    'next.js': 'Next.js',
-    nodejs: 'Node.js',
-    'node.js': 'Node.js',
-    kotlin: 'Kotlin',
-    java: 'Java',
-    swift: 'Swift',
-    go: 'Go',
-    rust: 'Rust',
-    python: 'Python',
-    typescript: 'TypeScript',
-    javascript: 'JavaScript',
-    'c++': 'C++',
-    'c#': 'C#',
-  };
-  return map[lower] || raw.charAt(0).toUpperCase() + raw.slice(1);
-}
-
-function isSpecificTitle(title: string): boolean {
-  return (
-    /\b(Android|iOS|Backend|Frontend|Full Stack|Mobile|Web|Platform|Kotlin|Java|Swift|Python|TypeScript|JavaScript|React|Vue|Angular)\b/i.test(
-      title
-    ) && !/,/.test(title)
-  );
-}
-
-function stripTrailingNoiseClauses(title: string): string {
-  title = title
-    .replace(/\s+Location\b.*$/i, '')
-    .replace(/\s+Employment Type\b.*$/i, '')
-    .replace(/\s+Location Type\b.*$/i, '')
-    .replace(/\s+Department\b.*$/i, '')
-    .replace(/\s+Compensation\b.*$/i, '')
-    .replace(/\s+RemoteEngineering\b.*$/i, '')
-    .trim();
-
-  if (title.includes(',')) {
-    const parts = title.split(',').map((p) => p.trim()).filter(Boolean);
-    const kept = parts.filter((part, index) => {
-      if (index === 0) return true;
-      if (NOISE_TOKEN.test(part)) return false;
-      if (/^(remote|hybrid|onsite)/i.test(part)) return false;
-      if (/\b(atlanta|san francisco|washington|new york|seattle|austin|boston|india)\b/i.test(part)) {
-        return false;
-      }
-      return part.length <= 40;
-    });
-    title = kept.join(', ');
-  }
-
-  return title.trim();
-}
-
-function scoreTitleSegment(segment: string, companyName?: string): number {
-  let score = 0;
-  const lower = segment.toLowerCase();
-
-  if (TITLE_ROLE_WORD.test(segment)) score += 5;
-  if (/\b(senior|junior|staff|principal|lead|associate|mid-level|sr\.?|jr\.?)\b/i.test(segment)) {
-    score += 2;
-  }
-  if (NOISE_TOKEN.test(segment)) score -= 4;
-  if (/\bjob\s*details\b/i.test(segment)) score -= 8;
-  if (/\bcareers?\b/i.test(segment)) score -= 6;
-  if (companyName && new RegExp(escapeRegExp(companyName), 'i').test(segment)) score -= 3;
-  if (/^https?:\/\//i.test(segment)) score -= 10;
-  if (segment.length > 80) score -= 2;
-  if (segment.length < 3) score -= 5;
-  if (/^\d+%/.test(segment) || /match/i.test(lower)) score -= 5;
-  if (/\b(location|compensation|department|overview|about the position|description)\b/i.test(segment)) {
-    score -= 5;
-  }
-  if (/^as an?\b/i.test(segment) || /\byou will\b/i.test(segment)) score -= 10;
-  if (/\([^)]*$/.test(segment) || /\($/.test(segment)) score -= 8;
-  if (/,/.test(segment)) score -= 1;
-
-  return score;
-}
-
-function guessCompanyFromTitle(raw: unknown): string | undefined {
-  if (typeof raw !== 'string') return undefined;
-  const first = raw.trim().split(/\s+/)[0];
-  if (first && first.length <= 24 && !TITLE_ROLE_WORD.test(first) && !/^(senior|junior|staff|as)$/i.test(first)) {
-    return first;
-  }
-  return undefined;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function parseJsonLoose(text: string): any {
   let jsonString = stripCodeFences(text);
@@ -874,7 +305,7 @@ function experienceHasAllDescriptions(experience: any[]): boolean {
 /** Two most recent roles should have plenty of bullets in tailor-company mode. */
 function experienceRecentRolesNeedEnrichment(experience: any[], minBullets = 8): boolean {
   if (!Array.isArray(experience) || experience.length === 0) return false;
-  const recent = mostRecentExperienceIndices(experience, 2);
+  const recent = mostRecentIndices(experience, 2);
   return recent.some((index) => normalizeDescriptions(experience[index]).length < minBullets);
 }
 
@@ -1015,8 +446,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    if (shouldTailorCompanies && companyPick?.replacements?.length) {
-      parsed = forceCompaniesOnParsed(parsed, companyPick.replacements, profile);
+    if (shouldTailorCompanies) {
+      if (companyPick?.replacements?.length) {
+        parsed = forceCompaniesOnParsed(parsed, companyPick.replacements, profile);
+      } else {
+        parsed = normalizeParsedResume(parsed);
+      }
       parsed = applyTitleProgression(parsed, jd);
     } else {
       parsed = normalizeParsedResume(parsed);
@@ -1073,7 +508,7 @@ async function repairMissingDescriptions(
   }));
 
   const recentSet = options.stressIndustryLast2
-    ? new Set(mostRecentExperienceIndices(roles, 2))
+    ? new Set(mostRecentIndices(roles, 2))
     : new Set<number>();
 
   const prompt = `
@@ -1131,7 +566,7 @@ JSON only:
   const repaired = parseJsonLoose(raw);
   const repairedExperience = Array.isArray(repaired.experience) ? repaired.experience : [];
   const recentIdx = options.stressIndustryLast2
-    ? new Set(mostRecentExperienceIndices(experience, 2))
+    ? new Set(mostRecentIndices(experience, 2))
     : new Set<number>();
 
   const mergedExperience = experience.map((exp: any, index: number) => {
@@ -1417,6 +852,7 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
 Please provide the following in JSON format:
 
 1. Extract the job title and company name from the job description
+${JOB_TITLE_EXTRACTION_INSTRUCTIONS}
 2. A compelling professional summary that positions the candidate for this specific role
 3. Enhanced work experience with 7-12 bullet points per position that:
    - Are specifically tailored to the job description requirements
@@ -1523,14 +959,7 @@ ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 INSTRUCTIONS:
 1. Extract jobTitle and companyName from the JD
-   - jobTitle must be a clean professional title only (e.g. "Senior JavaScript Developer", "Senior Android Engineer", "Senior Software Engineer")
-   - Use the posted title near the top of the JD (e.g. "Senior Javascript Developer - React" → "Senior JavaScript Developer"; "Cloud Platform Engineer Job Details | Farmers Insurance Careers" → "Cloud Platform Engineer")
-   - NEVER extract from body prose like "As a Senior Frontend Developer (React.js / Next.js), you will"
-   - Never return incomplete titles or ATS/page chrome (bad: "Cloud Platform Engineer Job Details", "As a Senior Frontend Developer (React.js")
-   - Convert posted specialties into normal titles when needed: "Senior Software Engineer, Android" → "Senior Android Engineer"
-   - Never return comma specialties like "Senior Software Engineer, Android" or glued forms like "Senior Software Engineer Android"
-   - Strip company name, location, remote/hybrid, full-time/part-time, seniority badges, match %, and other marketing/UI noise
-   - Do NOT return titles like "Senior Java Developer - Chordline Health" or "Senior Java Developer | Remote"
+${JOB_TITLE_EXTRACTION_INSTRUCTIONS}
 2. Write a tailored summary
 3. For EACH of the ${experience.length} roles, write contentful bullet points in "descriptions" (array of strings). NEVER leave descriptions empty. NEVER use singular "description".
    - TWO MOST RECENT roles: write 8-10 PLENTY, detailed bullets each (longer sentences OK). Must include:

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { generateResume, AIProvider } from '../utils/resumeGenerator';
+import { generateResume, extractJobInfo, AIProvider } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
 import { generateDocx } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
@@ -70,9 +70,6 @@ const ResumeGenerator: React.FC = () => {
   const [newQuestion, setNewQuestion] = useState('');
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<string | null>(null);
 
-  // Application Eligibility State
-  const [isApplicationEligible, setIsApplicationEligible] = useState(true);
-
   // Per-application download options (local only; not persisted)
   const [includeLinkedIn, setIncludeLinkedIn] = useState(true);
   /** Empty string = pick a template at random on download. */
@@ -113,36 +110,59 @@ const ResumeGenerator: React.FC = () => {
 
     setLoading(true);
     try {
-      // Generate AI resume with job title and company name extraction
+      const duplicateCheckEnabled = profile.check_duplicate_applications !== false;
+
+      // Extract company first; block generation on duplicate (do not generate then disable save)
+      if (duplicateCheckEnabled) {
+        const { companyName: extractedCompany } = await extractJobInfo(jobDescription);
+        if (extractedCompany) {
+          const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
+            p_profile_id: selectedProfile,
+            p_company_name: extractedCompany,
+          });
+
+          if (checkError) {
+            console.error('Error checking application eligibility:', checkError);
+            toast.error('Error checking application eligibility');
+            return;
+          }
+
+          if (!canApply) {
+            toast.error(
+              `This profile already has an active application to ${extractedCompany}. You cannot generate another resume for the same company.`
+            );
+            return;
+          }
+        }
+      }
+
       const generated = await generateResume(profile, jobDescription, aiProvider, tailorCompanyNames);
 
-      console.log(generated, '=== generated')
-
-      setGeneratedWithTailoredCompanies(tailorCompanyNames);
-      setGeneratedResume(generated);
-      setEditingResume(generated);
-      setIsEditing(false);
-
-      // Duplicate check after we have a result so the user can still see tailored content
-      if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
+      // Safety: if final company name differs from extract and is a duplicate, discard result
+      if (duplicateCheckEnabled && generated.companyName) {
         const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
           p_profile_id: selectedProfile,
-          p_company_name: generated.companyName
+          p_company_name: generated.companyName,
         });
 
         if (checkError) {
           console.error('Error checking application eligibility:', checkError);
           toast.error('Error checking application eligibility');
-          setIsApplicationEligible(false);
-        } else if (!canApply) {
-          setIsApplicationEligible(false);
-          toast.error(`This profile already has an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
-        } else {
-          setIsApplicationEligible(true);
+          return;
         }
-      } else {
-        setIsApplicationEligible(true);
+
+        if (!canApply) {
+          toast.error(
+            `This profile already has an active application to ${generated.companyName}. You cannot generate another resume for the same company.`
+          );
+          return;
+        }
       }
+
+      setGeneratedWithTailoredCompanies(tailorCompanyNames);
+      setGeneratedResume(generated);
+      setEditingResume(generated);
+      setIsEditing(false);
 
       setTimeout(() => {
         document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
@@ -276,11 +296,6 @@ const ResumeGenerator: React.FC = () => {
   const handleDownload = async (format: ResumeDownloadFormat) => {
     if (!generatedResume) {
       toast.error('No resume to download');
-      return;
-    }
-
-    if (!isApplicationEligible) {
-      toast.error('Cannot save: this profile already has an active application to that company');
       return;
     }
 
@@ -568,7 +583,6 @@ const ResumeGenerator: React.FC = () => {
     setGeneratedCoverLetter(null);
     setApplicationQuestions([]);
     setNewQuestion('');
-    setIsApplicationEligible(true);
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
     setIncludeLinkedIn(true);
@@ -578,7 +592,6 @@ const ResumeGenerator: React.FC = () => {
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
-  console.log(currentResume, '=== currentResume')
   /** Generator preview shows the generated payload as-is (export still uses resolveResumeExperience). */
   const previewExperience = currentResume?.experience ?? [];
 
@@ -730,7 +743,7 @@ const ResumeGenerator: React.FC = () => {
           <div className="flex justify-center space-x-4">
             <button
               onClick={handleGenerate}
-              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible}
+              disabled={loading || !selectedProfile || !jobDescription}
               className="flex items-center space-x-2 px-8 py-3 text-lg font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -794,12 +807,6 @@ const ResumeGenerator: React.FC = () => {
               )}
             </div>
           </div>
-
-          {!isApplicationEligible && (
-            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              This profile already has an active application to the extracted company. You can review the generated resume below, but saving a new application is blocked until you reset or choose a different company.
-            </div>
-          )}
 
           <div className="mb-6 flex flex-col items-stretch gap-3">
             <fieldset className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
@@ -878,7 +885,6 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('docx')}
-                  disabled={!isApplicationEligible}
                   className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
@@ -887,7 +893,6 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('pdf')}
-                  disabled={!isApplicationEligible}
                   className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
@@ -898,7 +903,6 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('docx')}
-                  disabled={!isApplicationEligible}
                   className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
@@ -907,7 +911,6 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('pdf')}
-                  disabled={!isApplicationEligible}
                   className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
@@ -1135,7 +1138,7 @@ const ResumeGenerator: React.FC = () => {
       )}
 
       {/* Cover Letter Section */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center">
@@ -1259,7 +1262,7 @@ const ResumeGenerator: React.FC = () => {
       )}
 
       {/* Application Questions Section */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center">

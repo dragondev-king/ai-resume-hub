@@ -15,7 +15,9 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "./**/*.ts"
+    "./**/*.ts",
+    "../src/utils/jobTitlePrompt.ts",
+    "../src/utils/careerProgression.ts"
   ],
   "exclude": [
     "node_modules"

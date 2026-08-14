@@ -1,7 +1,7 @@
 import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
-import { applyCareerTitleProgression, mostRecentIndices, toneDescriptionsToSeniority } from './careerProgression';
-import { resolveJobTitle } from './jobTitle';
+import { mostRecentIndices } from './careerProgression';
+import { normalizeJobTitle } from './jobTitlePrompt';
 import { stripBoldMarkup } from './resumeLayout';
 
 type Profile = ProfileWithDetailsRPC;
@@ -24,6 +24,34 @@ interface GeneratedResume {
 export type AIProvider = 'openai' | 'claude';
 
 type CompanyReplacement = { company: string; address: string };
+
+/** Lightweight company/title extract for pre-generate duplicate checks. */
+export async function extractJobInfo(
+  jobDescription: string
+): Promise<{ companyName: string; jobTitle: string }> {
+  const response = await fetch('/api/extract-job-info', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobDescription }),
+  });
+
+  if (!response.ok) {
+    let message = 'Failed to extract company from job description';
+    try {
+      const errorData = await response.json();
+      message = errorData.details || errorData.error || message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  const data = await response.json();
+  return {
+    companyName: typeof data.companyName === 'string' ? data.companyName.trim() : '',
+    jobTitle: typeof data.jobTitle === 'string' ? data.jobTitle.trim() : '',
+  };
+}
 
 /** Normalize messy AI/profile description fields into a bullet array. */
 export function normalizeDescriptions(exp: any): string[] {
@@ -107,21 +135,18 @@ export const generateResume = async (
     throw new Error('The AI returned an empty resume response. Please try again.');
   }
 
-  return parseAIResponse(profile, aiResponse, tailorCompanyNames, replacements, jobDescription);
+  return parseAIResponse(profile, aiResponse, tailorCompanyNames, replacements);
 };
 
 const parseAIResponse = (
   originalProfile: Profile,
   aiResponse: string | Record<string, unknown>,
   tailorCompanyNames: boolean = false,
-  replacements: CompanyReplacement[] = [],
-  jobDescription: string = ''
+  replacements: CompanyReplacement[] = []
 ): GeneratedResume => {
   try {
     const parsed =
       typeof aiResponse === 'string' ? parseJsonResponse(aiResponse) : aiResponse;
-
-    console.log(parsed, '=== parsed');
 
     const aiExperience = Array.isArray(parsed.experience)
       ? (parsed.experience as any[])
@@ -172,6 +197,7 @@ const parseAIResponse = (
         const fallbackDescriptions = normalizeDescriptions(original);
 
         experience.push({
+          // Server already applied junior→senior ladder + seniority tone
           position: aiExp.position || original?.position || '',
           company: isRecentForCompany
             ? replacementForIndex?.company || aiExp.company || original?.company || ''
@@ -194,12 +220,7 @@ const parseAIResponse = (
     }
 
     const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
-    const jobTitle = resolveJobTitle(parsed.jobTitle, companyName, jobDescription);
-
-    // Junior→senior ladder only when tailor-company checkbox is on
-    const finalExperience = tailorCompanyNames
-      ? toneDescriptionsToSeniority(applyCareerTitleProgression(experience, jobTitle))
-      : experience;
+    const jobTitle = normalizeJobTitle(parsed.jobTitle);
 
     const rawSkills = Array.isArray(parsed.skills)
       ? (parsed.skills as string[])
@@ -208,16 +229,13 @@ const parseAIResponse = (
       .map((skill) => stripBoldMarkup(String(skill || '')).trim())
       .filter(Boolean);
 
-    const enhancedData: GeneratedResume = {
+    return {
       summary: (parsed.summary as string) || originalProfile.summary || '',
-      experience: finalExperience,
+      experience,
       skills: skills.length ? skills : originalProfile.skills || [],
       jobTitle,
       companyName,
     };
-
-    console.log(enhancedData, '=== enhancedData');
-    return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
     if (typeof aiResponse === 'string') {
