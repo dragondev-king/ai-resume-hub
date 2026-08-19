@@ -21,6 +21,7 @@ import {
   parseBoldMarkup,
 } from './resumeLayout';
 import { resolveResumeTheme, type ResumeTheme } from '../resumeTemplates';
+import { mostRecentIndices } from './careerProgression';
 
 interface GeneratedResume {
   summary: string;
@@ -73,6 +74,21 @@ function findMatchingAiExperience(
       companiesMatch(ai.company, originalExp.company) &&
       normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
   );
+}
+
+/** Header role under the name: latest position from the exported experience list. */
+export function resolveHeaderRoleTitle(
+  originalExperience: ExperienceEntry[],
+  aiExperience: ExperienceEntry[],
+  useAiEnhancedJobTitle: boolean,
+  fallbackTitle?: string
+): string | undefined {
+  const entries = resolveResumeExperience(originalExperience, aiExperience, useAiEnhancedJobTitle);
+  if (!entries.length) return fallbackTitle?.trim() || undefined;
+
+  const [newestIndex] = mostRecentIndices(entries, 1);
+  const position = entries[newestIndex]?.position?.trim();
+  return position || fallbackTitle?.trim() || undefined;
 }
 
 export function resolveResumeExperience(
@@ -168,9 +184,15 @@ export const generateDocx = async (
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
   const bodyRun = makeBodyRun(theme);
   const t = theme.template;
+  const headerRole = resolveHeaderRoleTitle(
+    profile?.experience ?? [],
+    generatedResume.experience ?? [],
+    useAiEnhancedJobTitle,
+    profile?.title
+  );
 
   const children: (Paragraph | Table)[] = [
-    ...createHeader(theme, bodyRun, profile, includeLinkedIn),
+    ...createHeader(theme, bodyRun, profile, includeLinkedIn, headerRole),
   ];
 
   const sectionBuilders: Record<string, () => (Paragraph | Table)[]> = {
@@ -250,13 +272,14 @@ const createHeader = (
   theme: ResumeTheme,
   bodyRun: BodyRunFn,
   profile?: Profile,
-  includeLinkedIn = true
+  includeLinkedIn = true,
+  headerRole?: string
 ): Paragraph[] => {
   const t = theme.template;
   const rawName = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
   const name = t.header.nameTransform === 'uppercase' ? rawName.toUpperCase() : rawName;
   const align = t.header.nameAlign === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT;
-  const title = t.header.showRole ? profile?.title : undefined;
+  const title = t.header.showRole ? headerRole || profile?.title : undefined;
 
   const paragraphs: Paragraph[] = [
     new Paragraph({
