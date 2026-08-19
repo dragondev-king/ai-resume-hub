@@ -12,27 +12,55 @@ export type DatedExperience = {
   [key: string]: unknown;
 };
 
-function parseSortDate(value?: string): string {
+function parseEndSortDate(value?: string): string {
   if (!value) return '';
-  // Prefer YYYY-MM or YYYY-MM-DD; "Present"/empty sorts as far future for end dates
   const trimmed = value.trim();
   if (!trimmed || /^present$/i.test(trimmed) || /^current$/i.test(trimmed)) {
     return '9999-12';
   }
+  const iso = trimmed.match(/^(\d{4})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
   return trimmed.slice(0, 7);
 }
 
-/** Indices sorted oldest → newest by start_date (then end_date). */
+/** Sort key for start_date; missing values infer recency from end_date when possible. */
+function parseStartSortDate(start?: string, end?: string): string {
+  const startKey = parseEndSortDate(start);
+  if (startKey) return startKey;
+
+  const endKey = parseEndSortDate(end);
+  if (endKey === '9999-12') return '9999-11'; // current role without start → treat as newest
+  if (endKey) return endKey; // past role without start → approximate from end date
+  return '';
+}
+
+function chronologicalSortKeys(experience: DatedExperience[]): Array<{ start: string; end: string; index: number }> {
+  const total = experience.length;
+  return experience.map((exp, index) => {
+    let start = parseStartSortDate(exp.start_date, exp.end_date);
+    let end = parseEndSortDate(exp.end_date);
+    if (!start && !end) {
+      // No dates: assume lower index = more recent (typical resume order)
+      const rank = total - index;
+      const synthetic = `8888-${String(rank).padStart(2, '0')}`;
+      start = synthetic;
+      end = synthetic;
+    }
+    return { start, end, index };
+  });
+}
+
+/** Indices sorted oldest → newest by start_date (then end_date, then array index). */
 export function chronologicalIndices(experience: DatedExperience[]): number[] {
+  const keys = chronologicalSortKeys(experience);
   return experience
     .map((_, index) => index)
     .sort((a, b) => {
-      const startA = parseSortDate(experience[a]?.start_date);
-      const startB = parseSortDate(experience[b]?.start_date);
-      if (startA !== startB) return startA.localeCompare(startB);
-      const endA = parseSortDate(experience[a]?.end_date);
-      const endB = parseSortDate(experience[b]?.end_date);
-      return endA.localeCompare(endB);
+      const keyA = keys[a];
+      const keyB = keys[b];
+      if (keyA.start !== keyB.start) return keyA.start.localeCompare(keyB.start);
+      if (keyA.end !== keyB.end) return keyA.end.localeCompare(keyB.end);
+      return keyB.index - keyA.index;
     });
 }
 
@@ -97,6 +125,13 @@ export function buildCareerTitleLadder(
   chrono.forEach((expIndex, careerStep) => {
     byIndex[expIndex] = oldestToNewest[careerStep];
   });
+
+  // Safety net: the most recent role always gets the senior title
+  const newestIndex = chrono[chrono.length - 1];
+  if (newestIndex !== undefined) {
+    byIndex[newestIndex] = seniorTitle;
+  }
+
   return byIndex;
 }
 

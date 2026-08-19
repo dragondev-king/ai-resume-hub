@@ -183,6 +183,8 @@ function forceCompaniesOnParsed(
         ...next.experience[i],
         company: replacements[recentSlot].company,
         address: replacements[recentSlot].address || next.experience[i].address || '',
+        start_date: original?.start_date || next.experience[i].start_date,
+        end_date: original?.end_date || next.experience[i].end_date,
         descriptions: normalizeDescriptions(next.experience[i]),
       };
     } else {
@@ -200,13 +202,16 @@ function forceCompaniesOnParsed(
 }
 
 /** Force junior->senior titles and seniority-matched bullet tone. */
-function applyTitleProgression(parsed: any, jobDescription?: string): any {
+function applyTitleProgression(parsed: any, jobDescription?: string, profileExperience?: any[]): any {
   if (!parsed || !Array.isArray(parsed.experience) || parsed.experience.length === 0) {
     return parsed;
   }
   const jobTitle = normalizeJobTitle(parsed.jobTitle);
-  const normalized = parsed.experience.map((exp: any) => ({
+  const profileRows = Array.isArray(profileExperience) ? profileExperience : [];
+  const normalized = parsed.experience.map((exp: any, index: number) => ({
     ...exp,
+    start_date: profileRows[index]?.start_date || exp.start_date || '',
+    end_date: profileRows[index]?.end_date || exp.end_date || '',
     descriptions: normalizeDescriptions(exp),
   }));
   const withLadder = applyCareerTitleProgression(
@@ -452,7 +457,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         parsed = normalizeParsedResume(parsed);
       }
-      parsed = applyTitleProgression(parsed, jd);
+      parsed = applyTitleProgression(parsed, jd, profile.experience);
     } else {
       parsed = normalizeParsedResume(parsed);
       parsed = finalizeJobTitle(parsed, jd);
