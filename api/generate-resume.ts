@@ -34,7 +34,7 @@ const SYSTEM_PROMPT_TAILOR_COMPANY =
   `You are an expert resume writer. Return ONLY complete valid JSON. ${JOB_TITLE_EXTRACTION_INSTRUCTIONS} Also extract companyName. Every experience item MUST include a non-empty "descriptions" array. The TWO MOST RECENT roles need PLENTY of content: 8-10 long, detailed bullets each covering industry/field experience, technical delivery, AND remote/distributed-team collaboration. Older roles: 5-7 technical-focused bullets. Bullet tone MUST match that role's seniority: Junior/entry roles must NOT lead teams, own architecture, or mentor; use contribute/implement/build language. Mid roles own features; Senior roles may lead and mentor. Never omit descriptions. Never use "description" (singular) - always "descriptions" (array of strings). Wrap tech skills with <b>...</b> ONLY inside experience description bullets - never in the skills array, summary, jobTitle, companyName, or position. The skills array must be plain strings only (e.g. "Node.js", not "<b>Node.js</b>"). Rewrite EVERY experience "position" for the target JD into a junior-to-senior career ladder by employment dates. Never reuse the candidate's original profile titles. Only the two most recent company names may already be substituted; keep older company names exact.`;
 
 const SYSTEM_PROMPT_COMPANY_PICK =
-  'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees). Never suggest famous giants or the target company itself. CRITICAL: replacements must have NO business relationship with the hiring company (not partners, customers, vendors, subsidiaries, parents, affiliates, investors, portfolio companies, contractors, or companies named in the JD). The ONLY allowed relationship is being a direct rival/competitor.';
+  'You research mid-market employers. Return ONLY valid JSON with targetCompany, industry, and replacements[]. Prefer real mid-sized lesser-known peers (about 50-500 employees) whose headquarters or primary operations are in the candidate\'s country of residence (infer from their home address/location). Never suggest famous giants or the target company itself. CRITICAL: replacements must have NO business relationship with the hiring company (not partners, customers, vendors, subsidiaries, parents, affiliates, investors, portfolio companies, contractors, or companies named in the JD). The ONLY allowed relationship is being a direct rival/competitor.';
 
 const SYSTEM_PROMPT_REPAIR =
   'You fill and enrich resume bullet points. Return ONLY valid JSON: { "experience": [ { "descriptions": ["bullet", ...] } ] } with one entry per input role. For the two most recent roles when asked, write 8-10 plentiful detailed bullets covering industry/field experience, technical delivery, and remote/distributed-team contributions. Older roles: 5-7 technical bullets. Bullet seniority MUST match the role title (Junior never Led/Owned architecture/Mentored). Wrap tech skills in <b>...</b>.';
@@ -595,14 +595,22 @@ JSON only:
   return { ...parsed, experience: mergedExperience };
 }
 
+function describeCandidateResidence(profile: any): string {
+  const location = String(profile?.location || '').trim();
+  if (!location) return '';
+  return location;
+}
+
 async function pickSubstituteCompanies(
   profile: any,
   jobDescription: string,
   provider: AIProvider
 ): Promise<CompanyPickResult> {
   const experience = Array.isArray(profile.experience) ? profile.experience : [];
-  const recent = experience.slice(0, 2);
+  const recentOrdered = mostRecentIndices(experience, 2);
+  const recent = recentOrdered.map((i) => experience[i]).filter(Boolean);
   const needed = Math.min(2, Math.max(1, recent.length));
+  const homeAddress = describeCandidateResidence(profile);
 
   const attempt = async (extraGuard: string): Promise<CompanyPickResult> => {
     const prompt = `
@@ -617,19 +625,30 @@ SIZE & FAME RULES (STRICT):
 - Prefer obscure / regional / lesser-known companies
 - DO NOT use FAANG, Big Tech, Fortune 500 household names, mega insurers, or mega EHR vendors (Epic, Oracle Health/Cerner, Optum, UnitedHealth, Google, Amazon, Microsoft, Apple, Meta, IBM, Salesforce, etc.)
 - DO NOT use the target hiring company itself
-- Real company names only; include plausible HQ city
+- Real company names only; include a plausible HQ / office address in the candidate's country of residence
+
+COUNTRY OF RESIDENCE RULES (STRICT — REQUIRED):
+- Infer the candidate's country of residence from their HOME ADDRESS / location below
+- Every proposed substitute company MUST be headquartered in, or primarily based in, that SAME country
+- Prefer companies with offices in the same country (and when possible the same region/metro) as the home address
+- Do NOT pick companies primarily based in a different country, even if they are industry peers
+- Each replacement "address" must be a real city/region INSIDE that country of residence (not abroad)
+${homeAddress ? `- Candidate home address / location: ${homeAddress}` : '- Candidate home address was not provided; infer country from any location clues in the profile, otherwise prefer US mid-market peers'}
 
 RELATIONSHIP RULES (STRICT — MOST IMPORTANT):
 - Substitutes must have NO relationship with the hiring/target company
 - Forbidden relationships include: partners, customers, clients, vendors, suppliers, subsidiaries, parent companies, sister brands, affiliates, contractors, resellers, integrators, investors, portfolio companies, acquisitions, spin-offs, joint ventures, or any company named/mentioned in the JD as a customer/partner/user
 - The ONLY acceptable relationship is being a direct rival/competitor in the same market
-- First replacement = preferably a lesser-known mid-market rival of the hiring company
-- Second = a different company that is either another rival OR a completely unrelated mid-sized peer in the same industry (still no partnership/customer/vendor ties)
+- First replacement = preferably a lesser-known mid-market rival of the hiring company (still in the candidate's country)
+- Second = a different company that is either another rival OR a completely unrelated mid-sized peer in the same industry (still no partnership/customer/vendor ties; still in the candidate's country)
 - If unsure whether a company is related to the hiring company, do NOT use it — pick a clearly independent peer instead
 ${extraGuard}
 
 JOB DESCRIPTION:
 ${jobDescription}
+
+CANDIDATE HOME ADDRESS / LOCATION (use this to decide country of residence):
+${homeAddress || '(not provided)'}
 
 CANDIDATE CURRENT MOST RECENT EMPLOYERS (replace these):
 ${recent.map((exp: any, i: number) => `${i + 1}. ${exp.company || 'Unknown'} - ${exp.position || ''}`).join('\n')}
@@ -639,7 +658,7 @@ Return ONLY JSON:
   "targetCompany": "hiring company from the JD",
   "industry": "short industry/field label",
   "replacements": [
-    { "company": "Independent mid-sized rival or unrelated peer", "address": "City, State" }
+    { "company": "Independent mid-sized rival or unrelated peer in candidate's country", "address": "City, State/Region, Country" }
   ]
 }
 `;
@@ -675,7 +694,7 @@ Return ONLY JSON:
   if (rejected.length) {
     console.warn('Rejected related substitute companies:', rejected.join(', '));
     result = await attempt(
-      `\nRETRY GUARD: Do NOT use these rejected companies (related or named in the JD): ${rejected.join(', ')}. Pick different independent rivals/peers.`
+      `\nRETRY GUARD: Do NOT use these rejected companies (related or named in the JD): ${rejected.join(', ')}. Pick different independent rivals/peers that are still based in the candidate's country of residence (${homeAddress || 'from home address'}).`
     );
     const stillBad = replacementsRelatedToTarget(result, jobDescription);
     if (stillBad.length) {
