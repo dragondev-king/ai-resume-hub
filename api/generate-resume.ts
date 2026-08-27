@@ -29,15 +29,16 @@ QUALITY RULES (non-negotiable):
 CHRONOLOGY IS CRITICAL — honesty and job-fit both matter:
 - Never put a technology or specific version in a job that ended before that thing existed.
 - Example: Angular 21 (Nov 2025) must not appear in a role that ended in 2024.
-- Specific versions from the job description (React 19, Angular 21, etc.) may appear in ONE place in experience: the most recent company only, and only if that role was still active after the version shipped. Do not repeat React 19 (or any other required version) across every other eligible job.
-- All earlier companies use the family name only (React, Angular, etc.) — no version numbers. Do not write "React 17/18" in older jobs either.
+- Specific versions from the job description (React 18, React 19, Python 3.11, Angular 21, etc.) may appear in the most recent company only, and only if that role was still active after the version shipped.
+- Within that company, each specific version is named ONCE in the whole bullet list. Later bullets use the family name only (React, Python). Never write React 18 or Python 3.11 in three different bullets at the same job.
+- All earlier companies use the family name only — no version numbers.
 - The professional summary must never name a specific version. Write React, not React 19. Write Angular, not Angular 21.
 - If the most recent role ended before the required version existed, omit that version from experience bullets entirely. Do not backfill it into an older company.
 - Never claim years of experience with a version. Generate 7–12 bullet points per role. Extract job title and company from the job description.`;
 
-const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history. A specific version must not appear in a job that ended before it existed. Required JD versions belong in mustUse for the MOST RECENT role only, and only if that role was still active after the version shipped. All earlier roles: family name in mayUse, required version in mustNotUse. Respond with valid JSON only.`;
+const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history. A specific version must not appear in a job that ended before it existed. Required JD versions belong in mustUse for the MOST RECENT role only. Each version should be named once in that role's bullets, then family names only. All earlier roles: family name in mayUse, required version in mustNotUse. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a senior recruiter and technical editor. Make the resume chronologically honest and human. The professional summary must not name specific versions (React, not React 19). In experience, a required version may appear only in the most recent company, and only if that job's dates allow it. Strip repeated versions from earlier companies; use the family name there. Remove versions from jobs that ended before they existed. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a senior recruiter and technical editor. Make the resume chronologically honest and human. The professional summary must not name specific versions. In experience, a required version may appear only in the most recent company, and only once in that company's bullets — later bullets use the family name (React, Python). Strip repeated versions from the same job and from earlier companies. Remove versions from jobs that ended before they existed. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -252,7 +253,7 @@ INSTRUCTIONS:
    - mayUse: family names that existed during that role (React, TypeScript) — not version numbers, except as below
    - mustUse: required JD versions for the MOST RECENT role only, and only if that role was still active after the version shipped. Empty for every earlier role.
    - mustNotUse: required JD versions for every role except that one most-recent eligible role
-   - eraStackGuidance: most recent eligible role should name the required version once; all other roles use the family name with no version number
+   - eraStackGuidance: most recent eligible role should name each required version once in the whole bullet list; remaining bullets and all other roles use the family name with no version number
 6. If the most recent role ended before the version existed, mustUse is empty everywhere. Do not assign the version to an older company.
 
 Respond with ONLY JSON:
@@ -365,9 +366,9 @@ ${params.draft}
 AUDIT AND REWRITE:
 1. Keep the same companies, dates, number of roles, and JSON shape.
 2. Professional summary: remove every specific version (React 19 → React, Angular 21 → Angular). Do not add versions to the summary.
-3. Experience: a required version (e.g. React 19) may appear only in the most recent company, and only if that job was still active after the version shipped. If it is missing there and dates allow it, add it once.
-4. Strip specific versions from every earlier company. Use the family name (React) with no version number. Do not write "React 17/18" or repeat React 19.
-5. Skills may list the required version (React 19) for ATS. Summary still must not.
+3. Experience: a required version (e.g. React 18, Python 3.11) may appear only in the most recent company, and only if that job was still active after the version shipped. Name each version ONCE in that company's bullets. If React 18 appears in three bullets, keep it in one bullet and change the others to React.
+4. Strip specific versions from every earlier company. Use the family name with no version number.
+5. Skills may list the required version for ATS. Summary still must not.
 6. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
 7. Aim for 7–12 bullets per role.
 
@@ -509,9 +510,10 @@ CRITICAL TAILORING INSTRUCTIONS:
 
 3. CHRONOLOGY / VERSION RULES:
    - Professional summary: family names only. Never write React 19, Angular 21, or any other specific version in the summary.
-   - Experience: name a required JD version (e.g. React 19) in the most recent company only, and only if that role was still active after the version shipped.
+   - Experience: name a required JD version in the most recent company only, and only if that role was still active after the version shipped.
+   - Each specific version appears at most ONCE in that company's entire bullet list. Later bullets use the family name: after one "Python 3.11" write Python; after one "React 18" write React. Do not repeat Python 3.11 or React 18 in every bullet.
    - Do not repeat that version in any earlier company, even if those dates would have allowed it.
-   - Earlier companies: write <b>React</b> (or the family name), with no version number. Not "React 17/18".
+   - Earlier companies: family name only, no version number.
    - If the most recent role ended before the version existed, do not put the version on an older job either.
    - Keep every original company name and the original start/end dates (YYYY-MM). Same number of positions as the original history.
 
@@ -530,11 +532,12 @@ CRITICAL TAILORING INSTRUCTIONS:
    - Keep the <b> tags inside JSON string values.
 
 EXAMPLE OF HONEST TAILORING:
-Job requires React 19 (released Dec 2024). Most recent job is Bluemercury 10/2025–04/2026.
-- Summary: Experienced React developer... (no "React 19")
-- Bluemercury (last company): mention <b>React 19</b> once in the bullets.
-- Subflow and every earlier company: <b>React</b> only. No React 19. No React 17/18.
-- Skills may include React 19.
+Job requires Python 3.11+ and React 18+. Most recent job is an e-commerce role.
+- Summary: Experienced Python, Django, and React developer... (no "Python 3.11" or "React 18")
+- Last company, first bullet only: ... using <b>Python 3.11</b>, <b>Django</b>, <b>React 18</b>, and <b>JavaScript</b>.
+- Same company, remaining bullets: <b>Python</b>, <b>Django</b>, <b>React</b>, <b>JavaScript</b> — never Python 3.11 or React 18 again.
+- Every earlier company: family names only. No version numbers.
+- Skills may include Python 3.11 and React 18.
 
 Respond with ONLY valid JSON — no markdown, no extra text. Do not drop companies. Same number of positions as original experience.
 
