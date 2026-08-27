@@ -845,7 +845,7 @@ const ResumeGenerator: React.FC = () => {
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Generating...</span>
+                  <span>Generating (this may take a minute)...</span>
                 </>
               ) : (
                 <>

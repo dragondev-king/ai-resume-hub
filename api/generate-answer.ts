@@ -135,6 +135,7 @@ The answer should be:
 Please write the answer in the candidate's voice, using their actual experience and background. Be direct and avoid unnecessary elaboration.
 Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write.
 Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
+CHRONOLOGY: Only mention technologies alongside roles whose dates overlap after that technology existed. Do not claim years of experience with a version that did not exist yet. Follow the dates on the AI-generated resume content.
 `;
 };
 
