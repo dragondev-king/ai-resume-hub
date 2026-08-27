@@ -137,6 +137,7 @@ The cover letter should be well-structured with:
 Please write the cover letter in a natural, conversational tone that sounds authentic to the candidate. Be concise and avoid unnecessary verbosity.
 Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
 Avoid examples that are too close to the job's tech stack because it'll be obvious the cover letter was AI generated.
+CHRONOLOGY: Only mention technologies in connection with jobs/dates where those technologies already existed. Do not claim years of experience with a tool that exceed how long it has existed (e.g. do not say long-term Angular 21 experience if Angular 21 is new). Follow the dates on the AI-generated resume content.
 `;
 };
 

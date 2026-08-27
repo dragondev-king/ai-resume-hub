@@ -4,6 +4,10 @@ import OpenAI from 'openai';
 
 type AIProvider = 'openai' | 'claude';
 
+export const config = {
+  maxDuration: 300,
+};
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -12,10 +16,14 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const SYSTEM_PROMPT =
-  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Your goal is to transform a candidate\'s experience to make them appear as an ideal fit for the target position, even if their original experience doesn\'t perfectly match. Be creative and strategic in highlighting transferable skills, relevant technologies, and adaptable experience. Generate 7-12 bullet points per work experience, with varying counts based on role complexity and duration. Extract the job title and company name from the job description. CRITICAL: Aggressively tailor job titles and experience descriptions to align with the target role while maintaining authenticity and keeping company names unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).';
-
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+const SYSTEM_PROMPT =
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
+
+const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history. A specific version must not appear in a job that ended before it existed. Required JD versions belong in mustUse for the MOST RECENT role only. Each version should be named once in that role's bullets, then family names only. All earlier roles: family name in mayUse, required version in mustNotUse. Respond with valid JSON only.`;
+
+const AUDIT_SYSTEM_PROMPT = `You are a light copy editor. Do not rewrite the resume. Do not shorten it. Do not drop bullets or skills. Keep the same dates, companies, bullet count, and skill list length. Only fix version-number placement. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -48,6 +56,55 @@ const RESUME_OUTPUT_SCHEMA = {
     },
   },
   required: ['jobTitle', 'companyName', 'summary', 'experience', 'skills'],
+  additionalProperties: false,
+};
+
+const TIMELINE_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    technologies: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          kind: { type: 'string' },
+          introduced: { type: 'string' },
+          confidence: { type: 'string' },
+          notes: { type: 'string' },
+        },
+        required: ['name', 'kind', 'introduced', 'confidence', 'notes'],
+        additionalProperties: false,
+      },
+    },
+    roles: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          company: { type: 'string' },
+          start_date: { type: 'string' },
+          end_date: { type: 'string' },
+          mayUse: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          mustUse: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          mustNotUse: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          eraStackGuidance: { type: 'string' },
+        },
+        required: ['company', 'start_date', 'end_date', 'mayUse', 'mustUse', 'mustNotUse', 'eraStackGuidance'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['technologies', 'roles'],
   additionalProperties: false,
 };
 
@@ -90,11 +147,29 @@ export default async function handler(
       });
     }
 
-    const prompt = createAIPrompt(profile, jobDescription);
-    const aiResponse =
-      provider === 'claude'
-        ? await generateWithClaude(prompt)
-        : await generateWithOpenAI(prompt);
+    const today = formatToday();
+    const workHistory = formatWorkHistory(profile);
+
+    const timeline = await analyzeTechnologyTimeline({
+      provider,
+      jobDescription,
+      workHistory,
+      today,
+    });
+
+    const draft = await generateResumeDraft({
+      provider,
+      prompt: createAIPrompt(profile, jobDescription, timeline, today, workHistory),
+    });
+
+    const aiResponse = await auditResumeChronology({
+      provider,
+      draft,
+      timeline,
+      workHistory,
+      jobDescription,
+      today,
+    });
 
     return res.status(200).json({
       success: true,
@@ -110,31 +185,247 @@ export default async function handler(
   }
 }
 
-async function generateWithOpenAI(prompt: string): Promise<string> {
+function formatToday(): string {
+  return new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function formatRoleEnd(exp: any): string {
+  if (exp.current || !exp.end_date || String(exp.end_date).toLowerCase() === 'present') {
+    return 'Present';
+  }
+  return String(exp.end_date);
+}
+
+function formatWorkHistory(profile: any): string {
+  const experience = Array.isArray(profile.experience) ? profile.experience : [];
+  return experience
+    .map((exp: any, index: number) => {
+      const end = formatRoleEnd(exp);
+      return `${index + 1}. ${exp.position} at ${exp.company}
+   Dates (FACT — do not change): ${exp.start_date} through ${end}
+   Address: ${exp.address || ''}
+   Original description: ${exp.description || ''}`;
+    })
+    .join('\n');
+}
+
+async function analyzeTechnologyTimeline(params: {
+  provider: AIProvider;
+  jobDescription: string;
+  workHistory: string;
+  today: string;
+}): Promise<string> {
+  const prompt = `TODAY'S DATE: ${params.today}
+
+JOB DESCRIPTION:
+${params.jobDescription}
+
+CANDIDATE WORK HISTORY (dates are facts):
+${params.workHistory}
+
+Build a chronology map. Required job-description versions may be named in the MOST RECENT role only.
+
+INSTRUCTIONS:
+1. Extract technologies and versioned products from THIS job description. Use whatever names and versions the JD actually lists.
+2. For each, estimate when it first became available (YYYY-MM).
+3. Distinguish family names from versions. "<Family>" is not "<Family> <Version>".
+4. Identify the most recent work-history role (latest end date, or Present).
+5. For each role, list:
+   - mayUse: family names that existed during that role — not version numbers, except as below
+   - mustUse: required JD versions for the MOST RECENT role only, and only if that role was still active after the version shipped. Empty for every earlier role.
+   - mustNotUse: required JD versions for every role except that one most-recent eligible role
+   - eraStackGuidance: most recent eligible role should name each required version once in the whole bullet list; remaining bullets and all other roles use the family name with no version number
+6. If the most recent role ended before the version existed, mustUse is empty everywhere. Do not assign the version to an older company.
+
+Respond with ONLY JSON using the REAL company names and dates from the work history above, and the REAL technologies from the job description. The following is the shape only — copy structure, not these placeholders:
+
+{
+  "technologies": [
+    {
+      "name": "<Family> <Version>",
+      "kind": "versioned",
+      "introduced": "YYYY-MM",
+      "confidence": "high",
+      "notes": "Required by the JD. Name it only in the most recent role if that role was still active after introduced."
+    }
+  ],
+  "roles": [
+    {
+      "company": "<most recent company from work history>",
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "mayUse": ["<Family>", "<Family> <Version>"],
+      "mustUse": ["<Family> <Version>"],
+      "mustNotUse": [],
+      "eraStackGuidance": "Most recent role and dates allow the required version. This is the ONLY role that should name it."
+    },
+    {
+      "company": "<earlier company from work history>",
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "mayUse": ["<Family>"],
+      "mustUse": [],
+      "mustNotUse": ["<Family> <Version>"],
+      "eraStackGuidance": "Write the family name only. No version numbers."
+    }
+  ]
+}`;
+
+  try {
+    if (params.provider === 'claude') {
+      return await generateWithClaude({
+        prompt,
+        system: TIMELINE_SYSTEM_PROMPT,
+        schema: TIMELINE_OUTPUT_SCHEMA,
+        maxTokens: 4000,
+      });
+    }
+
+    return await generateWithOpenAI({
+      prompt,
+      system: TIMELINE_SYSTEM_PROMPT,
+      temperature: 0.2,
+      maxTokens: 4000,
+    });
+  } catch (error) {
+    console.error('Technology timeline analysis failed; continuing with prompt-only chronology rules:', error);
+    return '';
+  }
+}
+
+async function generateResumeDraft(params: {
+  provider: AIProvider;
+  prompt: string;
+}): Promise<string> {
+  if (params.provider === 'claude') {
+    return generateWithClaude({
+      prompt: params.prompt,
+      system: SYSTEM_PROMPT,
+      schema: RESUME_OUTPUT_SCHEMA,
+      maxTokens: 8000,
+    });
+  }
+
+  return generateWithOpenAI({
+    prompt: params.prompt,
+    system: SYSTEM_PROMPT,
+    temperature: 0.7,
+    maxTokens: 8000,
+  });
+}
+
+async function auditResumeChronology(params: {
+  provider: AIProvider;
+  draft: string;
+  timeline: string;
+  workHistory: string;
+  jobDescription: string;
+  today: string;
+}): Promise<string> {
+  const prompt = `TODAY'S DATE: ${params.today}
+
+JOB DESCRIPTION (for tailoring context, not for copying into old jobs):
+${params.jobDescription}
+
+FACTUAL WORK HISTORY DATES:
+${params.workHistory}
+
+TECHNOLOGY TIMELINE (follow this):
+${params.timeline || 'Required JD versions may be named in the most recent company only, and only if that role was still active after the version shipped. Summary: family names only, no versions. Earlier jobs: family names, no version numbers.'}
+
+DRAFT RESUME JSON:
+${params.draft}
+
+AUDIT AND REWRITE:
+This is a surgical edit, not a rewrite. Quality of the draft must stay the same or improve.
+
+1. Keep the same companies, start/end dates, addresses, positions, number of roles, and JSON shape.
+2. Keep EVERY bullet. Do not delete bullets. Do not merge bullets. If a role has 8 bullets, it still has 8. Prefer 7-12 per role; if a role is already under 7, leave the count as-is unless you can add substance without inventing new employers.
+3. Keep the full skills list. Add missing job-description skills if needed. Never shrink a long list down to only a few JD keywords.
+4. Professional summary: keep length and strength. Remove version numbers only (Family Version → Family). Do not make the summary shorter or generic.
+5. Experience versions: a required version from THIS job description may appear only in the most recent company, once per version. Other bullets at that company use the family name. Earlier companies: family name, no version number. Do not strip other technologies, tools, or details.
+6. Do not change employment dates.
+7. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
+
+Respond with ONLY the corrected resume JSON in this shape:
+{
+  "jobTitle": "...",
+  "companyName": "...",
+  "summary": "...",
+  "experience": [
+    {
+      "position": "...",
+      "company": "...",
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "address": "...",
+      "descriptions": ["..."]
+    }
+  ],
+  "skills": ["..."]
+}`;
+
+  try {
+    if (params.provider === 'claude') {
+      return await generateWithClaude({
+        prompt,
+        system: AUDIT_SYSTEM_PROMPT,
+        schema: RESUME_OUTPUT_SCHEMA,
+        maxTokens: 8000,
+      });
+    }
+
+    return await generateWithOpenAI({
+      prompt,
+      system: AUDIT_SYSTEM_PROMPT,
+      temperature: 0.2,
+      maxTokens: 8000,
+    });
+  } catch (error) {
+    console.error('Chronology audit failed; returning draft resume:', error);
+    return params.draft;
+  }
+}
+
+async function generateWithOpenAI(params: {
+  prompt: string;
+  system: string;
+  temperature: number;
+  maxTokens: number;
+}): Promise<string> {
   const completion = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: prompt },
+      { role: 'system', content: params.system },
+      { role: 'user', content: params.prompt },
     ],
     response_format: { type: 'json_object' },
-    temperature: 0.7,
-    max_tokens: 5000,
+    temperature: params.temperature,
+    max_tokens: params.maxTokens,
   });
 
   return completion.choices[0]?.message?.content || '';
 }
 
-async function generateWithClaude(prompt: string): Promise<string> {
+async function generateWithClaude(params: {
+  prompt: string;
+  system: string;
+  schema: Record<string, unknown>;
+  maxTokens: number;
+}): Promise<string> {
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 5000,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
+    max_tokens: params.maxTokens,
+    system: params.system,
+    messages: [{ role: 'user', content: params.prompt }],
     output_config: {
       format: {
         type: 'json_schema',
-        schema: RESUME_OUTPUT_SCHEMA,
+        schema: params.schema,
       },
     },
   });
@@ -149,96 +440,93 @@ function extractClaudeTextContent(message: Anthropic.Message): string {
     .join('');
 }
 
-const createAIPrompt = (profile: any, jobDescription: string): string => {
+const createAIPrompt = (
+  profile: any,
+  jobDescription: string,
+  timeline: string,
+  today: string,
+  workHistory: string
+): string => {
+  const education = Array.isArray(profile.education) ? profile.education : [];
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+
   return `
-Please create a highly tailored resume for the following job description. The goal is to position the candidate as an ideal fit for this specific role, even if their original experience doesn't perfectly match.
+Please create a highly tailored, professional resume for the following job. Position the candidate as an ideal fit. Writing quality matters as much as chronological honesty: rich bullets, full skill list, strong summary.
+
+TODAY'S DATE: ${today}
 
 JOB DESCRIPTION:
 ${jobDescription}
 
-CANDIDATE INFORMATION:
+CANDIDATE:
 Name: ${profile.first_name} ${profile.last_name}
 Current Summary: ${profile.summary || ''}
 
-ORIGINAL EXPERIENCE (Use as inspiration but don't be limited by it):
-${profile.experience.map((exp: any) => `
-- ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
-  Address: ${exp.address || ''}
-  Original Description: ${exp.description || ''}
-`).join('\n')}
+WORK HISTORY (dates and companies are FACTS — copy start_date and end_date exactly):
+${workHistory}
 
 EDUCATION:
-${profile.education.map((edu: any) => `
-- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
-`).join('\n')}
+${education
+  .map(
+    (edu: any) =>
+      `- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})`
+  )
+  .join('\n')}
 
-CURRENT SKILLS:
-${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
+CURRENT SKILLS (keep these; add JD skills; do not replace this list with only a few keywords):
+${skills.filter((skill: string) => skill.trim()).join(', ')}
+
+VERSION MAP (placement only — do not use this to shrink the resume):
+${timeline || 'Required JD versions: name them once in the most recent company if that role was still active after the version shipped. Summary and earlier jobs: family name only.'}
 
 CRITICAL INSTRUCTIONS FOR TAILORING:
-1. ANALYZE the job description thoroughly to identify:
-   - Job title and company name
-   - Required technical skills and technologies
-   - Key responsibilities and duties
-   - Industry-specific terminology
-   - Desired qualifications and experience level
-   - Company culture and values mentioned
+1. ANALYZE the job description for title, company, required skills, responsibilities, and terminology.
 
 2. TRANSFORM each work experience to align with the target role:
    - Adjust job titles to show progression toward the target position
    - Rewrite bullet points to emphasize relevant skills and achievements
-   - Include specific technologies, tools, and methodologies mentioned in the job description
+   - Include specific technologies, tools, and methodologies from the job description and from the original experience
    - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
    - Focus on transferable skills that apply to the target role
-   - Use industry-specific language and terminology from the job description
+   - Use industry-specific language from the job description
+   - Show quantifiable achievements and measurable impact where it still sounds human
+   - Use action verbs. Vary the work: features, integrations, collaboration, testing, performance, mentoring, delivery
 
-3. CREATIVE TAILORING APPROACH:
-   - If the job requires specific technologies (e.g., Ruby on Rails), incorporate those technologies into relevant work experiences
-   - Emphasize similar frameworks, methodologies, or problem-solving approaches
-   - Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
-   - Highlight leadership, project management, and collaboration skills that are universally valuable
-   - Show how past experiences demonstrate the ability to learn and adapt to new technologies
-   - Create bullet points that showcase the candidate's potential to excel in the target role
+3. BULLET COUNT (REQUIRED):
+   - 7-12 bullets per position. Senior or longer roles: 10-12. Never output 4-5 bullets for a role.
+   - Each bullet should be a full accomplishment, not a three-word stub.
 
-4. JOB TITLE STRATEGY:
-   - Most recent position: Make it closely match or be one step below the target job title
-   - Previous positions: Show clear career progression toward the target role
-   - Use industry-standard titles that align with the target position
+4. CREATIVE TAILORING:
+   - Incorporate job-description technologies into relevant work, following the version map below
+   - Emphasize similar frameworks, methodologies, and problem-solving
+   - Highlight leadership, collaboration, and delivery
+   - Show the ability to learn and adapt without sounding like keyword stuffing
+
+5. VERSION RULES (do not let these make the resume thin):
+   - Pull technologies from THIS job description and from the original experience. Do not invent a default stack.
+   - Summary: family names only, no version numbers. Keep it 4-6 strong sentences, not two generic lines.
+   - Most recent company: each required JD version appears ONCE in the bullet list; later bullets use the family name. Other skills (TypeScript, TailwindCSS, APIs, tests, etc.) can appear throughout.
+   - Earlier companies: family names for those JD technologies, no version numbers. Keep the rest of the original/relevant stack (Vue, Rails, Redux, Amplify, and so on) when it belongs to that job.
+   - Never put a version in a job that ended before that version existed
+   - Keep original company names and original start/end dates. Same number of positions as the original history
+
+6. JOB TITLE STRATEGY:
+   - Most recent position: closely match or sit one step below the target title
+   - Previous positions: clear career progression
    - Keep company names exactly as provided
 
-Please provide the following in JSON format:
+7. SKILLS LIST (REQUIRED):
+   - Start from CURRENT SKILLS above. Keep them.
+   - Add skills mentioned in the job description, including required versions for keyword match
+   - The result should look like a senior engineer's skill section, not five keywords
 
-1. Extract the job title and company name from the job description
-2. A compelling professional summary that positions the candidate for this specific role
-3. Enhanced work experience with 7-12 bullet points per position that:
-   - Are specifically tailored to the job description requirements
-   - Include relevant technologies, tools, and methodologies from the job description
-   - Show quantifiable achievements and measurable impact
-   - Demonstrate transferable skills and adaptability
-   - Use action verbs and industry-specific terminology from the job description
-   - Vary bullet point count based on role complexity and duration
-4. Enhanced skills list that includes both current skills and skills mentioned in the job description
+8. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
+   - Wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b>
+   - Only wrap the token — not entire sentences. Do not bold soft skills
+   - Keep the <b> tags inside JSON string values
 
-5. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
-   - In every experience bullet point, wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b> tags
-   - Examples: <b>React</b>, <b>Node.js</b>, <b>PostgreSQL</b>, <b>AWS</b>, <b>Docker</b>, <b>CI/CD</b>, <b>TypeScript</b>
-   - Only wrap the skill/technology token itself — not entire sentences
-   - Do not bold soft skills or generic words
-   - Keep the <b> tags inside the JSON string values (valid JSON)
+Respond with ONLY valid JSON — no markdown, no extra text. Do not drop companies. Same number of positions as original experience.
 
-EXAMPLE OF TAILORING:
-If applying for "Ruby on Rails Developer" and original experience was in "Web Development":
-- Adjust title to "Ruby on Rails Developer"
-- Include bullet points about web development, database management, API development
-- Emphasize experience with similar frameworks (if any) or rapid learning abilities
-- Highlight problem-solving, debugging, and software development lifecycle experience, and Ruby on Rails experience
-
-IMPORTANT JSON FORMATTING RULES:
-- Respond with ONLY valid JSON - no markdown code blocks, no extra text
-- Ensure you do not remove any original company names or job titles. The generated number of positions should be the same as the original experience.
-- Must follow the response format exactly.
-
-Response format:
 {
   "jobTitle": "extracted or inferred job title from the job description",
   "companyName": "extracted or inferred company name from the job description",
@@ -246,23 +534,14 @@ Response format:
   "experience": [
     {
       "position": "Tailored Job Title",
-      "company": "Company Name", 
+      "company": "Company Name",
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Built scalable APIs with <b>Node.js</b> and <b>TypeScript</b> on <b>AWS</b>...",
-        "Led frontend delivery using <b>React</b> and <b>Next.js</b>...",
-        "Optimized <b>PostgreSQL</b> queries and improved system reliability...",
-        "Technical accomplishment using relevant technologies or methodologies...",
-        "Leadership or collaboration experience valuable for the target position...",
-        "Problem-solving or innovation that shows adaptability...",
-        "Project management or delivery experience relevant to target role...",
-        "Cross-functional collaboration demonstrating team skills...",
-        "Process improvement or optimization relevant to target position...",
-        "Strategic thinking or planning experience valuable for the role...",
-        "Measurable outcome that demonstrates impact and results...",
-        "Technical expertise or specialization relevant to target position..."
+        "Shipped a new feature in the lead-generation app using <b>Skill</b> and <b>Skill</b>...",
+        "Integrated APIs and backend services with <b>Skill</b>...",
+        "Improved UI consistency with <b>Skill</b> and cut load time by 30%..."
       ]
     }
   ],
