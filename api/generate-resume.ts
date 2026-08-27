@@ -18,27 +18,12 @@ const anthropic = new Anthropic({
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-const SYSTEM_PROMPT = `You are an expert resume writer. Write human, credible resumes that a recruiter would believe were written by the candidate.
-
-QUALITY RULES (non-negotiable):
-- Sound like a native English speaker. Short, concrete sentences. No filler words like "scalability", "reliability", or "robust".
-- Keep company names and employment dates exactly as provided. Do not invent extra jobs.
-- Aggressively tailor titles and bullets to the target role, but stay chronologically honest.
-- In experience bullets, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>Skill</b>).
-
-CHRONOLOGY IS CRITICAL — honesty and job-fit both matter:
-- Never put a technology or specific version in a job that ended before that thing existed.
-- Treat "<Family>" and "<Family> <Version>" as different. Extract both from the job description; do not assume a fixed stack.
-- Specific versions required by the job description may appear in the most recent company only, and only if that role was still active after the version shipped.
-- Within that company, each specific version is named ONCE in the whole bullet list. Later bullets use the family name only.
-- All earlier companies use the family name only — no version numbers.
-- The professional summary must never name a specific version — family names only.
-- If the most recent role ended before the required version existed, omit that version from experience bullets entirely. Do not backfill it into an older company.
-- Never claim years of experience with a version. Generate 7–12 bullet points per role. Extract job title and company from the job description.`;
+const SYSTEM_PROMPT =
+  'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
 
 const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history. A specific version must not appear in a job that ended before it existed. Required JD versions belong in mustUse for the MOST RECENT role only. Each version should be named once in that role's bullets, then family names only. All earlier roles: family name in mayUse, required version in mustNotUse. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a senior recruiter and technical editor. Make the resume chronologically honest and human. The professional summary must not name specific versions. In experience, a required version from the job description may appear only in the most recent company, and only once in that company's bullets — later bullets use the family name. Strip repeated versions from the same job and from earlier companies. Remove versions from jobs that ended before they existed. Use technologies from the job description, not a fixed example stack. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a light copy editor. Do not rewrite the resume. Do not shorten it. Do not drop bullets or skills. Keep the same dates, companies, bullet count, and skill list length. Only fix version-number placement. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -328,7 +313,7 @@ async function generateResumeDraft(params: {
   return generateWithOpenAI({
     prompt: params.prompt,
     system: SYSTEM_PROMPT,
-    temperature: 0.55,
+    temperature: 0.7,
     maxTokens: 8000,
   });
 }
@@ -356,13 +341,15 @@ DRAFT RESUME JSON:
 ${params.draft}
 
 AUDIT AND REWRITE:
-1. Keep the same companies, dates, number of roles, and JSON shape.
-2. Professional summary: remove every specific version ("<Family> <Version>" → "<Family>"). Do not add versions to the summary.
-3. Experience: a required version from THIS job description may appear only in the most recent company, and only if that job was still active after the version shipped. Name each version ONCE in that company's bullets. If the same version appears in three bullets, keep it in one bullet and change the others to the family name.
-4. Strip specific versions from every earlier company. Use the family name with no version number.
-5. Skills may list the required version for ATS. Summary still must not.
-6. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
-7. Aim for 7–12 bullets per role.
+This is a surgical edit, not a rewrite. Quality of the draft must stay the same or improve.
+
+1. Keep the same companies, start/end dates, addresses, positions, number of roles, and JSON shape.
+2. Keep EVERY bullet. Do not delete bullets. Do not merge bullets. If a role has 8 bullets, it still has 8. Prefer 7-12 per role; if a role is already under 7, leave the count as-is unless you can add substance without inventing new employers.
+3. Keep the full skills list. Add missing job-description skills if needed. Never shrink a long list down to only a few JD keywords.
+4. Professional summary: keep length and strength. Remove version numbers only (Family Version → Family). Do not make the summary shorter or generic.
+5. Experience versions: a required version from THIS job description may appear only in the most recent company, once per version. Other bullets at that company use the family name. Earlier companies: family name, no version number. Do not strip other technologies, tools, or details.
+6. Do not change employment dates.
+7. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
 
 Respond with ONLY the corrected resume JSON in this shape:
 {
@@ -464,7 +451,7 @@ const createAIPrompt = (
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
 
   return `
-Create a highly tailored, chronologically honest resume. Position the candidate as a strong fit without making claims a recruiter could catch as AI or a lie.
+Please create a highly tailored, professional resume for the following job. Position the candidate as an ideal fit. Writing quality matters as much as chronological honesty: rich bullets, full skill list, strong summary.
 
 TODAY'S DATE: ${today}
 
@@ -475,7 +462,7 @@ CANDIDATE:
 Name: ${profile.first_name} ${profile.last_name}
 Current Summary: ${profile.summary || ''}
 
-WORK HISTORY (dates and companies are FACTS):
+WORK HISTORY (dates and companies are FACTS — copy start_date and end_date exactly):
 ${workHistory}
 
 EDUCATION:
@@ -486,51 +473,57 @@ ${education
   )
   .join('\n')}
 
-CURRENT SKILLS:
+CURRENT SKILLS (keep these; add JD skills; do not replace this list with only a few keywords):
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
-TECHNOLOGY TIMELINE FOR THIS CANDIDATE (follow strictly):
-${timeline || 'Required JD versions: name them only in the most recent company if that role was still active after the version shipped. Summary: no version numbers. Earlier jobs: family name only.'}
+VERSION MAP (placement only — do not use this to shrink the resume):
+${timeline || 'Required JD versions: name them once in the most recent company if that role was still active after the version shipped. Summary and earlier jobs: family name only.'}
 
-CRITICAL TAILORING INSTRUCTIONS:
+CRITICAL INSTRUCTIONS FOR TAILORING:
 1. ANALYZE the job description for title, company, required skills, responsibilities, and terminology.
 
-2. TRANSFORM each role toward the target job, but only with tech that existed during that role:
-   - Adjust titles to show progression toward the target position.
-   - Rewrite bullets around relevant work, transferable skills, and measurable results.
-   - Don't use complex words like "scalability", "reliability", or "robust". Write like a native English speaker.
+2. TRANSFORM each work experience to align with the target role:
+   - Adjust job titles to show progression toward the target position
+   - Rewrite bullet points to emphasize relevant skills and achievements
+   - Include specific technologies, tools, and methodologies from the job description and from the original experience
+   - Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
+   - Focus on transferable skills that apply to the target role
+   - Use industry-specific language from the job description
+   - Show quantifiable achievements and measurable impact where it still sounds human
+   - Use action verbs. Vary the work: features, integrations, collaboration, testing, performance, mentoring, delivery
 
-3. CHRONOLOGY / VERSION RULES:
-   - Pull required technologies and versions from THIS job description. Do not invent a default stack.
-   - Professional summary: family names only. Never write "<Family> <Version>" in the summary.
-   - Experience: name a required JD version in the most recent company only, and only if that role was still active after the version shipped.
-   - Each specific version appears at most ONCE in that company's entire bullet list. Later bullets use the family name only.
-   - Do not repeat that version in any earlier company, even if those dates would have allowed it.
-   - Earlier companies: family name only, no version number.
-   - If the most recent role ended before the version existed, do not put the version on an older job either.
-   - Keep every original company name and the original start/end dates (YYYY-MM). Same number of positions as the original history.
+3. BULLET COUNT (REQUIRED):
+   - 7-12 bullets per position. Senior or longer roles: 10-12. Never output 4-5 bullets for a role.
+   - Each bullet should be a full accomplishment, not a three-word stub.
 
-4. JOB TITLE STRATEGY:
-   - Most recent position: closely match or sit one step below the target title.
-   - Earlier positions: clear progression. Keep company names exact.
+4. CREATIVE TAILORING:
+   - Incorporate job-description technologies into relevant work, following the version map below
+   - Emphasize similar frameworks, methodologies, and problem-solving
+   - Highlight leadership, collaboration, and delivery
+   - Show the ability to learn and adapt without sounding like keyword stuffing
 
-5. SKILLS LIST:
-   - May include required versions from the job description for keyword match.
-   - That still does not belong in the summary or in earlier experience bullets.
+5. VERSION RULES (do not let these make the resume thin):
+   - Pull technologies from THIS job description and from the original experience. Do not invent a default stack.
+   - Summary: family names only, no version numbers. Keep it 4-6 strong sentences, not two generic lines.
+   - Most recent company: each required JD version appears ONCE in the bullet list; later bullets use the family name. Other skills (TypeScript, TailwindCSS, APIs, tests, etc.) can appear throughout.
+   - Earlier companies: family names for those JD technologies, no version numbers. Keep the rest of the original/relevant stack (Vue, Rails, Redux, Amplify, and so on) when it belongs to that job.
+   - Never put a version in a job that ended before that version existed
+   - Keep original company names and original start/end dates. Same number of positions as the original history
 
-6. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
+6. JOB TITLE STRATEGY:
+   - Most recent position: closely match or sit one step below the target title
+   - Previous positions: clear career progression
+   - Keep company names exactly as provided
+
+7. SKILLS LIST (REQUIRED):
+   - Start from CURRENT SKILLS above. Keep them.
+   - Add skills mentioned in the job description, including required versions for keyword match
+   - The result should look like a senior engineer's skill section, not five keywords
+
+8. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
    - Wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b>
-   - Latest job: one <b>Family Version</b> mention per required version; other bullets use <b>Family</b>
-   - Only wrap the token — not entire sentences. Do not bold soft skills.
-   - Keep the <b> tags inside JSON string values.
-
-EXAMPLE OF HONEST TAILORING:
-Job requires <Family> <Version>. Most recent job is eligible.
-- Summary: family names only (no version numbers).
-- Last company, one bullet: mention <b>Family Version</b> once.
-- Same company, remaining bullets: <b>Family</b> only.
-- Every earlier company: family names only. No version numbers.
-- Skills may include Family Version.
+   - Only wrap the token — not entire sentences. Do not bold soft skills
+   - Keep the <b> tags inside JSON string values
 
 Respond with ONLY valid JSON — no markdown, no extra text. Do not drop companies. Same number of positions as original experience.
 
@@ -546,9 +539,9 @@ Respond with ONLY valid JSON — no markdown, no extra text. Do not drop compani
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Built APIs with <b>Skill</b>...",
-        "Led delivery using <b>Skill</b>...",
-        "Improved <b>Skill</b> workflows and cut report time by 30%..."
+        "Shipped a new feature in the lead-generation app using <b>Skill</b> and <b>Skill</b>...",
+        "Integrated APIs and backend services with <b>Skill</b>...",
+        "Improved UI consistency with <b>Skill</b> and cut load time by 30%..."
       ]
     }
   ],
