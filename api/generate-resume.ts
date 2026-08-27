@@ -26,18 +26,21 @@ QUALITY RULES (non-negotiable):
 - Aggressively tailor titles and bullets to the target role, but stay chronologically honest.
 - In experience bullets, wrap each technical skill/tool/framework/language with <b>...</b> (e.g. <b>React</b>, <b>PostgreSQL</b>).
 
-CHRONOLOGY IS CRITICAL — this is how recruiters detect AI or lies:
-- Never put a technology, library, framework version, language version, cloud product, or API in a job that ended before that thing existed.
-- Example: if Angular 21 was released in November 2025, a role that ended in 2024 (or any month before Nov 2025) MUST NOT mention Angular 21. Use the Angular version (or predecessor) that actually existed during that job.
-- Versioned names from the job description (Angular 21, React 19, Java 21, Python 3.13, Next.js 15, Node.js 22, .NET 8, etc.) are not the same as the family name. The family (Angular, React) may appear in older jobs if it existed then; the specific new version may appear only in roles whose dates overlap after that version's release. If a role started before a release and is still current, you may mention the new version, but never imply it was used from the start of that job.
-- If you are unsure when something was released, be conservative: use the exact new version only in the current or most recent role. Older roles get era-appropriate predecessors or the unversioned family name.
-- Newest job-description tech belongs mainly in the most recent 1–2 roles. Older roles should show a believable progression (older stack → newer stack), not a copy-paste of today's JD.
-- Never claim years of experience with a technology that exceed how long it has existed. Do not write "5 years of Angular 21" if Angular 21 is months old.
+CHRONOLOGY IS CRITICAL — honesty and job-fit both matter:
+- Never put a technology or specific version in a job that ended before that thing existed.
+- Example: Angular 21 (Nov 2025) must not appear in a role that ended in 2024. Use the Angular version that existed then.
+- The opposite is also required: if the job description asks for a version, and a role was still active after that version shipped, that role MUST use the required version by name. Do not "play it safe" by writing only older versions in eligible jobs.
+- Example: React 19 (Dec 2024). A role from Oct 2024–Nov 2025 or Oct 2025–Apr 2026 MUST mention <b>React 19</b>. A role that ended in 2022 must not.
+- Family names (React, Angular) can appear in older jobs if the family existed then. Specific new versions belong only in roles whose dates overlap after the release.
+- If a role started before a release and continued after it, mention the new version as work during that job — not as something used from day one.
+- If you are unsure of a release date, still put required JD versions in the most recent roles that could plausibly include them. Only omit a required version from a role when that role clearly ended before the version existed.
+- Older ineligible roles should show a believable progression (React 16 → 17/18 → 19), not a copy of today's JD.
+- Never claim years of experience with a version that exceed how long that version has existed. "8 years of React 19" is false; recent React 19 work plus earlier React is fine.
 - Generate 7–12 bullet points per role, varying by duration and seniority. Extract job title and company from the job description.`;
 
-const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history with strict chronological honesty. Recruiters will reject resumes that mention a tool in a job before that tool existed. When unsure of a release date, be conservative. Respond with valid JSON only.`;
+const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history. A version must not appear in a job that ended before it existed. A version the job requires MUST be marked mustUse for every role that was still active after it shipped. Do not omit required JD versions from eligible roles. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a senior recruiter and technical editor. Your only job is to make a tailored resume chronologically honest and human. Fix anachronisms. Do not weaken tailoring except where a date makes a claim impossible. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a senior recruiter and technical editor. Make the resume chronologically honest AND tailored. Remove versions from jobs that ended before they existed. If a required job-description version is missing from an eligible role, skills, or a recent-work summary line, add it. Do not replace required versions with older ones in eligible jobs. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -103,13 +106,17 @@ const TIMELINE_OUTPUT_SCHEMA = {
             type: 'array',
             items: { type: 'string' },
           },
+          mustUse: {
+            type: 'array',
+            items: { type: 'string' },
+          },
           mustNotUse: {
             type: 'array',
             items: { type: 'string' },
           },
           eraStackGuidance: { type: 'string' },
         },
-        required: ['company', 'start_date', 'end_date', 'mayUse', 'mustNotUse', 'eraStackGuidance'],
+        required: ['company', 'start_date', 'end_date', 'mayUse', 'mustUse', 'mustNotUse', 'eraStackGuidance'],
         additionalProperties: false,
       },
     },
@@ -237,38 +244,50 @@ ${params.jobDescription}
 CANDIDATE WORK HISTORY (dates are facts):
 ${params.workHistory}
 
-Build a chronology map so resume bullets cannot mention tools before they existed.
+Build a chronology map. Required job-description versions must appear in eligible roles and must not appear in ineligible roles.
 
 INSTRUCTIONS:
-1. Extract technologies, frameworks, languages, platforms, and versioned products from the job description.
-2. For each, estimate when it first became available (YYYY-MM). Use your knowledge. If unsure, set confidence to "low" and treat it as too new for historical roles.
-3. Distinguish family names from versions. "Angular" (2016+) is not "Angular 21". "React" is not "React 19".
+1. Extract technologies, frameworks, languages, platforms, and versioned products from the job description. Mark which ones the job requires (especially specific versions like React 19 or Angular 21).
+2. For each, estimate when it first became available (YYYY-MM). Use your knowledge.
+3. Distinguish family names from versions. "React" is not "React 19".
 4. For each work-history role, list:
-   - mayUse: JD technologies that actually existed during that role (family names allowed if the family existed; specific new versions only if the version existed before the role ended)
+   - mayUse: JD technologies that existed during that role
+   - mustUse: required JD versions/tools that existed before the role ended (role end date >= introduced date, or end is Present). These MUST appear in that role's resume bullets.
    - mustNotUse: JD technologies that did not exist yet, or whose version is newer than the role's end date
-   - eraStackGuidance: what stack a credible engineer would have used in that period (predecessors, older versions)
-5. A role ending before a release date must NOT include that release. "Present" roles may include current JD tech.
-6. If a version's release date is uncertain, put it only in the current/most recent role.
+   - eraStackGuidance: what stack to write for that period, including which required JD versions to name
+5. A role ending before a release date must NOT include that release.
+6. If a required version's date is uncertain, still put it in mustUse for the most recent roles. Only put it in mustNotUse when the role clearly ended too early.
+7. Do not leave mustUse empty for recent roles when the JD requires a current version those dates allow.
 
 Respond with ONLY JSON:
 {
   "technologies": [
     {
-      "name": "Angular 21",
+      "name": "React 19",
       "kind": "versioned",
-      "introduced": "2025-11",
+      "introduced": "2024-12",
       "confidence": "high",
-      "notes": "Specific Angular major. Not valid in jobs that ended before 2025-11."
+      "notes": "Required by the JD. Valid in any role still active after 2024-12."
     }
   ],
   "roles": [
     {
-      "company": "Acme",
-      "start_date": "2022-01",
-      "end_date": "2024-06",
-      "mayUse": ["Angular", "TypeScript", "RxJS"],
-      "mustNotUse": ["Angular 21"],
-      "eraStackGuidance": "Angular 12–16 era. Do not mention Angular 21."
+      "company": "Subflow",
+      "start_date": "2024-10",
+      "end_date": "2025-11",
+      "mayUse": ["React", "React 19", "TypeScript"],
+      "mustUse": ["React 19"],
+      "mustNotUse": [],
+      "eraStackGuidance": "Role continued after React 19 shipped. Bullets MUST name React 19."
+    },
+    {
+      "company": "Phynd Health",
+      "start_date": "2021-05",
+      "end_date": "2022-11",
+      "mayUse": ["React", "TypeScript"],
+      "mustUse": [],
+      "mustNotUse": ["React 19"],
+      "eraStackGuidance": "React 16/17 era. Do not mention React 19."
     }
   ]
 }`;
@@ -333,19 +352,20 @@ FACTUAL WORK HISTORY DATES:
 ${params.workHistory}
 
 TECHNOLOGY TIMELINE (follow this):
-${params.timeline || 'No separate timeline was produced. Use release-date knowledge and conservative rules: specific new versions from the JD only in the current/most recent role; older roles use predecessors.'}
+${params.timeline || 'Use release-date knowledge. Required JD versions MUST appear in every role still active after that version shipped. Remove them only from roles that ended before they existed.'}
 
 DRAFT RESUME JSON:
 ${params.draft}
 
 AUDIT AND REWRITE:
 1. Keep the same companies, dates, number of roles, and JSON shape.
-2. In each role, remove or replace any technology/version that did not exist before that role's end date.
-3. Keep tailoring: older roles should still look relevant, using era-correct equivalents (e.g. earlier Angular majors instead of Angular 21).
-4. Summary must not claim years of experience with a tool that exceed how long that tool has existed.
-5. Skills may include current JD technologies the candidate could reasonably know by today or from a current/most recent role. Do not imply they used a brand-new version across their whole career.
-6. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
-7. If a bullet is anachronistic, rewrite it — do not just delete until the role is empty. Aim for 7–12 bullets per role.
+2. Remove or replace any technology/version in a role that ended before that thing existed.
+3. If the job description requires a specific version (e.g. React 19) and a role was still active after it shipped, that version MUST appear in that role's bullets. If the draft only says "React 17/18" in a 2025 job, change it to React 19.
+4. Put required JD versions in the skills list when at least one role is eligible.
+5. Summary should mention required current versions as recent experience, without claiming more years than the version has existed.
+6. Older ineligible roles stay on era-correct predecessors. Keep tailoring.
+7. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
+8. Aim for 7–12 bullets per role. Rewrite anachronistic bullets; do not empty a role.
 
 Respond with ONLY the corrected resume JSON in this shape:
 {
@@ -473,7 +493,7 @@ CURRENT SKILLS:
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 TECHNOLOGY TIMELINE FOR THIS CANDIDATE (follow strictly):
-${timeline || 'Estimate release dates yourself. When unsure, put brand-new JD versions only in the current/most recent role.'}
+${timeline || 'Estimate release dates yourself. Required JD versions MUST appear in every role still active after they shipped. Omit them only from roles that ended first.'}
 
 CRITICAL TAILORING INSTRUCTIONS:
 1. ANALYZE the job description for title, company, required skills, responsibilities, and terminology.
@@ -481,15 +501,17 @@ CRITICAL TAILORING INSTRUCTIONS:
 2. TRANSFORM each role toward the target job, but only with tech that existed during that role:
    - Adjust titles to show progression toward the target position.
    - Rewrite bullets around relevant work, transferable skills, and measurable results.
-   - Do NOT spray the job description's newest stack across every past job.
+   - Do NOT spray a brand-new version across jobs that ended before it existed.
+   - DO use required JD versions by name in every eligible role. Missing React 19 in a 2025 React job is a failed resume.
    - Don't use complex words like "scalability", "reliability", or "robust". Write like a native English speaker.
 
 3. CHRONOLOGY / VERSION RULES:
    - A tool may appear in a role only if it existed before that role ended.
-   - Specific versions from the JD (e.g. Angular 21) belong only in roles active after that version shipped. If a current role started before the release, mention the new version as recent work, not as something used for the whole tenure.
-   - Older roles: use the version or predecessor that was current then (Angular 12, Angular 14, AngularJS, etc.), or the unversioned family name if that family existed.
-   - Show believable stack evolution over time. Recent roles can look closest to the JD.
-   - Never claim more years with a technology than that technology has existed.
+   - Required JD versions MUST appear in every role whose end date is on or after the version's release (or Present).
+   - If a role started before the release and continued after it, name the required version in that role.
+   - Ineligible older roles: use the version that was current then, or the family name.
+   - Show believable stack evolution over time (older majors → required current major in recent jobs).
+   - Never claim more years with a version than that version has existed.
    - Keep every original company name and the original start/end dates (YYYY-MM). Same number of positions as the original history.
 
 4. JOB TITLE STRATEGY:
@@ -497,21 +519,22 @@ CRITICAL TAILORING INSTRUCTIONS:
    - Earlier positions: clear progression. Keep company names exact.
 
 5. SKILLS LIST:
-   - Include current skills plus JD skills the candidate could reasonably know by today or from their most recent/current role.
-   - Listing a current JD technology in Skills is OK if a recent/current role could include it. Do not also back-date it into old bullets.
+   - Include required JD versions (e.g. React 19) when any role is eligible.
+   - Do not back-date those versions into old bullets.
 
 6. BOLD TECH SKILLS IN BULLET POINTS (REQUIRED):
    - Wrap technical skills, tools, frameworks, languages, platforms, and methodologies with <b>...</b>
-   - Examples: <b>React</b>, <b>Node.js</b>, <b>PostgreSQL</b>, <b>AWS</b>, <b>Docker</b>, <b>CI/CD</b>, <b>TypeScript</b>
+   - Examples: <b>React 19</b>, <b>React</b>, <b>Node.js</b>, <b>PostgreSQL</b>, <b>TypeScript</b>
    - Only wrap the token — not entire sentences. Do not bold soft skills.
    - Keep the <b> tags inside JSON string values.
 
 EXAMPLE OF HONEST TAILORING:
-Applying for an Angular 21 role. History includes a 2022–2024 frontend job and a current 2025–Present job.
-- 2022–2024: <b>Angular</b> 14/15, <b>TypeScript</b>, <b>RxJS</b>. Do not mention Angular 21.
-- Current role (after Angular 21's release): <b>Angular 21</b>, <b>TypeScript</b>, and related current tools.
-- Skills may include Angular 21.
-- Summary must not say they have used Angular 21 for many years.
+Job requires React 19 (released Dec 2024).
+- 2021–2022: <b>React</b> 16/17. Do not mention React 19.
+- Oct 2024–Nov 2025: bullets MUST name <b>React 19</b>.
+- Oct 2025–Apr 2026: bullets MUST name <b>React 19</b>.
+- Skills MUST include React 19.
+- Summary: recent React 19 experience is good. "8 years of React 19" is not.
 
 Respond with ONLY valid JSON — no markdown, no extra text. Do not drop companies. Same number of positions as original experience.
 
