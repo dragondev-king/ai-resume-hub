@@ -80,7 +80,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
 
             {/* Navigation */}
-            <nav className="hidden md:flex space-x-8">
+            <nav className="hidden md:flex space-x-4 lg:space-x-8">
               <Link
                 to="/home"
                 className={getNavLinkClass('/home')}
@@ -104,6 +104,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 className={getNavLinkClass('/applications')}
               >
                 Applications
+              </Link>
+              <Link
+                to="/available-jobs"
+                className={getNavLinkClass('/available-jobs')}
+              >
+                Available Jobs
               </Link>
               {(role === 'manager' || role === 'admin') && (
                 <Link

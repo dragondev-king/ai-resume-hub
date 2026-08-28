@@ -11,6 +11,7 @@ import HomePage from './pages/HomePage';
 import ProfilesPage from './pages/ProfilesPage';
 import GeneratorPage from './pages/GeneratorPage';
 import ApplicationsPage from './pages/ApplicationsPage';
+import MissedJobsPage from './pages/MissedJobsPage';
 import AssignmentsPage from './pages/AssignmentsPage';
 import UsersPage from './pages/UsersPage';
 
@@ -26,6 +27,7 @@ const AppContent: React.FC = () => {
               <Route path="/profiles" element={<ProfilesPage />} />
               <Route path="/generator" element={<GeneratorPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
+              <Route path="/available-jobs" element={<MissedJobsPage />} />
               <Route
                 path="/assignments"
                 element={
