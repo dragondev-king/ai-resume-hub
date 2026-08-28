@@ -253,4 +253,12 @@ export interface ProfileAssignmentRPC {
   bidder_email: string;
   assigned_by_first_name?: string;
   assigned_by_last_name?: string;
+}
+
+export interface MissedJobApplicationRPC {
+  id: string;
+  company_name: string;
+  job_title: string;
+  job_description_link: string;
+  created_at: string;
 } 
