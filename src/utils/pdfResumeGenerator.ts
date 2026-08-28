@@ -3,7 +3,11 @@ import { saveAs } from 'file-saver';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
 import type { GenerateDocxOptions } from './docxGenerator';
-import { formatDateRange, resolveResumeExperience } from './docxGenerator';
+import {
+  formatDateRange,
+  resolveHeaderRoleTitle,
+  resolveResumeExperience,
+} from './docxGenerator';
 import { registerResumePdfFonts } from './pdfFonts';
 import {
   buildResumeSkillSections,
@@ -232,6 +236,12 @@ export async function generateResumePdf(
   const bodyLh = lineHeight(bodySize);
   const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
   const headerAlign = t.header.nameAlign;
+  const headerRole = resolveHeaderRoleTitle(
+    profile?.experience ?? [],
+    generatedResume.experience ?? [],
+    useAiEnhancedJobTitle,
+    profile?.title
+  );
 
   // —— Header ——
   const rawName = profile ? `${profile.first_name} ${profile.last_name}` : 'Professional Resume';
@@ -239,8 +249,8 @@ export async function generateResumePdf(
   needSpace(28);
   writeWrapped(name, sizes.name, true, margin, maxW, primary, fontHeading, headerAlign);
 
-  if (t.header.showRole && profile?.title) {
-    writeWrapped(profile.title, sizes.title, true, margin, maxW, accent, fontBody, headerAlign);
+  if (t.header.showRole && headerRole) {
+    writeWrapped(headerRole, sizes.title, true, margin, maxW, accent, fontBody, headerAlign);
     y += 4;
   }
 

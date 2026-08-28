@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
+import { mostRecentIndices } from './_lib/careerProgression.js';
 
 // Initialize OpenAI client (server-side, safe to use API key)
 const openai = new OpenAI({
@@ -77,6 +78,29 @@ export default async function handler(
 }
 
 const createAnswerPrompt = (profile: any, question: string, jobDescription: string, resumeContent: any): string => {
+  const experience = Array.isArray(resumeContent?.experience) && resumeContent.experience.length
+    ? resumeContent.experience
+    : profile.experience || [];
+  const summary = resumeContent?.summary || profile.summary || '';
+  const skills = Array.isArray(resumeContent?.skills) && resumeContent.skills.length
+    ? resumeContent.skills
+    : (profile.skills || []).filter((skill: string) => skill.trim());
+  const [newestIndex] = mostRecentIndices(experience, 1);
+  const currentTitle =
+    (newestIndex !== undefined ? experience[newestIndex]?.position : '') ||
+    resumeContent?.jobTitle ||
+    profile.title ||
+    '';
+
+  const formatExperienceEntry = (exp: any) => {
+    const endDate = exp.end_date || 'Present';
+    const bulletText = Array.isArray(exp.descriptions)
+      ? exp.descriptions.join(' ')
+      : exp.description || '';
+    return `- ${exp.position || ''} at ${exp.company || ''} (${exp.start_date || ''} - ${endDate})
+  Description: ${bulletText}`;
+  };
+
   return `
 Please provide a thoughtful answer to the following job application question:
 
@@ -88,18 +112,15 @@ ${jobDescription}
 
 CANDIDATE INFORMATION:
 Name: ${profile.first_name} ${profile.last_name}
-Current Title: ${profile.title || ''}
+Current Title: ${currentTitle}
 Email: ${profile.email}
 Location: ${profile.location || ''}
 
 CANDIDATE'S BACKGROUND:
-Summary: ${profile.summary || ''}
+Summary: ${summary}
 
-EXPERIENCE:
-${profile.experience.map((exp: any) => `
-- ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
-  Description: ${exp.description || ''}
-`).join('\n')}
+RESUME EXPERIENCE (use these employer names and role titles — not the original profile):
+${experience.map(formatExperienceEntry).join('\n')}
 
 EDUCATION:
 ${profile.education.map((edu: any) => `
@@ -107,12 +128,7 @@ ${profile.education.map((edu: any) => `
 `).join('\n')}
 
 SKILLS:
-${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
-
-AI-GENERATED RESUME CONTENT:
-Summary: ${resumeContent.summary || ''}
-Enhanced Experience: ${JSON.stringify(resumeContent.experience || [], null, 2)}
-Enhanced Skills: ${resumeContent.skills ? resumeContent.skills.join(', ') : ''}
+${skills.join(', ')}
 
 Please provide an answer that:
 1. Directly addresses the specific question asked
@@ -122,8 +138,9 @@ Please provide an answer that:
 5. Aligns with the job requirements
 6. Is authentic and personal to the candidate
 7. Is well-structured and easy to read
-8. Uses the candidate's actual background and experience
+8. Uses the candidate's actual background and experience from RESUME EXPERIENCE above
 9. Maintains a professional yet conversational tone
+10. When referencing past employers, use only the company names listed under RESUME EXPERIENCE
 
 The answer should be:
 - Specific and concise
@@ -135,7 +152,6 @@ The answer should be:
 Please write the answer in the candidate's voice, using their actual experience and background. Be direct and avoid unnecessary elaboration.
 Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write.
 Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
-CHRONOLOGY: Only mention technologies alongside roles whose dates overlap after that technology existed. Do not claim years of experience with a version that did not exist yet. Follow the dates on the AI-generated resume content.
 `;
 };
 

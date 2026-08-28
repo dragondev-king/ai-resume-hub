@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
+import { JOB_TITLE_EXTRACTION_INSTRUCTIONS, normalizeJobTitle } from './_lib/jobTitlePrompt.js';
 
 // Initialize OpenAI client (server-side, safe to use API key)
 const openai = new OpenAI({
@@ -137,7 +138,6 @@ The cover letter should be well-structured with:
 Please write the cover letter in a natural, conversational tone that sounds authentic to the candidate. Be concise and avoid unnecessary verbosity.
 Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
 Avoid examples that are too close to the job's tech stack because it'll be obvious the cover letter was AI generated.
-CHRONOLOGY: Only mention technologies in connection with jobs/dates where those technologies already existed. Do not claim years of experience with a tool that exceed how long it has existed (e.g. do not say long-term Angular 21 experience if Angular 21 is new). Follow the dates on the AI-generated resume content.
 `;
 };
 
@@ -148,24 +148,26 @@ const extractJobInfo = async (jobDescription: string): Promise<{ jobTitle: strin
       messages: [
         {
           role: 'system',
-          content: 'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
+          content: `You are an expert at extracting job information from job descriptions. Extract ONLY a clean professional job title and company name. ${JOB_TITLE_EXTRACTION_INSTRUCTIONS} Respond with ONLY valid JSON.`
         },
         {
           role: 'user',
-          content: `Please extract the job title and company name from this job description. If not explicitly stated, infer from context:
+          content: `Extract the clean professional job title and company name from this job description.
+
+${JOB_TITLE_EXTRACTION_INSTRUCTIONS}
 
 ${jobDescription}
 
 Respond with ONLY valid JSON in this exact format:
 {
-  "jobTitle": "extracted or inferred job title",
-  "companyName": "extracted or inferred company name"
+  "jobTitle": "exact clean job title",
+  "companyName": "company name"
 }`
         }
       ],
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 200,
+      max_completion_tokens: 200,
     });
 
     const aiResponse = completion.choices[0]?.message?.content || '';
@@ -177,10 +179,12 @@ Respond with ONLY valid JSON in this exact format:
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+    const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
+    const jobTitle = normalizeJobTitle(parsed.jobTitle);
 
     return {
-      jobTitle: parsed.jobTitle || '',
-      companyName: parsed.companyName || ''
+      jobTitle,
+      companyName,
     };
   } catch (error) {
     console.error('Error extracting job info:', error);

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check, Search } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { generateResume, AIProvider } from '../utils/resumeGenerator';
+import { generateResume, extractJobInfo, AIProvider } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
-import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
+import { generateDocx } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
-import { parseBoldMarkup } from '../utils/resumeLayout';
+import { parseBoldMarkup, stripBoldMarkup } from '../utils/resumeLayout';
 import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from '../resumeTemplates';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
@@ -49,6 +49,9 @@ const ResumeGenerator: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
+  const [tailorCompanyNames, setTailorCompanyNames] = useState(false);
+  /** True when the current generated resume used company/role name tailoring. */
+  const [generatedWithTailoredCompanies, setGeneratedWithTailoredCompanies] = useState(false);
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [loading, setLoading] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
@@ -66,17 +69,6 @@ const ResumeGenerator: React.FC = () => {
   const [applicationQuestions, setApplicationQuestions] = useState<ApplicationQuestion[]>([]);
   const [newQuestion, setNewQuestion] = useState('');
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<string | null>(null);
-
-  // Application Eligibility State
-  const [isApplicationEligible, setIsApplicationEligible] = useState(true);
-
-  // Pre-generate company duplicate check (only when profile has duplicate checking enabled)
-  const [companyDuplicateInput, setCompanyDuplicateInput] = useState('');
-  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
-  const [duplicateCheckResult, setDuplicateCheckResult] = useState<{
-    companyName: string;
-    canApply: boolean;
-  } | null>(null);
 
   // Per-application download options (local only; not persisted)
   const [includeLinkedIn, setIncludeLinkedIn] = useState(true);
@@ -104,57 +96,6 @@ const ResumeGenerator: React.FC = () => {
     }
   }, [profiles, selectedProfile]);
 
-  // Clear duplicate check when profile changes
-  useEffect(() => {
-    setCompanyDuplicateInput('');
-    setDuplicateCheckResult(null);
-  }, [selectedProfile]);
-
-  const selectedProfileData = selectedProfile
-    ? profiles.find((p) => p.id === selectedProfile)
-    : undefined;
-  const showCompanyDuplicateCheck =
-    Boolean(selectedProfile) && selectedProfileData?.check_duplicate_applications !== false;
-
-  const handleCompanyDuplicateCheck = async () => {
-    const companyName = companyDuplicateInput.trim();
-    if (!selectedProfile) {
-      toast.error('Please select a profile first');
-      return;
-    }
-    if (!companyName) {
-      toast.error('Please enter a company name');
-      return;
-    }
-
-    setIsCheckingDuplicate(true);
-    setDuplicateCheckResult(null);
-    try {
-      const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
-        p_profile_id: selectedProfile,
-        p_company_name: companyName,
-      });
-
-      if (checkError) {
-        console.error('Error checking application eligibility:', checkError);
-        toast.error('Error checking application eligibility');
-        return;
-      }
-
-      setDuplicateCheckResult({ companyName, canApply: Boolean(canApply) });
-      if (canApply) {
-        toast.success(`No active application to ${companyName}. You can generate a resume for this company.`);
-      } else {
-        toast.error(`This profile already has an active application to ${companyName}.`);
-      }
-    } catch (error: any) {
-      console.error('Error checking application eligibility:', error);
-      toast.error(error.message || 'Failed to check company eligibility');
-    } finally {
-      setIsCheckingDuplicate(false);
-    }
-  };
-
   const handleGenerate = async () => {
     if (!selectedProfile || !jobDescription) {
       toast.error('Please select a profile and enter a job description');
@@ -169,41 +110,60 @@ const ResumeGenerator: React.FC = () => {
 
     setLoading(true);
     try {
-      // Generate AI resume with job title and company name extraction
-      const generated = await generateResume(profile, jobDescription, aiProvider);
+      const duplicateCheckEnabled = profile.check_duplicate_applications !== false;
 
-      console.log(generated, '=== generated')
+      // Extract company first; block generation on duplicate (do not generate then disable save)
+      if (duplicateCheckEnabled) {
+        const { companyName: extractedCompany } = await extractJobInfo(jobDescription);
+        if (extractedCompany) {
+          const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
+            p_profile_id: selectedProfile,
+            p_company_name: extractedCompany,
+          });
 
-      // Check if this profile can apply to this company before showing the resume
-      // Only check if the profile has duplicate checking enabled (defaults to true)
-      if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
+          if (checkError) {
+            console.error('Error checking application eligibility:', checkError);
+            toast.error('Error checking application eligibility');
+            return;
+          }
+
+          if (!canApply) {
+            toast.error(
+              `This profile already has an active application to ${extractedCompany}. You cannot generate another resume for the same company.`
+            );
+            return;
+          }
+        }
+      }
+
+      const generated = await generateResume(profile, jobDescription, aiProvider, tailorCompanyNames);
+
+      // Safety: if final company name differs from extract and is a duplicate, discard result
+      if (duplicateCheckEnabled && generated.companyName) {
         const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
           p_profile_id: selectedProfile,
-          p_company_name: generated.companyName
+          p_company_name: generated.companyName,
         });
 
         if (checkError) {
           console.error('Error checking application eligibility:', checkError);
           toast.error('Error checking application eligibility');
-          setLoading(false);
           return;
         }
 
         if (!canApply) {
-          setIsApplicationEligible(false);
-          toast.error(`This profile already has an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
-          setLoading(false);
+          toast.error(
+            `This profile already has an active application to ${generated.companyName}. You cannot generate another resume for the same company.`
+          );
           return;
         }
-        setIsApplicationEligible(true);
-      } else {
-        // If duplicate checking is disabled, always allow
-        setIsApplicationEligible(true);
       }
 
+      setGeneratedWithTailoredCompanies(tailorCompanyNames);
       setGeneratedResume(generated);
       setEditingResume(generated);
       setIsEditing(false);
+
       setTimeout(() => {
         document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
       }, 300);
@@ -313,8 +273,10 @@ const ResumeGenerator: React.FC = () => {
     const template =
       (templateId && getResumeTemplate(templateId)) || pickRandomResumeTemplate();
     const opts = {
-      useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
-      includeLinkedIn,
+      useAiEnhancedJobTitle:
+        generatedWithTailoredCompanies || getUseAiEnhancedJobTitleForProfile(profile),
+      // Tailored company names = omit LinkedIn even if the checkbox is on
+      includeLinkedIn: includeLinkedIn && !generatedWithTailoredCompanies,
       templateId: template.id,
     };
     const fileName = buildResumeFileName(
@@ -364,7 +326,10 @@ const ResumeGenerator: React.FC = () => {
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
-          p_metadata: { resumeTemplateId: template.id },
+          p_metadata: {
+            resumeTemplateId: template.id,
+            tailorCompanyNames: generatedWithTailoredCompanies,
+          },
         });
 
         if (saveError) {
@@ -618,19 +583,17 @@ const ResumeGenerator: React.FC = () => {
     setGeneratedCoverLetter(null);
     setApplicationQuestions([]);
     setNewQuestion('');
-    setIsApplicationEligible(true);
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
     setIncludeLinkedIn(true);
-    setCompanyDuplicateInput('');
-    setDuplicateCheckResult(null);
+    // Keep tailorCompanyNames checked/unchecked as the user left it
+    setGeneratedWithTailoredCompanies(false);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };
 
   const currentResume = isEditing ? editingResume : generatedResume;
-  console.log(currentResume, '=== currentResume')
-  const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
+  /** Generator preview shows the generated payload as-is (export still uses resolveResumeExperience). */
+  const previewExperience = currentResume?.experience ?? [];
 
   if (profilesLoading) {
     return (
@@ -700,78 +663,19 @@ const ResumeGenerator: React.FC = () => {
             )}
           </div>
 
-          {/* Company duplicate check — only when profile has duplicate checking enabled */}
-          {showCompanyDuplicateCheck && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Check Company for Duplicate Application
-              </label>
-              <div className="flex space-x-2">
-                <div className="relative flex-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    value={companyDuplicateInput}
-                    onChange={(e) => {
-                      setCompanyDuplicateInput(e.target.value);
-                      setDuplicateCheckResult(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleCompanyDuplicateCheck();
-                      }
-                    }}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="Enter company name to check for existing applications..."
-                    disabled={isCheckingDuplicate}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCompanyDuplicateCheck}
-                  disabled={isCheckingDuplicate || !companyDuplicateInput.trim()}
-                  className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCheckingDuplicate ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Checking...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-4 h-4 mr-2" />
-                      Search
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Check whether this profile already has an active application to a company before generating a resume.
-              </p>
-              {duplicateCheckResult && (
-                <div
-                  className={`mt-3 rounded-md border px-3 py-2 text-sm ${
-                    duplicateCheckResult.canApply
-                      ? 'border-green-200 bg-green-50 text-green-800'
-                      : 'border-red-200 bg-red-50 text-red-800'
-                  }`}
-                >
-                  {duplicateCheckResult.canApply ? (
-                    <>
-                      You can generate a resume for <strong>{duplicateCheckResult.companyName}</strong> — no active application found for this profile.
-                    </>
-                  ) : (
-                    <>
-                      Cannot generate for <strong>{duplicateCheckResult.companyName}</strong> — this profile already has an active application to that company.
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Tailor company / role names */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="tailor_company_names"
+              checked={tailorCompanyNames}
+              onChange={(e) => setTailorCompanyNames(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label htmlFor="tailor_company_names" className="ml-3 text-sm font-medium text-gray-700">
+              Tailor company names and role titles
+            </label>
+          </div>
 
           {/* Job Description Link */}
           <div>
@@ -839,13 +743,13 @@ const ResumeGenerator: React.FC = () => {
           <div className="flex justify-center space-x-4">
             <button
               onClick={handleGenerate}
-              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible}
+              disabled={loading || !selectedProfile || !jobDescription}
               className="flex items-center space-x-2 px-8 py-3 text-lg font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Generating (this may take a minute)...</span>
+                  <span>Generating...</span>
                 </>
               ) : (
                 <>
@@ -870,7 +774,7 @@ const ResumeGenerator: React.FC = () => {
       </div>
 
       {/* Generated Resume */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div id="generated-resume" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <h3 className="text-lg font-medium text-gray-900">Generated Resume</h3>
@@ -955,20 +859,33 @@ const ResumeGenerator: React.FC = () => {
               </div>
             </fieldset>
             <div className="flex flex-col items-stretch gap-3 sm:items-end">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <label
+                className={`flex items-center gap-2 text-sm cursor-pointer select-none ${
+                  generatedWithTailoredCompanies ? 'text-gray-400' : 'text-gray-700'
+                }`}
+                title={
+                  generatedWithTailoredCompanies
+                    ? 'LinkedIn is omitted when company names are tailored'
+                    : undefined
+                }
+              >
                 <input
                   type="checkbox"
-                  checked={includeLinkedIn}
+                  checked={includeLinkedIn && !generatedWithTailoredCompanies}
+                  disabled={generatedWithTailoredCompanies}
                   onChange={(e) => setIncludeLinkedIn(e.target.checked)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
-                <span>Include LinkedIn link</span>
+                <span>
+                  Include LinkedIn link
+                  {generatedWithTailoredCompanies ? ' — omitted for tailored companies' : ''}
+                </span>
               </label>
               <div className="flex flex-wrap gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => handleDownload('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Save & Download Word (.docx)</span>
@@ -976,7 +893,7 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Save & Download PDF (.pdf)</span>
@@ -986,7 +903,7 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Download Word (.docx) only</span>
@@ -994,7 +911,7 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download PDF (.pdf) only</span>
@@ -1087,7 +1004,7 @@ const ResumeGenerator: React.FC = () => {
                         key={index}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800"
                       >
-                        {skill}
+                        {stripBoldMarkup(skill)}
                         <button
                           onClick={() => handleRemoveSkill(index)}
                           className="ml-2 text-primary-600 hover:text-primary-800"
@@ -1105,7 +1022,7 @@ const ResumeGenerator: React.FC = () => {
                       key={index}
                       className="px-3 py-1 bg-primary-100 text-primary-800 text-sm font-medium rounded-full"
                     >
-                      {skill}
+                      {stripBoldMarkup(skill)}
                     </span>
                   ))}
                 </div>
@@ -1116,10 +1033,7 @@ const ResumeGenerator: React.FC = () => {
             <div>
               <h4 className="font-medium text-gray-900 mb-2">Experience</h4>
               <div className="space-y-3">
-                {(isEditing
-                  ? currentResume.experience
-                  : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle)
-                ).map((exp, index) => (
+                {previewExperience.map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
                     {isEditing ? (
                       <div className="space-y-2">
@@ -1224,7 +1138,7 @@ const ResumeGenerator: React.FC = () => {
       )}
 
       {/* Cover Letter Section */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center">
@@ -1348,7 +1262,7 @@ const ResumeGenerator: React.FC = () => {
       )}
 
       {/* Application Questions Section */}
-      {currentResume && isApplicationEligible && (
+      {currentResume && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center">
