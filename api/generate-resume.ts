@@ -29,11 +29,11 @@ const MAX_REPAIR_TOKENS = 6000;
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-/** Main-branch resume quality (timeline + chronology). Always used for generation. */
+/** Exact main-branch system prompt. Used alone when company/role tailoring is OFF. */
 const SYSTEM_PROMPT =
   'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
 
-/** Layered on SYSTEM_PROMPT only when profile has company/role tailoring enabled. */
+/** Appended ONLY when profile.metadata.tailorCompanyNames is enabled. */
 const SYSTEM_PROMPT_TAILOR_EXTRA =
   ' ADVANCED MODE: Company names in the work history may already be substituted peer employers — keep those company names and addresses exactly; do not invent different ones. Rewrite EVERY experience "position" into a junior→senior career ladder by employment dates (oldest role = Junior-level title for the JD; newest = Senior matching the JD). Never keep the candidate\'s original profile titles. For the TWO MOST RECENT roles write 8-10 plentiful bullets covering industry/field experience, technical delivery, AND remote/distributed-team collaboration. Older roles: technical-focused bullets (still aim for 7-12). Bullet tone MUST match each role\'s seniority (Junior never Led/Owned architecture/Mentored).';
 
@@ -190,6 +190,28 @@ type CompanyPickResult = {
   industry: string;
   replacements: CompanyReplacement[];
 };
+
+/** Company/role tailoring only when profile.metadata.tailorCompanyNames is explicitly true. */
+function isCompanyTailoringEnabled(profile: any, bodyFlag?: unknown): boolean {
+  const meta = profile?.metadata;
+  let metaObj: Record<string, unknown> | null = null;
+  if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+    metaObj = meta as Record<string, unknown>;
+  } else if (typeof meta === 'string') {
+    try {
+      const parsed = JSON.parse(meta);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        metaObj = parsed as Record<string, unknown>;
+      }
+    } catch {
+      metaObj = null;
+    }
+  }
+  if (metaObj && 'tailorCompanyNames' in metaObj) {
+    return metaObj.tailorCompanyNames === true || metaObj.tailorCompanyNames === 'true';
+  }
+  return bodyFlag === true || bodyFlag === 'true';
+}
 
 function truncateJobDescription(jobDescription: string): string {
   const trimmed = jobDescription.trim();
@@ -447,11 +469,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const jd = truncateJobDescription(jobDescription);
-    const shouldTailorCompanies = Boolean(tailorCompanyNames);
+    // Profile metadata is authoritative — tailor features never run unless explicitly enabled there
+    const shouldTailorCompanies = isCompanyTailoringEnabled(profile, tailorCompanyNames);
     let profileForGeneration = profile;
     let companyPick: CompanyPickResult | null = null;
 
-    // Advanced option only: pick peer companies, then run full main pipeline on substituted profile
+    // ---- Tailor-only: peer company pick + substitute into profile before main pipeline ----
     if (shouldTailorCompanies) {
       const pickProvider: AIProvider = process.env.OPENAI_API_KEY ? 'openai' : provider;
       let lastPickError: Error | null = null;
@@ -486,9 +509,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
     const draft = await generateResumeDraft({
       provider,
-      system: shouldTailorCompanies
-        ? SYSTEM_PROMPT + SYSTEM_PROMPT_TAILOR_EXTRA
-        : SYSTEM_PROMPT,
+      // OFF = exact main system prompt; ON = main + company/role ladder extras
+      system: shouldTailorCompanies ? SYSTEM_PROMPT + SYSTEM_PROMPT_TAILOR_EXTRA : SYSTEM_PROMPT,
       prompt: createAIPrompt(profileForGeneration, jd, timeline, today, workHistory, {
         tailorCompanyNames: shouldTailorCompanies,
         industry: companyPick?.industry || '',
@@ -510,7 +532,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Unchecked = main-branch response shape (raw audited JSON, no tailor post-processing)
+    // OFF = main-branch response only (no peer swap, ladder, or industry enrich)
     if (!shouldTailorCompanies) {
       const parsedCheck = normalizeParsedResume(parseJsonLoose(rawResponse));
       if (!experienceHasAllDescriptions(parsedCheck.experience)) {
@@ -1138,7 +1160,10 @@ const createAIPrompt = (
 ): string => {
   const education = Array.isArray(profile.education) ? profile.education : [];
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
-  const tailorExtras = options.tailorCompanyNames
+  const tailor = Boolean(options.tailorCompanyNames);
+
+  // Section 9 only when ON — OFF prompt matches main (no "company-tailor OFF" instructions)
+  const tailorExtras = tailor
     ? `
 9. ADVANCED — COMPANY & ROLE TAILORING (ENABLED):
    - Company names/addresses in WORK HISTORY are already the intended employers (two most recent may be mid-sized industry peers). Copy them EXACTLY — do not change them back.
@@ -1209,12 +1234,17 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Most recent company: each required JD version appears ONCE in the bullet list; later bullets use the family name. Other skills (TypeScript, TailwindCSS, APIs, tests, etc.) can appear throughout.
    - Earlier companies: family names for those JD technologies, no version numbers. Keep the rest of the original/relevant stack when it belongs to that job.
    - Never put a version in a job that ended before that version existed
-   - Keep company names and original start/end dates. Same number of positions as the original history
+   - Keep original company names and original start/end dates. Same number of positions as the original history
 
 6. JOB TITLE STRATEGY:
-   - Most recent position: closely match or sit one step below the target title
+${
+  tailor
+    ? `   - Rewrite every position into a junior→senior ladder (oldest=Junior, newest=Senior matching the JD)
+   - Keep company names exactly as provided in WORK HISTORY`
+    : `   - Most recent position: closely match or sit one step below the target title
    - Previous positions: clear career progression
-   - Keep company names exactly as provided
+   - Keep company names exactly as provided`
+}
 
 7. SKILLS LIST (REQUIRED):
    - Start from CURRENT SKILLS above. Keep them.
@@ -1234,7 +1264,7 @@ Respond with ONLY valid JSON — no markdown, no extra text. Do not drop compani
   "summary": "Professional summary tailored to this specific role...",
   "experience": [
     {
-      "position": "Tailored Job Title",
+      "position": "${tailor ? 'Junior→Senior ladder title for this role' : 'Tailored Job Title'}",
       "company": "Company Name",
       "start_date": "YYYY-MM",
       "end_date": "YYYY-MM",

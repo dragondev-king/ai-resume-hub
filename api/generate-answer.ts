@@ -47,8 +47,10 @@ export default async function handler(
       return res.status(400).json({ error: 'Missing required fields: profile, question, jobDescription, and resumeContent' });
     }
 
-    // Create the AI prompt for answer
-    const prompt = Boolean(tailorCompanyNames)
+    // Use generation-time flag only (not live profile) so answers match this resume
+    const shouldTailor = tailorCompanyNames === true || tailorCompanyNames === 'true';
+
+    const prompt = shouldTailor
       ? createTailoredAnswerPrompt(profile, question, jobDescription, resumeContent)
       : createMainAnswerPrompt(profile, question, jobDescription, resumeContent);
 

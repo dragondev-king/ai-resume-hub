@@ -384,7 +384,12 @@ const ResumeGenerator: React.FC = () => {
 
     setIsGeneratingCoverLetter(true);
     try {
-      const coverLetter = await generateCoverLetter(profile, jobDescription, generatedResume);
+      const coverLetter = await generateCoverLetter(
+        profile,
+        jobDescription,
+        generatedResume,
+        generatedWithTailoredCompanies
+      );
       setGeneratedCoverLetter(coverLetter);
       toast.success('Cover letter generated successfully!');
     } catch (error: any) {

@@ -15,9 +15,10 @@ interface GeneratedAnswer {
 }
 
 export const generateCoverLetter = async (
-  profile: Profile, 
-  jobDescription: string, 
-  resumeContent: any
+  profile: Profile,
+  jobDescription: string,
+  resumeContent: any,
+  tailorCompanyNames: boolean = false
 ): Promise<GeneratedCoverLetter> => {
   try {
     // Call the Vercel serverless function instead of OpenAI directly
@@ -30,6 +31,7 @@ export const generateCoverLetter = async (
         profile,
         jobDescription,
         resumeContent,
+        tailorCompanyNames,
       }),
     });
 

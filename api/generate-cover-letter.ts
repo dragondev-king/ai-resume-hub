@@ -11,6 +11,8 @@ interface RequestBody {
   profile: any;
   jobDescription: string;
   resumeContent: any;
+  /** When true, cover letter must use tailored employers/titles from the generated resume. */
+  tailorCompanyNames?: boolean;
 }
 
 export default async function handler(
@@ -32,14 +34,21 @@ export default async function handler(
       });
     }
 
-    const { profile, jobDescription, resumeContent } = req.body as RequestBody;
+    const {
+      profile,
+      jobDescription,
+      resumeContent,
+      tailorCompanyNames = false,
+    } = req.body as RequestBody;
 
     if (!profile || !jobDescription || !resumeContent) {
       return res.status(400).json({ error: 'Missing required fields: profile, jobDescription, and resumeContent' });
     }
 
-    // Create the AI prompt for cover letter
-    const prompt = createCoverLetterPrompt(profile, jobDescription, resumeContent);
+    const shouldTailor = tailorCompanyNames === true || tailorCompanyNames === 'true';
+    const prompt = shouldTailor
+      ? createTailoredCoverLetterPrompt(profile, jobDescription, resumeContent)
+      : createCoverLetterPrompt(profile, jobDescription, resumeContent);
 
     // Call OpenAI API for cover letter
     const completion = await openai.chat.completions.create({
@@ -127,6 +136,82 @@ Please write a professional cover letter that:
 7. Is approximately 50-70 words (keep it concise and impactful)
 8. Uses the candidate's actual name and background information
 9. References specific aspects of the job description
+
+The cover letter should be well-structured with:
+- Professional greeting
+- Brief opening paragraph (1-2 sentences)
+- 1-2 body paragraphs highlighting relevant experience (keep each paragraph short)
+- Strong closing paragraph (1-2 sentences)
+- Professional sign-off
+
+Please write the cover letter in a natural, conversational tone that sounds authentic to the candidate. Be concise and avoid unnecessary verbosity.
+Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write
+Avoid examples that are too close to the job's tech stack because it'll be obvious the cover letter was AI generated.
+`;
+};
+
+/** Tailor-mode: employers and role titles come from the generated resume, not the original profile. */
+const createTailoredCoverLetterPrompt = (
+  profile: any,
+  jobDescription: string,
+  resumeContent: any
+): string => {
+  const experience = Array.isArray(resumeContent?.experience) && resumeContent.experience.length
+    ? resumeContent.experience
+    : profile.experience || [];
+  const summary = resumeContent?.summary || profile.summary || '';
+  const skills = Array.isArray(resumeContent?.skills) && resumeContent.skills.length
+    ? resumeContent.skills
+    : (profile.skills || []).filter((skill: string) => skill.trim());
+
+  const formatExperienceEntry = (exp: any) => {
+    const endDate = exp.end_date || 'Present';
+    const bulletText = Array.isArray(exp.descriptions)
+      ? exp.descriptions.join(' ')
+      : exp.description || '';
+    return `- ${exp.position || ''} at ${exp.company || ''} (${exp.start_date || ''} - ${endDate})
+  Description: ${bulletText}`;
+  };
+
+  return `
+Please write a compelling cover letter for the following job application:
+
+JOB DESCRIPTION:
+${jobDescription}
+
+CANDIDATE INFORMATION:
+Name: ${profile.first_name} ${profile.last_name}
+Current Title: ${resumeContent?.jobTitle || profile.title || ''}
+Email: ${profile.email}
+Location: ${profile.location || ''}
+LinkedIn: ${profile.linkedin || ''}
+Portfolio: ${profile.portfolio || ''}
+
+CANDIDATE'S BACKGROUND:
+Summary: ${summary}
+
+RESUME EXPERIENCE (use these employer names and role titles — not the original profile):
+${experience.map(formatExperienceEntry).join('\n')}
+
+EDUCATION:
+${profile.education.map((edu: any) => `
+- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
+`).join('\n')}
+
+SKILLS:
+${skills.join(', ')}
+
+Please write a professional cover letter that:
+1. Addresses the specific job requirements from the job description
+2. Highlights the candidate's most relevant experience and skills from RESUME EXPERIENCE above
+3. Uses ONLY the employer names and role titles from RESUME EXPERIENCE (never invent different ones or revert to original profile employers)
+4. Demonstrates enthusiasm for the position and company
+5. Explains why the candidate is the perfect fit
+6. Includes specific examples from their experience
+7. Maintains a professional yet engaging tone
+8. Is approximately 50-70 words (keep it concise and impactful)
+9. Uses the candidate's actual name
+10. References specific aspects of the job description
 
 The cover letter should be well-structured with:
 - Professional greeting

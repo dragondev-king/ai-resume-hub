@@ -8,8 +8,24 @@ export type JobApplicationMetadata = {
   tailorCompanyNames?: boolean;
 };
 
+function asBooleanFlag(value: unknown): boolean {
+  return value === true || value === 'true';
+}
+
 export function parseJobApplicationMetadata(raw: unknown): JobApplicationMetadata {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as JobApplicationMetadata;
+      }
+    } catch {
+      return {};
+    }
+    return {};
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) return {};
   return raw as JobApplicationMetadata;
 }
 
@@ -25,7 +41,7 @@ export function getResumeTemplateIdForApplication(application?: {
 }
 
 export function getTailorCompanyNamesFromMetadata(metadata: unknown): boolean {
-  return parseJobApplicationMetadata(metadata).tailorCompanyNames === true;
+  return asBooleanFlag(parseJobApplicationMetadata(metadata).tailorCompanyNames);
 }
 
 export function getTailorCompanyNamesForApplication(application?: {

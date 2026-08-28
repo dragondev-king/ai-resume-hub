@@ -8,19 +8,33 @@ export interface ProfileMetadata {
   [key: string]: unknown;
 }
 
+function asBooleanFlag(value: unknown): boolean {
+  return value === true || value === 'true';
+}
+
 export function parseProfileMetadata(raw: unknown): ProfileMetadata {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as ProfileMetadata;
+      }
+    } catch {
+      return {};
+    }
+    return {};
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) return {};
   return raw as ProfileMetadata;
 }
 
 export function getUseAiEnhancedJobTitleFromMetadata(metadata: unknown): boolean {
-  const m = parseProfileMetadata(metadata);
-  if (typeof m.useAiEnhancedJobTitle === 'boolean') return m.useAiEnhancedJobTitle;
-  return false;
+  return asBooleanFlag(parseProfileMetadata(metadata).useAiEnhancedJobTitle);
 }
 
 export function getTailorCompanyNamesFromMetadata(metadata: unknown): boolean {
-  return parseProfileMetadata(metadata).tailorCompanyNames === true;
+  return asBooleanFlag(parseProfileMetadata(metadata).tailorCompanyNames);
 }
 
 export interface ProfileRowWithMetadata {
@@ -31,6 +45,7 @@ export function getUseAiEnhancedJobTitleForProfile(profile: ProfileRowWithMetada
   return getUseAiEnhancedJobTitleFromMetadata(profile?.metadata);
 }
 
+/** Company/role tailoring runs only when this profile flag is explicitly true. */
 export function getTailorCompanyNamesForProfile(profile: ProfileRowWithMetadata | null | undefined): boolean {
   return getTailorCompanyNamesFromMetadata(profile?.metadata);
 }

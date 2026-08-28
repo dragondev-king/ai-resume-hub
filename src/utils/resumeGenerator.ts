@@ -161,7 +161,7 @@ const parseAIResponse = (
     const experience: GeneratedResume['experience'] = [];
 
     if (!tailorCompanyNames) {
-      // Original main-branch behavior: keep AI experience (titles tailored, companies unchanged)
+      // OFF = main-style: use AI titles/bullets; keep profile companies/dates as facts
       for (let index = 0; index < rowCount; index++) {
         const original = originalExperience[index];
         const aiExp = aiExperience[index] || {};
@@ -169,10 +169,10 @@ const parseAIResponse = (
         const fallbackDescriptions = normalizeDescriptions(original);
         experience.push({
           position: aiExp.position || original?.position || '',
-          company: aiExp.company || original?.company || '',
-          start_date: aiExp.start_date || original?.start_date || '',
-          end_date: aiExp.end_date || original?.end_date || '',
-          address: aiExp.address || original?.address || '',
+          company: original?.company || aiExp.company || '',
+          start_date: original?.start_date || aiExp.start_date || '',
+          end_date: original?.end_date || aiExp.end_date || '',
+          address: original?.address || aiExp.address || '',
           descriptions: descriptions.length ? descriptions : fallbackDescriptions,
         });
       }
