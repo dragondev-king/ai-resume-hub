@@ -96,7 +96,7 @@ const MissedJobs: React.FC = () => {
       setTotalJobs(countData || 0);
     } catch (error) {
       console.error('Error loading missed jobs:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to load missed jobs');
+      toast.error(error instanceof Error ? error.message : 'Failed to load available jobs');
       setJobs([]);
       setTotalJobs(0);
     } finally {
@@ -147,7 +147,7 @@ const MissedJobs: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Missed Jobs</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Available Jobs</h2>
           <p className="text-gray-600">
             Companies others applied to this period that this profile has not applied to yet.
             Only jobs with a link are listed.
@@ -215,13 +215,13 @@ const MissedJobs: React.FC = () => {
           <p className="text-gray-600">
             {role === 'bidder'
               ? 'No profiles have been assigned to you yet. Contact your manager.'
-              : 'Create a profile first to see missed jobs.'}
+              : 'Create a profile first to see available jobs.'}
           </p>
         </div>
       ) : jobs.length === 0 ? (
         <div className="text-center py-12">
           <Calendar className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Missed Jobs</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Available Jobs</h3>
           <p className="text-gray-600">
             This profile has an active application to every company that others applied to in this period
             (or no linked applications were submitted).

@@ -106,10 +106,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 Applications
               </Link>
               <Link
-                to="/missed-jobs"
-                className={getNavLinkClass('/missed-jobs')}
+                to="/available-jobs"
+                className={getNavLinkClass('/available-jobs')}
               >
-                Missed Jobs
+                Available Jobs
               </Link>
               {(role === 'manager' || role === 'admin') && (
                 <Link

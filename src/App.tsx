@@ -27,7 +27,7 @@ const AppContent: React.FC = () => {
               <Route path="/profiles" element={<ProfilesPage />} />
               <Route path="/generator" element={<GeneratorPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
-              <Route path="/missed-jobs" element={<MissedJobsPage />} />
+              <Route path="/available-jobs" element={<MissedJobsPage />} />
               <Route
                 path="/assignments"
                 element={
