@@ -5,6 +5,11 @@ import { toast } from 'react-hot-toast';
 import { Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import {
+  getTailorCompanyNamesForProfile,
+  getUseAiEnhancedJobTitleForProfile,
+  parseProfileMetadata,
+} from '../utils/profileMetadata';
 
 interface ProfileFormData {
   first_name: string;
@@ -41,17 +46,16 @@ interface ProfileFormProps {
   onSave?: () => void;
 }
 
-function initialUseAiEnhancedJobTitle(profile?: Profile): boolean {
-  const om = profile?.metadata as Record<string, unknown> | undefined;
-  if (om && typeof om.useAiEnhancedJobTitle === 'boolean') return om.useAiEnhancedJobTitle;
-  return false;
-}
-
 const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
   const { role } = useUser();
   const { user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
-  const [useAiEnhancedJobTitle, setUseAiEnhancedJobTitle] = useState(() => initialUseAiEnhancedJobTitle(profile));
+  const [useAiEnhancedJobTitle, setUseAiEnhancedJobTitle] = useState(() =>
+    getUseAiEnhancedJobTitleForProfile(profile)
+  );
+  const [tailorCompanyNames, setTailorCompanyNames] = useState(() =>
+    getTailorCompanyNamesForProfile(profile)
+  );
   const [skillFields, setSkillFields] = useState(
     profile?.skills.length ? profile.skills.map((skill, index) => ({ id: index, value: skill })) : [{ id: 0, value: '' }]
   );
@@ -182,7 +186,11 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
         p_skills: skills,
         p_resume_filename_format: data.resume_filename_format,
         p_check_duplicate_applications: data.check_duplicate_applications,
-        p_profile_metadata: { useAiEnhancedJobTitle },
+        p_profile_metadata: {
+          ...parseProfileMetadata(profile?.metadata),
+          useAiEnhancedJobTitle,
+          tailorCompanyNames,
+        },
       });
 
       if (error) throw error;
@@ -642,9 +650,7 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
               type="checkbox"
               id="use_ai_enhanced_job_title"
               checked={useAiEnhancedJobTitle}
-              onChange={(e) => {
-                setUseAiEnhancedJobTitle(e.target.checked);
-              }}
+              onChange={(e) => setUseAiEnhancedJobTitle(e.target.checked)}
               className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
             />
           </div>
@@ -654,6 +660,25 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
             </label>
             <p className="text-gray-500">
               When enabled, generated resumes use AI-tailored job titles per experience when available. When disabled, your original job titles are used everywhere.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start pt-2">
+          <div className="flex items-center h-5">
+            <input
+              type="checkbox"
+              id="tailor_company_names"
+              checked={tailorCompanyNames}
+              onChange={(e) => setTailorCompanyNames(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+          </div>
+          <div className="ml-3 text-sm">
+            <label htmlFor="tailor_company_names" className="font-medium text-gray-700">
+              Tailor company names and role titles
+            </label>
+            <p className="text-gray-500">
+              When enabled, resume generation replaces the two most recent employers with mid-sized industry peers (based in the candidate&apos;s country of residence) and rewrites every role title into a junior→senior career ladder. LinkedIn is omitted from downloads for these resumes.
             </p>
           </div>
         </div>

@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { generateResume, extractJobInfo, AIProvider } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
 import { generateDocx } from '../utils/docxGenerator';
-import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
+import { getUseAiEnhancedJobTitleForProfile, getTailorCompanyNamesForProfile } from '../utils/profileMetadata';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { parseBoldMarkup, stripBoldMarkup } from '../utils/resumeLayout';
@@ -49,7 +49,6 @@ const ResumeGenerator: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('');
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
-  const [tailorCompanyNames, setTailorCompanyNames] = useState(false);
   /** True when the current generated resume used company/role name tailoring. */
   const [generatedWithTailoredCompanies, setGeneratedWithTailoredCompanies] = useState(false);
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
@@ -136,6 +135,7 @@ const ResumeGenerator: React.FC = () => {
         }
       }
 
+      const tailorCompanyNames = getTailorCompanyNamesForProfile(profile);
       const generated = await generateResume(profile, jobDescription, aiProvider, tailorCompanyNames);
 
       // Safety: if final company name differs from extract and is a duplicate, discard result
@@ -586,7 +586,6 @@ const ResumeGenerator: React.FC = () => {
     setCopiedCoverLetter(false);
     setCopiedAnswers({});
     setIncludeLinkedIn(true);
-    // Keep tailorCompanyNames checked/unchecked as the user left it
     setGeneratedWithTailoredCompanies(false);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };
@@ -661,20 +660,12 @@ const ResumeGenerator: React.FC = () => {
                 ✓ Profile automatically selected
               </p>
             )}
-          </div>
-
-          {/* Tailor company / role names */}
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="tailor_company_names"
-              checked={tailorCompanyNames}
-              onChange={(e) => setTailorCompanyNames(e.target.checked)}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            />
-            <label htmlFor="tailor_company_names" className="ml-3 text-sm font-medium text-gray-700">
-              Tailor company names and role titles
-            </label>
+            {selectedProfile &&
+              getTailorCompanyNamesForProfile(profiles.find((p) => p.id === selectedProfile)) && (
+                <p className="text-sm text-primary-700 mt-2">
+                  Company name &amp; role title tailoring is enabled for this profile (edit in Profile settings).
+                </p>
+              )}
           </div>
 
           {/* Job Description Link */}

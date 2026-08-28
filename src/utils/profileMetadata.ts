@@ -3,6 +3,8 @@
  */
 export interface ProfileMetadata {
   useAiEnhancedJobTitle?: boolean;
+  /** When true, resume generation substitutes peer company names and junior→senior role titles. */
+  tailorCompanyNames?: boolean;
   [key: string]: unknown;
 }
 
@@ -17,10 +19,18 @@ export function getUseAiEnhancedJobTitleFromMetadata(metadata: unknown): boolean
   return false;
 }
 
+export function getTailorCompanyNamesFromMetadata(metadata: unknown): boolean {
+  return parseProfileMetadata(metadata).tailorCompanyNames === true;
+}
+
 export interface ProfileRowWithMetadata {
   metadata?: unknown;
 }
 
 export function getUseAiEnhancedJobTitleForProfile(profile: ProfileRowWithMetadata | null | undefined): boolean {
   return getUseAiEnhancedJobTitleFromMetadata(profile?.metadata);
+}
+
+export function getTailorCompanyNamesForProfile(profile: ProfileRowWithMetadata | null | undefined): boolean {
+  return getTailorCompanyNamesFromMetadata(profile?.metadata);
 }
