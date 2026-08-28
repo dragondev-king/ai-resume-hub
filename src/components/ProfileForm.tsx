@@ -675,10 +675,10 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ profile, onSave }) => {
           </div>
           <div className="ml-3 text-sm">
             <label htmlFor="tailor_company_names" className="font-medium text-gray-700">
-              Tailor company names and role titles
+              Tailor company names and role titles (advanced)
             </label>
             <p className="text-gray-500">
-              When enabled, resume generation replaces the two most recent employers with mid-sized industry peers (based in the candidate&apos;s country of residence) and rewrites every role title into a junior→senior career ladder. LinkedIn is omitted from downloads for these resumes.
+              Off (default): resume generation matches the standard main-branch behavior. On: uses the full main-branch pipeline (timeline, version chronology, rich bullets, skills) plus substitutes the two most recent employers with mid-sized peers in the candidate&apos;s country of residence and rewrites every role title into a junior→senior ladder. LinkedIn is omitted from downloads when this is on.
             </p>
           </div>
         </div>

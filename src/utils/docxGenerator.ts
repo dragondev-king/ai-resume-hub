@@ -76,19 +76,25 @@ function findMatchingAiExperience(
   );
 }
 
-/** Header role under the name: latest position from the exported experience list. */
+/** Header role under the name.
+ * Main-branch behavior: profile.title.
+ * AI-enhanced / company-tailor mode: latest position from the exported experience list.
+ */
 export function resolveHeaderRoleTitle(
   originalExperience: ExperienceEntry[],
   aiExperience: ExperienceEntry[],
   useAiEnhancedJobTitle: boolean,
   fallbackTitle?: string
 ): string | undefined {
+  const fallback = fallbackTitle?.trim() || undefined;
+  if (!useAiEnhancedJobTitle) return fallback;
+
   const entries = resolveResumeExperience(originalExperience, aiExperience, useAiEnhancedJobTitle);
-  if (!entries.length) return fallbackTitle?.trim() || undefined;
+  if (!entries.length) return fallback;
 
   const [newestIndex] = mostRecentIndices(entries, 1);
   const position = entries[newestIndex]?.position?.trim();
-  return position || fallbackTitle?.trim() || undefined;
+  return position || fallback;
 }
 
 export function resolveResumeExperience(

@@ -55,7 +55,8 @@ export const generateAnswer = async (
   profile: Profile,
   question: string,
   jobDescription: string,
-  resumeContent: any
+  resumeContent: any,
+  tailorCompanyNames: boolean = false
 ): Promise<GeneratedAnswer> => {
   try {
     // Call the Vercel serverless function instead of OpenAI directly
@@ -69,6 +70,7 @@ export const generateAnswer = async (
         question,
         jobDescription,
         resumeContent,
+        tailorCompanyNames,
       }),
     });
 

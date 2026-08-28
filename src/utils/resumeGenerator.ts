@@ -220,7 +220,12 @@ const parseAIResponse = (
     }
 
     const companyName = typeof parsed.companyName === 'string' ? parsed.companyName.trim() : '';
-    const jobTitle = normalizeJobTitle(parsed.jobTitle);
+    // Job-title cleanup / ladder helpers are tailor-mode only; main path keeps AI title as returned
+    const jobTitle = tailorCompanyNames
+      ? normalizeJobTitle(parsed.jobTitle)
+      : typeof parsed.jobTitle === 'string'
+        ? parsed.jobTitle.trim()
+        : '';
 
     const rawSkills = Array.isArray(parsed.skills)
       ? (parsed.skills as string[])

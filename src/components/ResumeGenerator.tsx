@@ -420,7 +420,13 @@ const ResumeGenerator: React.FC = () => {
     setIsGeneratingAnswer(question.id);
 
     try {
-      const result = await generateAnswer(profile, question.question, jobDescription, generatedResume);
+      const result = await generateAnswer(
+        profile,
+        question.question,
+        jobDescription,
+        generatedResume,
+        generatedWithTailoredCompanies
+      );
       setApplicationQuestions(prev =>
         prev.map(q =>
           q.id === question.id ? { ...q, answer: result.content } : q
@@ -456,7 +462,13 @@ const ResumeGenerator: React.FC = () => {
 
     setIsGeneratingAnswer(questionId);
     try {
-      const answer = await generateAnswer(profile, question.question, jobDescription, generatedResume);
+      const answer = await generateAnswer(
+        profile,
+        question.question,
+        jobDescription,
+        generatedResume,
+        generatedWithTailoredCompanies
+      );
 
       setApplicationQuestions(prev =>
         prev.map(q =>
