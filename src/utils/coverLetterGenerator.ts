@@ -21,8 +21,10 @@ export const generateCoverLetter = async (
   tailorCompanyNames: boolean = false
 ): Promise<GeneratedCoverLetter> => {
   try {
-    // Call the Vercel serverless function instead of OpenAI directly
-    const response = await fetch('/api/generate-cover-letter', {
+    const endpoint = tailorCompanyNames
+      ? '/api/generate-cover-letter-james'
+      : '/api/generate-cover-letter';
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,8 +63,10 @@ export const generateAnswer = async (
   tailorCompanyNames: boolean = false
 ): Promise<GeneratedAnswer> => {
   try {
-    // Call the Vercel serverless function instead of OpenAI directly
-    const response = await fetch('/api/generate-answer', {
+    const endpoint = tailorCompanyNames
+      ? '/api/generate-answer-james'
+      : '/api/generate-answer';
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

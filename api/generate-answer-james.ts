@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
+import { mostRecentIndices } from './_lib/careerProgression.js';
 
 // Initialize OpenAI client (server-side, safe to use API key)
 const openai = new OpenAI({
@@ -11,6 +12,8 @@ interface RequestBody {
   question: string;
   jobDescription: string;
   resumeContent: any;
+  /** When true, answers must use tailored company names / role titles from the generated resume. */
+  tailorCompanyNames?: boolean;
 }
 
 export default async function handler(
@@ -32,14 +35,24 @@ export default async function handler(
       });
     }
 
-    const { profile, question, jobDescription, resumeContent } = req.body as RequestBody;
+    const {
+      profile,
+      question,
+      jobDescription,
+      resumeContent,
+      tailorCompanyNames = false,
+    } = req.body as RequestBody;
 
     if (!profile || !question || !jobDescription || !resumeContent) {
       return res.status(400).json({ error: 'Missing required fields: profile, question, jobDescription, and resumeContent' });
     }
 
-    // Create the AI prompt for answer
-    const prompt = createAnswerPrompt(profile, question, jobDescription, resumeContent);
+    // Use generation-time flag only (not live profile) so answers match this resume
+    const shouldTailor = tailorCompanyNames === true || tailorCompanyNames === 'true';
+
+    const prompt = shouldTailor
+      ? createTailoredAnswerPrompt(profile, question, jobDescription, resumeContent)
+      : createMainAnswerPrompt(profile, question, jobDescription, resumeContent);
 
     // Call OpenAI API for answer
     const completion = await openai.chat.completions.create({
@@ -76,7 +89,13 @@ export default async function handler(
   }
 }
 
-const createAnswerPrompt = (profile: any, question: string, jobDescription: string, resumeContent: any): string => {
+/** Main-branch answer prompt — profile experience primary; AI resume as supporting context. */
+const createMainAnswerPrompt = (
+  profile: any,
+  question: string,
+  jobDescription: string,
+  resumeContent: any
+): string => {
   return `
 Please provide a thoughtful answer to the following job application question:
 
@@ -139,3 +158,86 @@ CHRONOLOGY: Only mention technologies alongside roles whose dates overlap after 
 `;
 };
 
+/** Tailor-mode answer prompt — must use generated resume employers and junior→senior titles. */
+const createTailoredAnswerPrompt = (
+  profile: any,
+  question: string,
+  jobDescription: string,
+  resumeContent: any
+): string => {
+  const experience = Array.isArray(resumeContent?.experience) && resumeContent.experience.length
+    ? resumeContent.experience
+    : profile.experience || [];
+  const summary = resumeContent?.summary || profile.summary || '';
+  const skills = Array.isArray(resumeContent?.skills) && resumeContent.skills.length
+    ? resumeContent.skills
+    : (profile.skills || []).filter((skill: string) => skill.trim());
+  const [newestIndex] = mostRecentIndices(experience, 1);
+  const currentTitle =
+    (newestIndex !== undefined ? experience[newestIndex]?.position : '') ||
+    resumeContent?.jobTitle ||
+    profile.title ||
+    '';
+
+  const formatExperienceEntry = (exp: any) => {
+    const endDate = exp.end_date || 'Present';
+    const bulletText = Array.isArray(exp.descriptions)
+      ? exp.descriptions.join(' ')
+      : exp.description || '';
+    return `- ${exp.position || ''} at ${exp.company || ''} (${exp.start_date || ''} - ${endDate})
+  Description: ${bulletText}`;
+  };
+
+  return `
+Please provide a thoughtful answer to the following job application question:
+
+QUESTION:
+${question}
+
+JOB DESCRIPTION:
+${jobDescription}
+
+CANDIDATE INFORMATION:
+Name: ${profile.first_name} ${profile.last_name}
+Current Title: ${currentTitle}
+Email: ${profile.email}
+Location: ${profile.location || ''}
+
+CANDIDATE'S BACKGROUND:
+Summary: ${summary}
+
+RESUME EXPERIENCE (use these employer names and role titles — not the original profile):
+${experience.map(formatExperienceEntry).join('\n')}
+
+EDUCATION:
+${profile.education.map((edu: any) => `
+- ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
+`).join('\n')}
+
+SKILLS:
+${skills.join(', ')}
+
+Please provide an answer that:
+1. Directly addresses the specific question asked
+2. Uses concrete examples from the candidate's experience
+3. Demonstrates relevant skills and knowledge
+4. Shows enthusiasm and genuine interest
+5. Aligns with the job requirements
+6. Is authentic and personal to the candidate
+7. Is well-structured and easy to read
+8. Uses the candidate's actual background and experience from RESUME EXPERIENCE above
+9. Maintains a professional yet conversational tone
+10. When referencing past employers, use only the company names listed under RESUME EXPERIENCE
+
+The answer should be:
+- Specific and concise
+- Relevant to the question and job
+- Based on the candidate's actual experience
+- Professional but engaging
+- Approximately 30-50 words (keep it brief and to the point)
+
+Please write the answer in the candidate's voice, using their actual experience and background. Be direct and avoid unnecessary elaboration.
+Don't use complex words like "scalability", "reliability", or "robust". Keep it simple, like how native English speakers write.
+Avoid examples that are too close to the job's tech stack because it'll be obvious AI generated it.
+`;
+};
