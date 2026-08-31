@@ -1,7 +1,6 @@
 ﻿import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import handlerJames from './generate-resume-james';
 
 type AIProvider = 'openai' | 'claude';
 
@@ -154,6 +153,7 @@ export default async function handler(
     }
 
     if (isCompanyTailoringEnabled(profile, tailorCompanyNames)) {
+      const { default: handlerJames } = await import('./_lib/generate-resume-james.js');
       return handlerJames(req, res);
     }
 
