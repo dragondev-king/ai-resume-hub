@@ -101,7 +101,8 @@ export const generateResume = async (
   provider: AIProvider = 'openai',
   tailorCompanyNames: boolean = false
 ): Promise<GeneratedResume> => {
-  const response = await fetch('/api/generate-resume', {
+  const endpoint = tailorCompanyNames ? '/api/generate-resume-james' : '/api/generate-resume';
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -112,29 +112,6 @@ interface RequestBody {
   profile: any;
   jobDescription: string;
   provider?: AIProvider;
-  tailorCompanyNames?: unknown;
-}
-
-/** Company/role tailoring only when profile.metadata.tailorCompanyNames is explicitly true. */
-function isCompanyTailoringEnabled(profile: any, bodyFlag?: unknown): boolean {
-  const meta = profile?.metadata;
-  let metaObj: Record<string, unknown> | null = null;
-  if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
-    metaObj = meta as Record<string, unknown>;
-  } else if (typeof meta === 'string') {
-    try {
-      const parsed = JSON.parse(meta);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        metaObj = parsed as Record<string, unknown>;
-      }
-    } catch {
-      metaObj = null;
-    }
-  }
-  if (metaObj && 'tailorCompanyNames' in metaObj) {
-    return metaObj.tailorCompanyNames === true || metaObj.tailorCompanyNames === 'true';
-  }
-  return bodyFlag === true || bodyFlag === 'true';
 }
 
 export default async function handler(
@@ -146,15 +123,10 @@ export default async function handler(
   }
 
   try {
-    const { profile, jobDescription, provider = 'openai', tailorCompanyNames } = req.body as RequestBody;
+    const { profile, jobDescription, provider = 'openai' } = req.body as RequestBody;
 
     if (!profile || !jobDescription) {
       return res.status(400).json({ error: 'Missing required fields: profile and jobDescription' });
-    }
-
-    if (isCompanyTailoringEnabled(profile, tailorCompanyNames)) {
-      const { default: handlerJames } = await import('./_lib/generate-resume-james.js');
-      return handlerJames(req, res);
     }
 
     if (provider !== 'openai' && provider !== 'claude') {

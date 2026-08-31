@@ -1,12 +1,12 @@
 ﻿import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { normalizeJobTitle, JOB_TITLE_EXTRACTION_INSTRUCTIONS } from './jobTitlePrompt.js';
+import { normalizeJobTitle, JOB_TITLE_EXTRACTION_INSTRUCTIONS } from './_lib/jobTitlePrompt.js';
 import {
   applyCareerTitleProgression,
   mostRecentIndices,
   toneDescriptionsToSeniority,
-} from './careerProgression.js';
+} from './_lib/careerProgression.js';
 
 type AIProvider = 'openai' | 'claude';
 

@@ -164,7 +164,8 @@ export async function generateResume(
   provider: 'openai' | 'claude' = 'openai'
 ): Promise<GeneratedResume> {
   const tailorCompanyNames = getTailorCompanyNamesForProfile(profile);
-  const url = `${settings.apiBaseUrl}/api/generate-resume`;
+  const path = tailorCompanyNames ? '/api/generate-resume-james' : '/api/generate-resume';
+  const url = `${settings.apiBaseUrl}${path}`;
 
   // Ensure metadata is a plain object so the API can read tailorCompanyNames
   const profilePayload = {
