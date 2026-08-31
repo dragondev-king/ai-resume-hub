@@ -2,7 +2,6 @@
 
 # dependencies
 /node_modules
-/extension/ui/node_modules
 /.pnp
 .pnp.js
 
@@ -11,6 +10,9 @@
 
 # production
 /build
+
+# Chrome extension (local-only)
+/extension/
 
 # misc
 .DS_Store
