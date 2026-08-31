@@ -37,6 +37,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "node scripts/copy-pdf-fonts.js && react-scripts build",
+    "build:extension": "npm --prefix extension/ui install && npm --prefix extension/ui run build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "postinstall": "node scripts/copy-pdf-fonts.js",

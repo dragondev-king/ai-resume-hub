@@ -13,6 +13,11 @@ import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
+import {
+  consumeExtensionPayload,
+  EXTENSION_PAYLOAD_EVENT,
+  type ExtensionJobPayload,
+} from '../utils/extensionBridge';
 import ResumeTemplatePreview from './ResumeTemplatePreview';
 
 function BoldMarkupText({ text }: { text: string }) {
@@ -94,6 +99,29 @@ const ResumeGenerator: React.FC = () => {
       setSelectedProfile(profiles[0].id);
     }
   }, [profiles, selectedProfile]);
+
+  // Chrome extension: apply captured job description / link once
+  useEffect(() => {
+    const applyPayload = (payload: ExtensionJobPayload | null) => {
+      if (!payload) return;
+      const jd = typeof payload.jobDescription === 'string' ? payload.jobDescription.trim() : '';
+      const link =
+        typeof payload.jobDescriptionLink === 'string' ? payload.jobDescriptionLink.trim() : '';
+      if (!jd && !link) return;
+      if (jd) setJobDescription(jd);
+      if (link) setJobDescriptionLink(link);
+      toast.success('Job description loaded from Chrome extension');
+    };
+
+    applyPayload(consumeExtensionPayload());
+
+    const onExtensionPayload = (event: Event) => {
+      const detail = (event as CustomEvent<ExtensionJobPayload>).detail;
+      applyPayload(detail || consumeExtensionPayload());
+    };
+    window.addEventListener(EXTENSION_PAYLOAD_EVENT, onExtensionPayload);
+    return () => window.removeEventListener(EXTENSION_PAYLOAD_EVENT, onExtensionPayload);
+  }, []);
 
   const handleGenerate = async () => {
     if (!selectedProfile || !jobDescription) {

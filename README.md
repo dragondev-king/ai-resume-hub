@@ -106,6 +106,18 @@ npm start
 
 The application will be available at `http://localhost:3000`
 
+## 🧩 Chrome extension
+
+Side panel with login, assigned profiles, and resume generation. Config is baked from `.env` when you build.
+
+```bash
+npm run build:extension
+```
+
+Then Chrome → `chrome://extensions` → Load unpacked → `extension/` folder.
+
+See [`extension/README.md`](./extension/README.md).
+
 ## 📋 Usage Guide
 
 ### Initial Setup (Admin Only)
