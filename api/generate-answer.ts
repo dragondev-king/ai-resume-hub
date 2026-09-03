@@ -1,82 +1,89 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import OpenAI from 'openai';
-
-// Initialize OpenAI client (server-side, safe to use API key)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import {
+  AIProvider,
+  generatePlainText,
+  isAIProvider,
+  providerConfigError,
+} from '../lib/aiClients';
 
 interface RequestBody {
   profile: any;
   question: string;
   jobDescription: string;
   resumeContent: any;
+  provider?: AIProvider;
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  // Only allow POST requests
+const ANSWER_SYSTEM =
+  "You are a professional job application consultant. Generate concise, thoughtful, specific, and compelling answers to job application questions. Your answers should be authentic, demonstrate relevant experience, and align with the candidate's background and the job requirements. Keep responses brief and direct - avoid unnecessary elaboration.";
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Check if API key is configured
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY is not configured');
-      return res.status(500).json({
-        error: 'Server configuration error',
-        details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable in Vercel dashboard.'
+    const {
+      profile,
+      question,
+      jobDescription,
+      resumeContent,
+      provider = 'openai',
+    } = req.body as RequestBody;
+
+    if (!profile || !question || !jobDescription || !resumeContent) {
+      return res.status(400).json({
+        error: 'Missing required fields: profile, question, jobDescription, and resumeContent',
       });
     }
 
-    const { profile, question, jobDescription, resumeContent } = req.body as RequestBody;
-
-    if (!profile || !question || !jobDescription || !resumeContent) {
-      return res.status(400).json({ error: 'Missing required fields: profile, question, jobDescription, and resumeContent' });
+    if (!isAIProvider(provider)) {
+      return res.status(400).json({ error: 'Invalid provider. Must be "openai" or "claude".' });
     }
 
-    // Create the AI prompt for answer
-    const prompt = createAnswerPrompt(profile, question, jobDescription, resumeContent);
+    const configError = providerConfigError(provider);
+    if (configError) {
+      return res.status(500).json(configError);
+    }
 
-    // Call OpenAI API for answer
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional job application consultant. Generate concise, thoughtful, specific, and compelling answers to job application questions. Your answers should be authentic, demonstrate relevant experience, and align with the candidate\'s background and the job requirements. Keep responses brief and direct - avoid unnecessary elaboration.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_completion_tokens: 1000,
+    const prompt = createAnswerPrompt(profile, question, jobDescription, resumeContent);
+    const answerContent = await generatePlainText({
+      provider,
+      system: ANSWER_SYSTEM,
+      prompt,
+      maxTokens: 1000,
     });
 
-    const answerContent = completion.choices[0]?.message?.content || '';
-
-    // Return the response
     return res.status(200).json({
       success: true,
       content: answerContent,
-      question: question
+      question,
+      provider,
     });
-
   } catch (error: any) {
     console.error('Error generating answer:', error);
+    const details = String(error?.message || error);
+    const needsWorkspaceId = details.includes('anthropic-workspace-id is required');
     return res.status(500).json({
       error: 'Failed to generate answer',
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: needsWorkspaceId
+        ? 'Claude rejected the request because this API key needs a workspace. Set ANTHROPIC_WORKSPACE_ID.'
+        : details,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 }
 
-const createAnswerPrompt = (profile: any, question: string, jobDescription: string, resumeContent: any): string => {
+const createAnswerPrompt = (
+  profile: any,
+  question: string,
+  jobDescription: string,
+  resumeContent: any
+): string => {
+  const experience = Array.isArray(profile.experience) ? profile.experience : [];
+  const education = Array.isArray(profile.education) ? profile.education : [];
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+
   return `
 Please provide a thoughtful answer to the following job application question:
 
@@ -96,18 +103,26 @@ CANDIDATE'S BACKGROUND:
 Summary: ${profile.summary || ''}
 
 EXPERIENCE:
-${profile.experience.map((exp: any) => `
+${experience
+  .map(
+    (exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
   Description: ${exp.description || ''}
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 EDUCATION:
-${profile.education.map((edu: any) => `
+${education
+  .map(
+    (edu: any) => `
 - ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 SKILLS:
-${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
+${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 AI-GENERATED RESUME CONTENT:
 Summary: ${resumeContent.summary || ''}
@@ -138,4 +153,3 @@ Avoid examples that are too close to the job's tech stack because it'll be obvio
 CHRONOLOGY: Only mention technologies alongside roles whose dates overlap after that technology existed. Do not claim years of experience with a version that did not exist yet. Follow the dates on the AI-generated resume content.
 `;
 };
-

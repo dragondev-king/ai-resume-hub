@@ -1,85 +1,91 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import OpenAI from 'openai';
-
-// Initialize OpenAI client (server-side, safe to use API key)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import {
+  AIProvider,
+  generateJsonText,
+  generatePlainText,
+  isAIProvider,
+  providerConfigError,
+} from '../lib/aiClients';
 
 interface RequestBody {
   profile: any;
   jobDescription: string;
   resumeContent: any;
+  provider?: AIProvider;
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  // Only allow POST requests
+const COVER_LETTER_SYSTEM =
+  "You are a professional cover letter writer. Generate concise, compelling, personalized cover letters that highlight the candidate's relevant experience and skills for the specific job. The cover letter should be professional, engaging, and demonstrate why the candidate is the perfect fit for the position. Keep responses brief and impactful - avoid unnecessary verbosity.";
+
+const JOB_INFO_SCHEMA = {
+  type: 'object',
+  properties: {
+    jobTitle: { type: 'string' },
+    companyName: { type: 'string' },
+  },
+  required: ['jobTitle', 'companyName'],
+  additionalProperties: false,
+};
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Check if API key is configured
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY is not configured');
-      return res.status(500).json({
-        error: 'Server configuration error',
-        details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable in Vercel dashboard.'
+    const { profile, jobDescription, resumeContent, provider = 'openai' } = req.body as RequestBody;
+
+    if (!profile || !jobDescription || !resumeContent) {
+      return res.status(400).json({
+        error: 'Missing required fields: profile, jobDescription, and resumeContent',
       });
     }
 
-    const { profile, jobDescription, resumeContent } = req.body as RequestBody;
-
-    if (!profile || !jobDescription || !resumeContent) {
-      return res.status(400).json({ error: 'Missing required fields: profile, jobDescription, and resumeContent' });
+    if (!isAIProvider(provider)) {
+      return res.status(400).json({ error: 'Invalid provider. Must be "openai" or "claude".' });
     }
 
-    // Create the AI prompt for cover letter
-    const prompt = createCoverLetterPrompt(profile, jobDescription, resumeContent);
+    const configError = providerConfigError(provider);
+    if (configError) {
+      return res.status(500).json(configError);
+    }
 
-    // Call OpenAI API for cover letter
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional cover letter writer. Generate concise, compelling, personalized cover letters that highlight the candidate\'s relevant experience and skills for the specific job. The cover letter should be professional, engaging, and demonstrate why the candidate is the perfect fit for the position. Keep responses brief and impactful - avoid unnecessary verbosity.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_completion_tokens: 1500,
+    const prompt = createCoverLetterPrompt(profile, jobDescription, resumeContent);
+    const coverLetterContent = await generatePlainText({
+      provider,
+      system: COVER_LETTER_SYSTEM,
+      prompt,
+      maxTokens: 1500,
     });
 
-    const coverLetterContent = completion.choices[0]?.message?.content || '';
+    const jobInfo = await extractJobInfo(jobDescription, resumeContent, provider);
 
-    // Extract job info
-    const jobInfo = await extractJobInfo(jobDescription);
-
-    // Return the response
     return res.status(200).json({
       success: true,
       content: coverLetterContent,
       jobTitle: jobInfo.jobTitle,
-      companyName: jobInfo.companyName
+      companyName: jobInfo.companyName,
+      provider,
     });
-
   } catch (error: any) {
     console.error('Error generating cover letter:', error);
+    const details = String(error?.message || error);
+    const needsWorkspaceId = details.includes('anthropic-workspace-id is required');
     return res.status(500).json({
       error: 'Failed to generate cover letter',
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: needsWorkspaceId
+        ? 'Claude rejected the request because this API key needs a workspace. Set ANTHROPIC_WORKSPACE_ID.'
+        : details,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 }
 
 const createCoverLetterPrompt = (profile: any, jobDescription: string, resumeContent: any): string => {
+  const experience = Array.isArray(profile.experience) ? profile.experience : [];
+  const education = Array.isArray(profile.education) ? profile.education : [];
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+
   return `
 Please write a compelling cover letter for the following job application:
 
@@ -98,18 +104,26 @@ CANDIDATE'S BACKGROUND:
 Summary: ${profile.summary || ''}
 
 EXPERIENCE:
-${profile.experience.map((exp: any) => `
+${experience
+  .map(
+    (exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
   Description: ${exp.description || ''}
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 EDUCATION:
-${profile.education.map((edu: any) => `
+${education
+  .map(
+    (edu: any) => `
 - ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 SKILLS:
-${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
+${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 AI-GENERATED RESUME CONTENT:
 Summary: ${resumeContent.summary || ''}
@@ -141,18 +155,25 @@ CHRONOLOGY: Only mention technologies in connection with jobs/dates where those 
 `;
 };
 
-const extractJobInfo = async (jobDescription: string): Promise<{ jobTitle: string; companyName: string }> => {
+const extractJobInfo = async (
+  jobDescription: string,
+  resumeContent: any,
+  provider: AIProvider
+): Promise<{ jobTitle: string; companyName: string }> => {
+  const fromResume = {
+    jobTitle: typeof resumeContent?.jobTitle === 'string' ? resumeContent.jobTitle : '',
+    companyName: typeof resumeContent?.companyName === 'string' ? resumeContent.companyName : '',
+  };
+  if (fromResume.jobTitle && fromResume.companyName) {
+    return fromResume;
+  }
+
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.'
-        },
-        {
-          role: 'user',
-          content: `Please extract the job title and company name from this job description. If not explicitly stated, infer from context:
+    const aiResponse = await generateJsonText({
+      provider,
+      system:
+        'You are an expert at extracting job information from job descriptions. Extract the job title and company name. If not clearly stated, make your best educated guess. Respond with ONLY valid JSON.',
+      prompt: `Please extract the job title and company name from this job description. If not explicitly stated, infer from context:
 
 ${jobDescription}
 
@@ -160,34 +181,24 @@ Respond with ONLY valid JSON in this exact format:
 {
   "jobTitle": "extracted or inferred job title",
   "companyName": "extracted or inferred company name"
-}`
-        }
-      ],
-      response_format: { type: "json_object" },
+}`,
+      schema: JOB_INFO_SCHEMA,
       temperature: 0.3,
-      max_tokens: 200,
+      maxTokens: 200,
     });
 
-    const aiResponse = completion.choices[0]?.message?.content || '';
-
-    // Try to extract JSON from the response
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('No JSON found in job info response');
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-
     return {
-      jobTitle: parsed.jobTitle || '',
-      companyName: parsed.companyName || ''
+      jobTitle: parsed.jobTitle || fromResume.jobTitle || '',
+      companyName: parsed.companyName || fromResume.companyName || '',
     };
   } catch (error) {
     console.error('Error extracting job info:', error);
-    return {
-      jobTitle: '',
-      companyName: ''
-    };
+    return fromResume;
   }
 };
-
