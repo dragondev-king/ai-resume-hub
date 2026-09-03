@@ -40,8 +40,10 @@ export const generateResume = async (
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate resume');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.details || errorData.error || `Failed to generate resume (${response.status})`
+      );
     }
 
     const data = await response.json();
@@ -53,21 +55,7 @@ export const generateResume = async (
     return enhancedData;
   } catch (error) {
     console.error('Error generating resume with AI:', error);
-    // Return the original data if AI generation fails
-    return {
-      summary: profile.summary || '',
-      experience: profile.experience.map(exp => ({
-        position: exp.position,
-        company: exp.company,
-        start_date: exp.start_date,
-        end_date: exp.end_date,
-        descriptions: exp.description ? [exp.description] : [],
-        address: exp.address
-      })),
-      skills: profile.skills,
-      jobTitle: '',
-      companyName: ''
-    };
+    throw error instanceof Error ? error : new Error('Failed to generate resume');
   }
 };
 

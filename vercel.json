@@ -1,4 +1,15 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "build"
+  "outputDirectory": "build",
+  "functions": {
+    "api/generate-resume.ts": {
+      "maxDuration": 300
+    },
+    "api/generate-cover-letter.ts": {
+      "maxDuration": 60
+    },
+    "api/generate-answer.ts": {
+      "maxDuration": 60
+    }
+  }
 }

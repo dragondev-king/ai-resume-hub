@@ -133,26 +133,34 @@ export default async function handler(
     const today = formatToday();
     const workHistory = formatWorkHistory(profile);
 
-    const timeline = await analyzeTechnologyTimeline({
-      provider,
-      jobDescription,
-      workHistory,
-      today,
-    });
+    // Claude is slower; three sequential calls often exceed Vercel’s limit and
+    // surface as FUNCTION_INVOCATION_FAILED. Chronology rules stay in the main prompt.
+    const timeline =
+      provider === 'claude'
+        ? ''
+        : await analyzeTechnologyTimeline({
+            provider,
+            jobDescription,
+            workHistory,
+            today,
+          });
 
     const draft = await generateResumeDraft({
       provider,
       prompt: createAIPrompt(profile, jobDescription, timeline, today, workHistory),
     });
 
-    const aiResponse = await auditResumeChronology({
-      provider,
-      draft,
-      timeline,
-      workHistory,
-      jobDescription,
-      today,
-    });
+    const aiResponse =
+      provider === 'claude'
+        ? draft
+        : await auditResumeChronology({
+            provider,
+            draft,
+            timeline,
+            workHistory,
+            jobDescription,
+            today,
+          });
 
     return res.status(200).json({
       success: true,
@@ -287,7 +295,7 @@ async function generateResumeDraft(params: {
     system: SYSTEM_PROMPT,
     schema: RESUME_OUTPUT_SCHEMA,
     temperature: 0.7,
-    maxTokens: 8000,
+    maxTokens: params.provider === 'claude' ? 5000 : 8000,
   });
 }
 
