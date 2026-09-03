@@ -1,10 +1,86 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import {
-  AIProvider,
-  generatePlainText,
-  isAIProvider,
-  providerConfigError,
-} from './_lib/aiClients';
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+
+type AIProvider = 'openai' | 'claude';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const anthropicWorkspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+function isAIProvider(value: unknown): value is AIProvider {
+  return value === 'openai' || value === 'claude';
+}
+
+function providerConfigError(provider: AIProvider): { error: string; details: string } | null {
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+    return {
+      error: 'Server configuration error',
+      details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.',
+    };
+  }
+  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
+    return {
+      error: 'Server configuration error',
+      details: 'Anthropic API key is not configured. Please set ANTHROPIC_API_KEY environment variable.',
+    };
+  }
+  if (provider === 'claude' && !anthropicWorkspaceId) {
+    return {
+      error: 'Server configuration error',
+      details:
+        'Anthropic workspace ID is not configured. Set ANTHROPIC_WORKSPACE_ID to the wrkspc_… ID from Claude Console → Settings → Workspaces.',
+    };
+  }
+  return null;
+}
+
+function getAnthropic() {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(anthropicWorkspaceId
+      ? { defaultHeaders: { 'anthropic-workspace-id': anthropicWorkspaceId } }
+      : {}),
+  });
+}
+
+function extractClaudeTextContent(message: Anthropic.Message): string {
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+}
+
+async function generatePlainText(params: {
+  provider: AIProvider;
+  system: string;
+  prompt: string;
+  maxTokens: number;
+}): Promise<string> {
+  if (params.provider === 'claude') {
+    const message = await getAnthropic().messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: params.maxTokens,
+      system: params.system,
+      messages: [{ role: 'user', content: params.prompt }],
+    });
+    return extractClaudeTextContent(message);
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'system', content: params.system },
+      { role: 'user', content: params.prompt },
+    ],
+    max_completion_tokens: params.maxTokens,
+  });
+
+  return completion.choices[0]?.message?.content || '';
+}
 
 interface RequestBody {
   profile: any;

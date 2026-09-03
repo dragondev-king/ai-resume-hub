@@ -1,14 +1,100 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import {
-  AIProvider,
-  generateJsonText,
-  isAIProvider,
-  providerConfigError,
-} from './_lib/aiClients';
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+
+type AIProvider = 'openai' | 'claude';
 
 export const config = {
   maxDuration: 300,
 };
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const anthropicWorkspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+function isAIProvider(value: unknown): value is AIProvider {
+  return value === 'openai' || value === 'claude';
+}
+
+function providerConfigError(provider: AIProvider): { error: string; details: string } | null {
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+    return {
+      error: 'Server configuration error',
+      details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.',
+    };
+  }
+  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
+    return {
+      error: 'Server configuration error',
+      details: 'Anthropic API key is not configured. Please set ANTHROPIC_API_KEY environment variable.',
+    };
+  }
+  if (provider === 'claude' && !anthropicWorkspaceId) {
+    return {
+      error: 'Server configuration error',
+      details:
+        'Anthropic workspace ID is not configured. Set ANTHROPIC_WORKSPACE_ID to the wrkspc_… ID from Claude Console → Settings → Workspaces.',
+    };
+  }
+  return null;
+}
+
+function getAnthropic() {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(anthropicWorkspaceId
+      ? { defaultHeaders: { 'anthropic-workspace-id': anthropicWorkspaceId } }
+      : {}),
+  });
+}
+
+function extractClaudeTextContent(message: Anthropic.Message): string {
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+}
+
+async function generateJsonText(params: {
+  provider: AIProvider;
+  system: string;
+  prompt: string;
+  schema: Record<string, unknown>;
+  maxTokens: number;
+  temperature?: number;
+}): Promise<string> {
+  if (params.provider === 'claude') {
+    const message = await getAnthropic().messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: params.maxTokens,
+      system: params.system,
+      messages: [{ role: 'user', content: params.prompt }],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: params.schema,
+        },
+      },
+    });
+    return extractClaudeTextContent(message);
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'system', content: params.system },
+      { role: 'user', content: params.prompt },
+    ],
+    response_format: { type: 'json_object' },
+    ...(params.temperature !== undefined ? { temperature: params.temperature } : {}),
+    max_tokens: params.maxTokens,
+  });
+
+  return completion.choices[0]?.message?.content || '';
+}
 
 const SYSTEM_PROMPT =
   'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
