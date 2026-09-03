@@ -12,11 +12,89 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
+const anthropicWorkspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+function isAIProvider(value: unknown): value is AIProvider {
+  return value === 'openai' || value === 'claude';
+}
+
+function providerConfigError(provider: AIProvider): { error: string; details: string } | null {
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+    return {
+      error: 'Server configuration error',
+      details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.',
+    };
+  }
+  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
+    return {
+      error: 'Server configuration error',
+      details: 'Anthropic API key is not configured. Please set ANTHROPIC_API_KEY environment variable.',
+    };
+  }
+  if (provider === 'claude' && !anthropicWorkspaceId) {
+    return {
+      error: 'Server configuration error',
+      details:
+        'Anthropic workspace ID is not configured. Set ANTHROPIC_WORKSPACE_ID to the wrkspc_… ID from Claude Console → Settings → Workspaces.',
+    };
+  }
+  return null;
+}
+
+function getAnthropic() {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(anthropicWorkspaceId
+      ? { defaultHeaders: { 'anthropic-workspace-id': anthropicWorkspaceId } }
+      : {}),
+  });
+}
+
+function extractClaudeTextContent(message: Anthropic.Message): string {
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+}
+
+async function generateJsonText(params: {
+  provider: AIProvider;
+  system: string;
+  prompt: string;
+  schema: Record<string, unknown>;
+  maxTokens: number;
+  temperature?: number;
+}): Promise<string> {
+  if (params.provider === 'claude') {
+    const message = await getAnthropic().messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: params.maxTokens,
+      system: params.system,
+      messages: [{ role: 'user', content: params.prompt }],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: params.schema,
+        },
+      },
+    });
+    return extractClaudeTextContent(message);
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'system', content: params.system },
+      { role: 'user', content: params.prompt },
+    ],
+    response_format: { type: 'json_object' },
+    ...(params.temperature !== undefined ? { temperature: params.temperature } : {}),
+    max_tokens: params.maxTokens,
+  });
+
+  return completion.choices[0]?.message?.content || '';
+}
 
 const SYSTEM_PROMPT =
   'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
@@ -129,47 +207,46 @@ export default async function handler(
       return res.status(400).json({ error: 'Missing required fields: profile and jobDescription' });
     }
 
-    if (provider !== 'openai' && provider !== 'claude') {
+    if (!isAIProvider(provider)) {
       return res.status(400).json({ error: 'Invalid provider. Must be "openai" or "claude".' });
     }
 
-    if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: 'Server configuration error',
-        details: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.',
-      });
-    }
-
-    if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({
-        error: 'Server configuration error',
-        details: 'Anthropic API key is not configured. Please set ANTHROPIC_API_KEY environment variable.',
-      });
+    const configError = providerConfigError(provider);
+    if (configError) {
+      return res.status(500).json(configError);
     }
 
     const today = formatToday();
     const workHistory = formatWorkHistory(profile);
 
-    const timeline = await analyzeTechnologyTimeline({
-      provider,
-      jobDescription,
-      workHistory,
-      today,
-    });
+    // Claude is slower; three sequential calls often exceed Vercel’s limit and
+    // surface as FUNCTION_INVOCATION_FAILED. Chronology rules stay in the main prompt.
+    const timeline =
+      provider === 'claude'
+        ? ''
+        : await analyzeTechnologyTimeline({
+            provider,
+            jobDescription,
+            workHistory,
+            today,
+          });
 
     const draft = await generateResumeDraft({
       provider,
       prompt: createAIPrompt(profile, jobDescription, timeline, today, workHistory),
     });
 
-    const aiResponse = await auditResumeChronology({
-      provider,
-      draft,
-      timeline,
-      workHistory,
-      jobDescription,
-      today,
-    });
+    const aiResponse =
+      provider === 'claude'
+        ? draft
+        : await auditResumeChronology({
+            provider,
+            draft,
+            timeline,
+            workHistory,
+            jobDescription,
+            today,
+          });
 
     return res.status(200).json({
       success: true,
@@ -178,9 +255,13 @@ export default async function handler(
     });
   } catch (error: any) {
     console.error('Error generating resume:', error);
+    const details = String(error?.message || error);
+    const needsWorkspaceId = details.includes('anthropic-workspace-id is required');
     return res.status(500).json({
       error: 'Failed to generate resume',
-      details: error.message,
+      details: needsWorkspaceId
+        ? 'Claude rejected the request because this API key needs a workspace. Set ANTHROPIC_WORKSPACE_ID to the wrkspc_… ID from Claude Console → Settings → Workspaces (local .env and Vercel env).'
+        : details,
     });
   }
 }
@@ -276,18 +357,11 @@ Respond with ONLY JSON using the REAL company names and dates from the work hist
 }`;
 
   try {
-    if (params.provider === 'claude') {
-      return await generateWithClaude({
-        prompt,
-        system: TIMELINE_SYSTEM_PROMPT,
-        schema: TIMELINE_OUTPUT_SCHEMA,
-        maxTokens: 4000,
-      });
-    }
-
-    return await generateWithOpenAI({
+    return await generateJsonText({
+      provider: params.provider,
       prompt,
       system: TIMELINE_SYSTEM_PROMPT,
+      schema: TIMELINE_OUTPUT_SCHEMA,
       temperature: 0.2,
       maxTokens: 4000,
     });
@@ -301,20 +375,13 @@ async function generateResumeDraft(params: {
   provider: AIProvider;
   prompt: string;
 }): Promise<string> {
-  if (params.provider === 'claude') {
-    return generateWithClaude({
-      prompt: params.prompt,
-      system: SYSTEM_PROMPT,
-      schema: RESUME_OUTPUT_SCHEMA,
-      maxTokens: 8000,
-    });
-  }
-
-  return generateWithOpenAI({
+  return generateJsonText({
+    provider: params.provider,
     prompt: params.prompt,
     system: SYSTEM_PROMPT,
+    schema: RESUME_OUTPUT_SCHEMA,
     temperature: 0.7,
-    maxTokens: 8000,
+    maxTokens: params.provider === 'claude' ? 5000 : 8000,
   });
 }
 
@@ -370,18 +437,11 @@ Respond with ONLY the corrected resume JSON in this shape:
 }`;
 
   try {
-    if (params.provider === 'claude') {
-      return await generateWithClaude({
-        prompt,
-        system: AUDIT_SYSTEM_PROMPT,
-        schema: RESUME_OUTPUT_SCHEMA,
-        maxTokens: 8000,
-      });
-    }
-
-    return await generateWithOpenAI({
+    return await generateJsonText({
+      provider: params.provider,
       prompt,
       system: AUDIT_SYSTEM_PROMPT,
+      schema: RESUME_OUTPUT_SCHEMA,
       temperature: 0.2,
       maxTokens: 8000,
     });
@@ -389,55 +449,6 @@ Respond with ONLY the corrected resume JSON in this shape:
     console.error('Chronology audit failed; returning draft resume:', error);
     return params.draft;
   }
-}
-
-async function generateWithOpenAI(params: {
-  prompt: string;
-  system: string;
-  temperature: number;
-  maxTokens: number;
-}): Promise<string> {
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4.1-mini',
-    messages: [
-      { role: 'system', content: params.system },
-      { role: 'user', content: params.prompt },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: params.temperature,
-    max_tokens: params.maxTokens,
-  });
-
-  return completion.choices[0]?.message?.content || '';
-}
-
-async function generateWithClaude(params: {
-  prompt: string;
-  system: string;
-  schema: Record<string, unknown>;
-  maxTokens: number;
-}): Promise<string> {
-  const message = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: params.maxTokens,
-    system: params.system,
-    messages: [{ role: 'user', content: params.prompt }],
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: params.schema,
-      },
-    },
-  });
-
-  return extractClaudeTextContent(message);
-}
-
-function extractClaudeTextContent(message: Anthropic.Message): string {
-  return message.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('');
 }
 
 const createAIPrompt = (

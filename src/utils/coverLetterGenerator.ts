@@ -1,4 +1,5 @@
 import { ProfileWithDetailsRPC } from '../lib/supabase';
+import type { AIProvider } from './resumeGenerator';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
 type Profile = ProfileWithDetailsRPC;
@@ -17,7 +18,8 @@ interface GeneratedAnswer {
 export const generateCoverLetter = async (
   profile: Profile, 
   jobDescription: string, 
-  resumeContent: any
+  resumeContent: any,
+  provider: AIProvider = 'openai'
 ): Promise<GeneratedCoverLetter> => {
   try {
     // Call the Vercel serverless function instead of OpenAI directly
@@ -30,12 +32,13 @@ export const generateCoverLetter = async (
         profile,
         jobDescription,
         resumeContent,
+        provider,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate cover letter');
+      throw new Error(errorData.details || errorData.error || 'Failed to generate cover letter');
     }
 
     const data = await response.json();
@@ -47,7 +50,7 @@ export const generateCoverLetter = async (
     };
   } catch (error) {
     console.error('Error generating cover letter:', error);
-    throw new Error('Failed to generate cover letter');
+    throw error instanceof Error ? error : new Error('Failed to generate cover letter');
   }
 };
 
@@ -55,7 +58,8 @@ export const generateAnswer = async (
   profile: Profile,
   question: string,
   jobDescription: string,
-  resumeContent: any
+  resumeContent: any,
+  provider: AIProvider = 'openai'
 ): Promise<GeneratedAnswer> => {
   try {
     // Call the Vercel serverless function instead of OpenAI directly
@@ -69,12 +73,13 @@ export const generateAnswer = async (
         question,
         jobDescription,
         resumeContent,
+        provider,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate answer');
+      throw new Error(errorData.details || errorData.error || 'Failed to generate answer');
     }
 
     const data = await response.json();
@@ -85,6 +90,6 @@ export const generateAnswer = async (
     };
   } catch (error) {
     console.error('Error generating answer:', error);
-    throw new Error('Failed to generate answer');
+    throw error instanceof Error ? error : new Error('Failed to generate answer');
   }
 };
