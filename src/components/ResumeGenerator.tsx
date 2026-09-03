@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check, Search } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check, Search, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume, AIProvider } from '../utils/resumeGenerator';
@@ -51,6 +51,7 @@ const ResumeGenerator: React.FC = () => {
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
   const [editingResume, setEditingResume] = useState<EditableResume | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -168,6 +169,10 @@ const ResumeGenerator: React.FC = () => {
     }
 
     setLoading(true);
+    setGenerationError(null);
+    setGeneratedResume(null);
+    setEditingResume(null);
+    setIsEditing(false);
     try {
       // Generate AI resume with job title and company name extraction
       const generated = await generateResume(profile, jobDescription, aiProvider);
@@ -210,7 +215,11 @@ const ResumeGenerator: React.FC = () => {
       toast.success('Resume generated successfully! You can now edit the content before downloading.');
     } catch (error: any) {
       console.error('Error generating resume:', error);
-      toast.error(error.message || 'Failed to generate resume');
+      const message = error?.message || 'Failed to generate resume';
+      setGeneratedResume(null);
+      setEditingResume(null);
+      setGenerationError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -614,6 +623,7 @@ const ResumeGenerator: React.FC = () => {
     setGeneratedResume(null);
     setEditingResume(null);
     setIsEditing(false);
+    setGenerationError(null);
     setNewSkill('');
     setGeneratedCoverLetter(null);
     setApplicationQuestions([]);
@@ -868,6 +878,16 @@ const ResumeGenerator: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {generationError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="text-sm font-semibold text-red-800">Resume generation failed</h3>
+            <p className="text-sm text-red-700 mt-1 whitespace-pre-wrap break-words">{generationError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Generated Resume */}
       {currentResume && isApplicationEligible && (

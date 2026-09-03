@@ -1,4 +1,3 @@
-import toast from 'react-hot-toast';
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
@@ -26,38 +25,44 @@ export const generateResume = async (
   jobDescription: string,
   provider: AIProvider = 'openai'
 ): Promise<GeneratedResume> => {
-  try {
-    const response = await fetch('/api/generate-resume', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        profile,
-        jobDescription,
-        provider,
-      }),
-    });
+  const response = await fetch('/api/generate-resume', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      profile,
+      jobDescription,
+      provider,
+    }),
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.details || errorData.error || `Failed to generate resume (${response.status})`
-      );
-    }
-
-    const data = await response.json();
-    const aiResponse = data.aiResponse;
-    
-    // Parse the AI response and enhance the resume data
-    const enhancedData = parseAIResponse(profile, aiResponse);
-    
-    return enhancedData;
-  } catch (error) {
-    console.error('Error generating resume with AI:', error);
-    throw error instanceof Error ? error : new Error('Failed to generate resume');
+  if (!response.ok) {
+    throw new Error(await readGenerationError(response));
   }
+
+  const data = await response.json();
+  if (!data?.aiResponse) {
+    throw new Error('Resume generation returned no content');
+  }
+
+  return parseAIResponse(profile, data.aiResponse);
 };
+
+async function readGenerationError(response: Response): Promise<string> {
+  const fallback = `Failed to generate resume (${response.status})`;
+  const text = await response.text();
+  try {
+    const errorData = JSON.parse(text);
+    return errorData.details || errorData.error || fallback;
+  } catch {
+    if (text.includes('FUNCTION_INVOCATION_FAILED')) {
+      return 'Resume generation timed out or crashed on the server. Please try again.';
+    }
+    const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return stripped.slice(0, 300) || fallback;
+  }
+}
 
 const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<string, unknown>): GeneratedResume => {
   try {
@@ -66,10 +71,11 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
         ? parseJsonResponse(aiResponse)
         : aiResponse;
 
-    console.log(parsed, '=== parsed')
-    
-    // Validate and enhance the parsed data
-    const enhancedData: GeneratedResume = {
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Resume generation returned invalid content');
+    }
+
+    return {
       summary: (parsed.summary as string) || originalProfile.summary || '',
       experience: (parsed.experience as GeneratedResume['experience']) || originalProfile.experience.map(exp => ({
         position: exp.position,
@@ -83,26 +89,11 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
       jobTitle: (parsed.jobTitle as string) || '',
       companyName: (parsed.companyName as string) || ''
     };
-
-    console.log(enhancedData, '=== enhancedData')
-
-    return enhancedData;
   } catch (error) {
     console.error('Error parsing AI response:', error);
-    if (typeof aiResponse === 'string') {
-      console.error('AI Response preview (first 500 chars):', aiResponse.substring(0, 500));
-      console.error('AI Response preview (last 500 chars):', aiResponse.substring(Math.max(0, aiResponse.length - 500)));
-    } else {
-      console.error('AI Response object:', aiResponse);
-    }
-    toast.error("An error occurred while parsing the AI response")
-    
-    // Return original data if parsing fails
-    return {
-      summary: '',
-      experience: [],
-      skills: originalProfile.skills,
-    };
+    throw error instanceof Error
+      ? error
+      : new Error('An error occurred while parsing the AI response');
   }
 };
 
