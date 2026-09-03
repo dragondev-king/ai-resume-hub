@@ -4,7 +4,7 @@ import {
   generateJsonText,
   isAIProvider,
   providerConfigError,
-} from '../lib/aiClients';
+} from './_lib/aiClients';
 
 export const config = {
   maxDuration: 300,

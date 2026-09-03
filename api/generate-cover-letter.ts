@@ -5,7 +5,7 @@ import {
   generatePlainText,
   isAIProvider,
   providerConfigError,
-} from '../lib/aiClients';
+} from './_lib/aiClients';
 
 interface RequestBody {
   profile: any;

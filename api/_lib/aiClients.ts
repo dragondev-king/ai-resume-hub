@@ -1,19 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
 export type AIProvider = 'openai' | 'claude';
 
 export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
-
-export const anthropicWorkspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
-
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  ...(anthropicWorkspaceId
-    ? { defaultHeaders: { 'anthropic-workspace-id': anthropicWorkspaceId } }
-    : {}),
 });
 
 export const CLAUDE_MODEL = 'claude-sonnet-4-6';
@@ -37,7 +27,7 @@ export function providerConfigError(provider: AIProvider): { error: string; deta
     };
   }
 
-  if (provider === 'claude' && !anthropicWorkspaceId) {
+  if (provider === 'claude' && !process.env.ANTHROPIC_WORKSPACE_ID?.trim()) {
     return {
       error: 'Server configuration error',
       details:
@@ -48,11 +38,23 @@ export function providerConfigError(provider: AIProvider): { error: string; deta
   return null;
 }
 
-export function extractClaudeTextContent(message: Anthropic.Message): string {
+function extractClaudeTextContent(message: { content: Array<{ type: string; text?: string }> }): string {
   return message.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text as string)
     .join('');
+}
+
+async function getAnthropic() {
+  const mod = await import('@anthropic-ai/sdk');
+  const Anthropic = (mod as any).default ?? (mod as any).Anthropic;
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(workspaceId
+      ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } }
+      : {}),
+  });
 }
 
 export async function generatePlainText(params: {
@@ -63,6 +65,7 @@ export async function generatePlainText(params: {
   temperature?: number;
 }): Promise<string> {
   if (params.provider === 'claude') {
+    const anthropic = await getAnthropic();
     const message = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: params.maxTokens,
@@ -94,6 +97,7 @@ export async function generateJsonText(params: {
   temperature?: number;
 }): Promise<string> {
   if (params.provider === 'claude') {
+    const anthropic = await getAnthropic();
     const message = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: params.maxTokens,
