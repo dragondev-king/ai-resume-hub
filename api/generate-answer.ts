@@ -74,16 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-const createAnswerPrompt = (
-  profile: any,
-  question: string,
-  jobDescription: string,
-  resumeContent: any
-): string => {
-  const experience = Array.isArray(profile.experience) ? profile.experience : [];
-  const education = Array.isArray(profile.education) ? profile.education : [];
-  const skills = Array.isArray(profile.skills) ? profile.skills : [];
-
+const createAnswerPrompt = (profile: any, question: string, jobDescription: string, resumeContent: any): string => {
   return `
 Please provide a thoughtful answer to the following job application question:
 
@@ -103,26 +94,18 @@ CANDIDATE'S BACKGROUND:
 Summary: ${profile.summary || ''}
 
 EXPERIENCE:
-${experience
-  .map(
-    (exp: any) => `
+${profile.experience.map((exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
   Description: ${exp.description || ''}
-`
-  )
-  .join('\n')}
+`).join('\n')}
 
 EDUCATION:
-${education
-  .map(
-    (edu: any) => `
+${profile.education.map((edu: any) => `
 - ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
-`
-  )
-  .join('\n')}
+`).join('\n')}
 
 SKILLS:
-${skills.filter((skill: string) => skill.trim()).join(', ')}
+${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
 
 AI-GENERATED RESUME CONTENT:
 Summary: ${resumeContent.summary || ''}

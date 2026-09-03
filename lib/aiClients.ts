@@ -78,7 +78,7 @@ export async function generatePlainText(params: {
       { role: 'system', content: params.system },
       { role: 'user', content: params.prompt },
     ],
-    temperature: params.temperature,
+    ...(params.temperature !== undefined ? { temperature: params.temperature } : {}),
     max_completion_tokens: params.maxTokens,
   });
 
@@ -116,7 +116,7 @@ export async function generateJsonText(params: {
       { role: 'user', content: params.prompt },
     ],
     response_format: { type: 'json_object' },
-    temperature: params.temperature,
+    ...(params.temperature !== undefined ? { temperature: params.temperature } : {}),
     max_tokens: params.maxTokens,
   });
 

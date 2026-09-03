@@ -82,10 +82,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 const createCoverLetterPrompt = (profile: any, jobDescription: string, resumeContent: any): string => {
-  const experience = Array.isArray(profile.experience) ? profile.experience : [];
-  const education = Array.isArray(profile.education) ? profile.education : [];
-  const skills = Array.isArray(profile.skills) ? profile.skills : [];
-
   return `
 Please write a compelling cover letter for the following job application:
 
@@ -104,26 +100,18 @@ CANDIDATE'S BACKGROUND:
 Summary: ${profile.summary || ''}
 
 EXPERIENCE:
-${experience
-  .map(
-    (exp: any) => `
+${profile.experience.map((exp: any) => `
 - ${exp.position} at ${exp.company} (${exp.start_date} - ${exp.end_date})
   Description: ${exp.description || ''}
-`
-  )
-  .join('\n')}
+`).join('\n')}
 
 EDUCATION:
-${education
-  .map(
-    (edu: any) => `
+${profile.education.map((edu: any) => `
 - ${edu.degree} in ${edu.field} from ${edu.school} (${edu.start_date} - ${edu.end_date})
-`
-  )
-  .join('\n')}
+`).join('\n')}
 
 SKILLS:
-${skills.filter((skill: string) => skill.trim()).join(', ')}
+${profile.skills.filter((skill: string) => skill.trim()).join(', ')}
 
 AI-GENERATED RESUME CONTENT:
 Summary: ${resumeContent.summary || ''}
@@ -160,19 +148,17 @@ const extractJobInfo = async (
   resumeContent: any,
   provider: AIProvider
 ): Promise<{ jobTitle: string; companyName: string }> => {
-  const fromResume = {
-    jobTitle: typeof resumeContent?.jobTitle === 'string' ? resumeContent.jobTitle : '',
-    companyName: typeof resumeContent?.companyName === 'string' ? resumeContent.companyName : '',
-  };
-  if (fromResume.jobTitle && fromResume.companyName) {
-    return fromResume;
+  const jobTitle = typeof resumeContent?.jobTitle === 'string' ? resumeContent.jobTitle.trim() : '';
+  const companyName = typeof resumeContent?.companyName === 'string' ? resumeContent.companyName.trim() : '';
+  if (jobTitle && companyName) {
+    return { jobTitle, companyName };
   }
 
   try {
     const aiResponse = await generateJsonText({
       provider,
       system:
-        'You are an expert at extracting job information from job descriptions. Extract the job title and company name. If not clearly stated, make your best educated guess. Respond with ONLY valid JSON.',
+        'You are an expert at extracting job information from job descriptions. Extract the job title and company name from the provided job description. If the information is not clearly stated, make your best educated guess based on the context. You MUST respond with ONLY valid JSON - no additional text, explanations, or markdown formatting.',
       prompt: `Please extract the job title and company name from this job description. If not explicitly stated, infer from context:
 
 ${jobDescription}
@@ -193,12 +179,13 @@ Respond with ONLY valid JSON in this exact format:
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+
     return {
-      jobTitle: parsed.jobTitle || fromResume.jobTitle || '',
-      companyName: parsed.companyName || fromResume.companyName || '',
+      jobTitle: parsed.jobTitle || jobTitle,
+      companyName: parsed.companyName || companyName,
     };
   } catch (error) {
     console.error('Error extracting job info:', error);
-    return fromResume;
+    return { jobTitle, companyName };
   }
 };
