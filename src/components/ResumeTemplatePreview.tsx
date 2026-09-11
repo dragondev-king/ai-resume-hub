@@ -11,10 +11,11 @@ type ResumeTemplatePreviewProps = {
 };
 
 const SECTION_LABELS: Record<string, string> = {
+  contact: 'Contact',
   summary: 'Summary',
   skills: 'Skills',
   education: 'Education',
-  experience: 'Experience',
+  experience: 'Professional Experience',
 };
 
 /** Shared mock content for gallery / expanded previews. */
@@ -29,10 +30,8 @@ export const MOCK_RESUME_PREVIEW = {
   summary:
     'Results-driven engineer with <b>8+ years</b> building scalable web platforms and APIs. Known for pairing strong product sense with clean architecture, mentoring teams, and shipping reliable features under tight deadlines.',
   skillsCategorized: [
-    { label: 'Programming Languages', skills: 'TypeScript, JavaScript, Python, Go, SQL' },
-    { label: 'Frameworks & Libraries', skills: 'React, Node.js, Next.js, Express, Django' },
-    { label: 'Cloud & DevOps', skills: 'AWS, Docker, Kubernetes, CI/CD, Terraform' },
-    { label: 'Databases', skills: 'PostgreSQL, Redis, MongoDB, Elasticsearch' },
+    { label: 'Hard Skills', skills: 'TypeScript, React, Node.js, AWS, PostgreSQL, Docker' },
+    { label: 'Soft Skills', skills: 'Leadership, Mentoring, Agile, Problem-solving' },
   ],
   skillsFlat: [
     'TypeScript',
@@ -120,7 +119,7 @@ const ResumeTemplatePreview: React.FC<ResumeTemplatePreviewProps> = ({
     const label = SECTION_LABELS[id] || id;
     const text = template.sectionStyle.allCaps ? label.toUpperCase() : label;
     return (
-      <div style={{ marginTop: expanded ? 14 : 5, marginBottom: expanded ? 6 : 2 }}>
+      <div style={{ marginTop: expanded ? 14 : 5, marginBottom: expanded ? 6 : 2, textAlign: 'left' }}>
         <div
           style={{
             color: primary,
@@ -337,12 +336,16 @@ const ResumeTemplatePreview: React.FC<ResumeTemplatePreviewProps> = ({
               {MOCK_RESUME_PREVIEW.role}
             </div>
           )}
+        </div>
+
+        <div className={nameCentered ? 'text-center' : 'text-left'}>
+          {sectionTitle('contact')}
           {template.contact.layout === 'inline' ? (
             <div
               style={{
                 color: muted,
                 fontSize: contactSize,
-                marginTop: expanded ? 8 : 3,
+                marginTop: 0,
                 lineHeight: 1.35,
               }}
             >
@@ -359,7 +362,7 @@ const ResumeTemplatePreview: React.FC<ResumeTemplatePreviewProps> = ({
               style={{
                 color: muted,
                 fontSize: contactSize,
-                marginTop: expanded ? 8 : 3,
+                marginTop: 0,
                 lineHeight: 1.4,
               }}
             >

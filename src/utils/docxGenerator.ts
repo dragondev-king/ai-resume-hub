@@ -18,7 +18,10 @@ import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
 import {
   buildResumeSkillSections,
   ensureTrailingPeriod,
+  hiddenJobDescriptionLines,
   parseBoldMarkup,
+  ATS_HIDDEN_DOCX_SIZE,
+  ATS_HIDDEN_TEXT_COLOR,
 } from './resumeLayout';
 import { resolveResumeTheme, type ResumeTheme } from '../resumeTemplates';
 
@@ -26,6 +29,8 @@ interface GeneratedResume {
   summary: string;
   experience: any[];
   skills: string[];
+  hardSkills?: string[];
+  softSkills?: string[];
 }
 
 type Profile = ProfileWithDetailsRPC;
@@ -37,6 +42,8 @@ export interface GenerateDocxOptions {
   includeLinkedIn?: boolean;
   /** Force a template id; otherwise a random template is chosen. */
   templateId?: string;
+  /** Append the job description in 1pt white text for ATS parsers. */
+  hiddenJobDescription?: string;
 }
 
 function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profile): boolean {
@@ -141,7 +148,10 @@ export const generateDocx = async (
   const theme = resolveResumeTheme(options?.templateId);
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
-  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? [], {
+    hard: generatedResume.hardSkills,
+    soft: generatedResume.softSkills,
+  });
   const bodyRun = makeBodyRun(theme);
   const t = theme.template;
 
@@ -168,7 +178,7 @@ export const generateDocx = async (
       if (!skills.length && !skillSections.length) return [];
       return [
         createSectionHeader(theme, 'SKILLS'),
-        ...createSkillsSection(theme, bodyRun, skillSections, t.skills.categorized, skills),
+        ...createSkillsSection(theme, bodyRun, skillSections, true, skills),
       ];
     },
     education: () => {
@@ -181,7 +191,7 @@ export const generateDocx = async (
     experience: () => {
       if (!profile?.experience?.length) return [];
       return [
-        createSectionHeader(theme, 'EXPERIENCE'),
+        createSectionHeader(theme, 'PROFESSIONAL EXPERIENCE'),
         ...createProfessionalExperienceSection(
           theme,
           bodyRun,
@@ -196,6 +206,8 @@ export const generateDocx = async (
   for (const sectionId of t.sectionOrder) {
     children.push(...(sectionBuilders[sectionId]?.() ?? []));
   }
+
+  children.push(...createHiddenJobDescriptionParagraphs(options?.hiddenJobDescription));
 
   const marginTwips = theme.spacing.marginPt * 20;
   const doc = new Document({
@@ -222,6 +234,24 @@ export const generateDocx = async (
 
 type BodyRunFn = ReturnType<typeof makeBodyRun>;
 
+function createHiddenJobDescriptionParagraphs(jobDescription?: string): Paragraph[] {
+  return hiddenJobDescriptionLines(jobDescription).map(
+    (line) =>
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: line,
+            size: ATS_HIDDEN_DOCX_SIZE,
+            color: ATS_HIDDEN_TEXT_COLOR,
+            font: 'Arial',
+            characterSpacing: 0,
+          }),
+        ],
+        spacing: { after: 0, before: 0, line: 20, lineRule: 'exact' },
+      })
+  );
+}
+
 const createHeader = (
   theme: ResumeTheme,
   bodyRun: BodyRunFn,
@@ -247,7 +277,7 @@ const createHeader = (
         }),
       ],
       alignment: align,
-      spacing: { after: title ? 60 : 200 },
+      spacing: { after: title ? 60 : 80 },
     }),
   ];
 
@@ -263,7 +293,7 @@ const createHeader = (
           }),
         ],
         alignment: align,
-        spacing: { after: 200 },
+        spacing: { after: 40 },
       })
     );
   }
@@ -278,6 +308,8 @@ const createHeader = (
   if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
   if (!contactParts.length) return paragraphs;
+
+  paragraphs.push(createSectionHeader(theme, 'CONTACT'));
 
   const contactBorder = t.header.underlineAfterContact
     ? {
@@ -373,9 +405,7 @@ const createSkillsSection = (
   flatSkills: string[]
 ): Paragraph[] => {
   if (!categorized) {
-    const skills = flatSkills.length
-      ? Array.from(new Set(flatSkills))
-      : sections.flatMap((s) => s.skills);
+    const skills = sections.flatMap((s) => s.skills);
     if (!skills.length) return [];
     return [
       new Paragraph({

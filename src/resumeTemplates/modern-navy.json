@@ -28,13 +28,13 @@
     "marginPt": 40
   },
   "header": {
-    "nameAlign": "center",
-    "nameTransform": "uppercase",
+    "nameAlign": "left",
+    "nameTransform": "none",
     "showRole": true,
     "underlineAfterContact": true
   },
   "contact": {
-    "layout": "inline"
+    "layout": "stacked"
   },
   "sectionOrder": [
     "summary",

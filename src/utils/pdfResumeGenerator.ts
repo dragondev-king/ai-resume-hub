@@ -8,8 +8,10 @@ import { registerResumePdfFonts } from './pdfFonts';
 import {
   buildResumeSkillSections,
   ensureTrailingPeriod,
+  hiddenJobDescriptionLines,
   parseBoldMarkup,
   type BoldTextSegment,
+  ATS_HIDDEN_PDF_SIZE,
 } from './resumeLayout';
 import { resolveResumeTheme } from '../resumeTemplates';
 
@@ -17,6 +19,8 @@ interface GeneratedResume {
   summary: string;
   experience: any[];
   skills: string[];
+  hardSkills?: string[];
+  softSkills?: string[];
 }
 
 type Profile = ProfileWithDetailsRPC;
@@ -230,7 +234,10 @@ export async function generateResumePdf(
 
   const bodySize = sizes.body;
   const bodyLh = lineHeight(bodySize);
-  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? [], {
+    hard: generatedResume.hardSkills,
+    soft: generatedResume.softSkills,
+  });
   const headerAlign = t.header.nameAlign;
 
   // —— Header ——
@@ -253,6 +260,7 @@ export async function generateResumePdf(
     if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
     if (contactParts.length) {
+      sectionHeader('Contact');
       if (t.contact.layout === 'inline') {
         const tokens: StyledToken[] = [];
         contactParts.forEach((part, i) => {
@@ -297,15 +305,6 @@ export async function generateResumePdf(
 
   const renderSkills = () => {
     sectionHeader('Skills');
-    if (!t.skills.categorized) {
-      const flat = Array.from(
-        new Set([...(generatedResume.skills ?? []), ...skillSections.flatMap((s) => s.skills)])
-      );
-      if (flat.length) {
-        writeMixedWrapped([{ text: flat.join(', '), bold: false }], bodySize, margin, maxW, body, fontBody);
-      }
-      return;
-    }
     for (const cat of skillSections) {
       writeMixedWrapped(
         [
@@ -379,7 +378,7 @@ export async function generateResumePdf(
     );
     if (!experienceEntries.length) return;
 
-    sectionHeader('Experience');
+    sectionHeader('Professional Experience');
     const twoColumn = t.experience.layout === 'twoColumn';
     const showAddress = t.experience.showAddress;
 
@@ -471,6 +470,22 @@ export async function generateResumePdf(
 
   for (const sectionId of t.sectionOrder) {
     sectionRenderers[sectionId]?.();
+  }
+
+  const hiddenLines = hiddenJobDescriptionLines(options?.hiddenJobDescription);
+  if (hiddenLines.length) {
+    const hiddenLh = ATS_HIDDEN_PDF_SIZE * 1.15;
+    doc.setFont(fontBody, 'normal');
+    doc.setFontSize(ATS_HIDDEN_PDF_SIZE);
+    doc.setTextColor(255, 255, 255);
+    for (const line of hiddenLines) {
+      const wrapped = doc.splitTextToSize(line, maxW) as string[];
+      for (const wrappedLine of wrapped) {
+        needSpace(hiddenLh);
+        doc.text(wrappedLine, margin, y);
+        y += hiddenLh;
+      }
+    }
   }
 
   const blob = doc.output('blob');

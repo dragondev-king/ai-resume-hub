@@ -11,7 +11,7 @@ import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileNa
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
 import { parseBoldMarkup } from '../utils/resumeLayout';
-import { getResumeTemplateIdForApplication } from '../utils/applicationMetadata';
+import { getResumeTemplateIdForApplication, parseJobApplicationMetadata } from '../utils/applicationMetadata';
 import { getResumeTemplate, pickRandomResumeTemplate } from '../resumeTemplates';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -177,6 +177,8 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
 
   if (!isOpen || !application) return null;
 
+  const applicationMeta = parseJobApplicationMetadata(application.metadata);
+
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -276,6 +278,20 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                     <label className="block text-sm font-medium text-gray-700">Company</label>
                     <p className="text-lg text-gray-900">{application.company_name || 'Not specified'}</p>
                   </div>
+                  {applicationMeta.aiProvider && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">AI Provider</label>
+                      <p className="text-lg text-gray-900">
+                        {applicationMeta.aiProvider === 'claude' ? 'Claude' : 'OpenAI'}
+                      </p>
+                    </div>
+                  )}
+                  {applicationMeta.resumeApiVersion && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Resume API version</label>
+                      <p className="text-lg text-gray-900">{applicationMeta.resumeApiVersion}</p>
+                    </div>
+                  )}
                   {application.job_description_link && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700">Job Description Link</label>
