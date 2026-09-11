@@ -28,7 +28,7 @@
     "marginPt": 44
   },
   "header": {
-    "nameAlign": "center",
+    "nameAlign": "left",
     "nameTransform": "none",
     "showRole": true,
     "underlineAfterContact": true
