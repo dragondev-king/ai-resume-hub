@@ -68,6 +68,10 @@ function isSoftSkill(skill: string): boolean {
   return SOFT_SKILL_PATTERN.test(skill.trim());
 }
 
+export function isSoftSkillLabel(skill: string): boolean {
+  return isSoftSkill(sanitizeSkillName(skill));
+}
+
 function uniqueSkills(skills: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -84,22 +88,38 @@ function uniqueSkills(skills: string[]): string[] {
 
 /**
  * Split generated skills into Hard Skills and Soft Skills.
- * Only the AI/profile skill list is used — no static baseline.
+ * Always returns both sections. Prefer AI-provided groups when present.
  */
-export function buildResumeSkillSections(jobSkills: string[] = []): CategorizedSkills {
-  const unique = uniqueSkills(jobSkills);
-  const hard: string[] = [];
-  const soft: string[] = [];
+export function buildResumeSkillSections(
+  jobSkills: string[] = [],
+  grouped?: { hard?: string[]; soft?: string[] }
+): CategorizedSkills {
+  const groupedHard = uniqueSkills(grouped?.hard ?? []);
+  const groupedSoft = uniqueSkills(grouped?.soft ?? []);
+  const current = uniqueSkills(jobSkills);
+  const groupedKeys = new Set([...groupedHard, ...groupedSoft].map(normalizeSkillKey));
+  const currentKeys = new Set(current.map(normalizeSkillKey));
+  const groupsMatchCurrent =
+    groupedKeys.size === currentKeys.size &&
+    [...groupedKeys].every((key) => currentKeys.has(key));
 
-  for (const skill of unique) {
-    if (isSoftSkill(skill)) soft.push(skill);
-    else hard.push(skill);
+  let hard: string[] = [];
+  let soft: string[] = [];
+
+  if (groupedHard.length + groupedSoft.length > 0 && groupsMatchCurrent) {
+    hard = groupedHard;
+    soft = groupedSoft;
+  } else {
+    for (const skill of current) {
+      if (isSoftSkill(skill)) soft.push(skill);
+      else hard.push(skill);
+    }
   }
 
   return [
     { label: 'Hard Skills', skills: hard },
     { label: 'Soft Skills', skills: soft },
-  ].filter((section) => section.skills.length > 0);
+  ];
 }
 
 /** Flat list of all skills shown on the resume. */

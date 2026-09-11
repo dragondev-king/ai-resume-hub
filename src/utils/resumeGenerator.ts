@@ -1,5 +1,5 @@
 import { ProfileWithDetailsRPC } from '../lib/supabase';
-import { sanitizeSkillName } from './resumeLayout';
+import { isSoftSkillLabel, sanitizeSkillName } from './resumeLayout';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
 type Profile = ProfileWithDetailsRPC;
@@ -15,6 +15,8 @@ interface GeneratedResume {
     address?: string; // Company address
   }[];
   skills: string[];
+  hardSkills?: string[];
+  softSkills?: string[];
   jobTitle?: string;
   companyName?: string;
 }
@@ -85,6 +87,8 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
       throw new Error('Resume generation returned invalid content');
     }
 
+    const skillGroups = parseSkillPayload(parsed.skills, originalProfile.skills);
+
     return {
       summary: (parsed.summary as string) || originalProfile.summary || '',
       experience: (parsed.experience as GeneratedResume['experience']) || originalProfile.experience.map(exp => ({
@@ -95,7 +99,9 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
         descriptions: exp.description ? [exp.description] : [],
         address: exp.address
       })),
-      skills: normalizeGeneratedSkills(parsed.skills, originalProfile.skills),
+      skills: skillGroups.skills,
+      hardSkills: skillGroups.hardSkills,
+      softSkills: skillGroups.softSkills,
       jobTitle: (parsed.jobTitle as string) || '',
       companyName: (parsed.companyName as string) || ''
     };
@@ -137,4 +143,27 @@ function normalizeGeneratedSkills(skills: unknown, fallback: string[]): string[]
       ? skills.split(/,|<\/?br\s*\/?>|\n/i)
       : fallback;
   return raw.map((skill) => sanitizeSkillName(String(skill))).filter(Boolean);
+}
+
+function parseSkillPayload(
+  skills: unknown,
+  fallback: string[]
+): { skills: string[]; hardSkills: string[]; softSkills: string[] } {
+  if (skills && typeof skills === 'object' && !Array.isArray(skills)) {
+    const obj = skills as Record<string, unknown>;
+    const hardSkills = normalizeGeneratedSkills(obj.hard ?? obj.hardSkills, []);
+    const softSkills = normalizeGeneratedSkills(obj.soft ?? obj.softSkills, []);
+    if (hardSkills.length || softSkills.length) {
+      return { hardSkills, softSkills, skills: [...hardSkills, ...softSkills] };
+    }
+  }
+
+  const flat = normalizeGeneratedSkills(skills, fallback);
+  const hardSkills: string[] = [];
+  const softSkills: string[] = [];
+  for (const skill of flat) {
+    if (isSoftSkillLabel(skill)) softSkills.push(skill);
+    else hardSkills.push(skill);
+  }
+  return { skills: flat, hardSkills, softSkills };
 }

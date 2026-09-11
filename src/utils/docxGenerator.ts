@@ -26,6 +26,8 @@ interface GeneratedResume {
   summary: string;
   experience: any[];
   skills: string[];
+  hardSkills?: string[];
+  softSkills?: string[];
 }
 
 type Profile = ProfileWithDetailsRPC;
@@ -141,7 +143,10 @@ export const generateDocx = async (
   const theme = resolveResumeTheme(options?.templateId);
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitle(options, profile);
   const includeLinkedIn = options?.includeLinkedIn !== false;
-  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? [], {
+    hard: generatedResume.hardSkills,
+    soft: generatedResume.softSkills,
+  });
   const bodyRun = makeBodyRun(theme);
   const t = theme.template;
 
@@ -168,7 +173,7 @@ export const generateDocx = async (
       if (!skills.length && !skillSections.length) return [];
       return [
         createSectionHeader(theme, 'SKILLS'),
-        ...createSkillsSection(theme, bodyRun, skillSections, t.skills.categorized, skills),
+        ...createSkillsSection(theme, bodyRun, skillSections, true, skills),
       ];
     },
     education: () => {

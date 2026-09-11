@@ -17,6 +17,8 @@ interface GeneratedResume {
   summary: string;
   experience: any[];
   skills: string[];
+  hardSkills?: string[];
+  softSkills?: string[];
 }
 
 type Profile = ProfileWithDetailsRPC;
@@ -230,7 +232,10 @@ export async function generateResumePdf(
 
   const bodySize = sizes.body;
   const bodyLh = lineHeight(bodySize);
-  const skillSections = buildResumeSkillSections(generatedResume.skills ?? []);
+  const skillSections = buildResumeSkillSections(generatedResume.skills ?? [], {
+    hard: generatedResume.hardSkills,
+    soft: generatedResume.softSkills,
+  });
   const headerAlign = t.header.nameAlign;
 
   // —— Header ——
@@ -298,13 +303,6 @@ export async function generateResumePdf(
 
   const renderSkills = () => {
     sectionHeader('Skills');
-    if (!t.skills.categorized) {
-      const flat = skillSections.flatMap((s) => s.skills);
-      if (flat.length) {
-        writeMixedWrapped([{ text: flat.join(', '), bold: false }], bodySize, margin, maxW, body, fontBody);
-      }
-      return;
-    }
     for (const cat of skillSections) {
       writeMixedWrapped(
         [
