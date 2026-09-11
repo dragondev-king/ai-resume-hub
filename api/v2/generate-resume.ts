@@ -97,11 +97,11 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer. Tailor for ATS in the skills list and summary, not by cloning the job-description stack into every past job. Each role may name only technologies from THAT role\'s original description. CURRENT SKILLS is for the skills section, not a license to paste the candidate\'s full toolkit into every employer. Do not pair competing technologies in one job unless both appear in that job\'s original description. Do not start every role with the same laundry-list of languages and frameworks. Vary bullets. No hiring-company names in other employers. No invented metrics. At least 6 bullets per role (6-10; 8-10 most recent). Wrap tech tokens in bullets with <b>...</b>. Extract jobTitle and companyName from the JD for metadata only.';
+  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Put ATS keywords in a short, focused skills list and a specific summary — not in every bullet. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in bullets with <b>...</b>. Extract jobTitle and companyName from the JD for metadata only.';
 
-const TIMELINE_SYSTEM_PROMPT = `You map technologies onto a candidate's real work history. A version must not appear in a job that ended before it existed. A JD technology belongs in a role only if THAT role's original description already names that family. CURRENT SKILLS must not be copied into mayUse for every job. Competing technologies (two backends, two clouds, two frontend frameworks) are not a default pair. Respond with valid JSON only.`;
+const TIMELINE_SYSTEM_PROMPT = `You extract the real projects and allowed technologies for each job from the original work-history description. A JD technology belongs in a role only if THAT role's original description already names that family. CURRENT SKILLS must not be copied into mayUse. Competing technologies are not a default pair. Versions must not appear in a job that ended before they existed. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a credibility editor. Strip cloned JD stacks, laundry-list bullets, invented backends, target-company leakage, and fake metrics. Each role keeps only technologies from its original description. Do not add new employers or change dates. Keep at least 6 bullets per role. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a credibility and signal editor. Delete generic duties, cloned JD stacks, fake metrics, and hiring-company leakage. Keep project-based bullets that show ownership, what shipped, and the outcome. Tighten the skills list to core strengths for this role. Do not add employers or change dates. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -176,8 +176,34 @@ const TIMELINE_OUTPUT_SCHEMA = {
             items: { type: 'string' },
           },
           eraStackGuidance: { type: 'string' },
+          projects: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                shipped: { type: 'string' },
+                stack: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                ownership: { type: 'string' },
+              },
+              required: ['name', 'shipped', 'stack', 'ownership'],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ['company', 'start_date', 'end_date', 'mayUse', 'mustUse', 'mustNotUse', 'eraStackGuidance'],
+        required: [
+          'company',
+          'start_date',
+          'end_date',
+          'mayUse',
+          'mustUse',
+          'mustNotUse',
+          'eraStackGuidance',
+          'projects',
+        ],
         additionalProperties: false,
       },
     },
@@ -293,7 +319,7 @@ function formatWorkHistory(profile: any): string {
       return `${index + 1}. ${exp.position} at ${exp.company}
    Dates (FACT — do not change): ${exp.start_date} through ${end}
    Address: ${exp.address || ''}
-   Original description: ${exp.description || ''}`;
+   Original description (source of projects, ownership, and stack — not a duty list to rewrite): ${exp.description || ''}`;
     })
     .join('\n');
 }
@@ -312,17 +338,18 @@ ${params.jobDescription}
 CANDIDATE WORK HISTORY (dates are facts):
 ${params.workHistory}
 
-Build a chronology map that prevents invented stacks, cloned JD stacks, and anachronistic versions.
+Build a project-and-stack map. The writer will turn these projects into resume bullets. Do not invent stacks or anachronistic versions.
 
 INSTRUCTIONS:
 1. Extract technologies and versioned products from THIS job description.
 2. For each, estimate when it first became available (YYYY-MM). Distinguish family vs version.
-3. Also note technologies named in each role's original work-history description. That list is the only stack for that role.
+3. From each role's original description, extract the real work as projects: named products, features, systems, integrations, or migrations. If the text has no product name, cluster related work into a project (search, APIs, billing, automation) without inventing a client or product the original did not mention.
 4. For each role:
+   - projects: 2-6 items. name = short project/product/feature; shipped = what was delivered; stack = tools NAMED in that original description for this work; ownership = strongest level the original supports (owned, led, built, contributed — do not inflate).
    - mayUse: families that both (a) existed during that role AND (b) are NAMED in that role's original description. Do not copy CURRENT SKILLS or the JD stack here.
    - mustUse: required JD versions ONLY if this is the most recent role, the role was still active after the version shipped, AND the original description already used that family. Otherwise empty.
-   - mustNotUse: versions that did not exist yet; JD-only technologies this role never named; competing technologies this role did not name (if original names one backend, one cloud, or one frontend framework, put the unused alternatives here)
-   - eraStackGuidance: keep this job's original stack. Do not write "using A, B, C, and D" unless all of those tools are in the original description.
+   - mustNotUse: versions that did not exist yet; JD-only technologies this role never named; competing technologies this role did not name.
+   - eraStackGuidance: keep this job's original stack. Write bullets around projects, not around a technology laundry list.
 5. If a role's original description does not name a given class of tool (backend language, cloud, database), do not put JD tools of that class in mayUse.
 6. If the candidate never used a JD technology, it belongs in mustNotUse for every role.
 
@@ -346,7 +373,15 @@ Respond with ONLY JSON using the REAL company names, dates, and technologies.
       "mayUse": ["<Family already used here>"],
       "mustUse": [],
       "mustNotUse": ["<JD-only tech>", "<Family> <Version>"],
-      "eraStackGuidance": "Keep only technologies named in this role's original description. Do not clone the JD stack. Do not pair competing technologies unless both were originally used here."
+      "eraStackGuidance": "Keep only technologies named in this role's original description. Write bullets around the projects below, not a cloned JD stack.",
+      "projects": [
+        {
+          "name": "<product, feature, or system from original description>",
+          "shipped": "<what was delivered>",
+          "stack": ["<tool named in original>"],
+          "ownership": "<owned | led | built | contributed>"
+        }
+      ]
     }
   ]
 }`;
@@ -394,31 +429,32 @@ async function auditResumeChronology(params: {
 JOB DESCRIPTION (keywords only — do not copy company/product names into experience):
 ${params.jobDescription}
 
-FACTUAL WORK HISTORY (original stacks and dates):
+FACTUAL WORK HISTORY (projects, original stacks, and dates):
 ${params.workHistory}
 
 CURRENT SKILLS:
 ${params.currentSkills}
 
-STACK MAP:
-${params.timeline || 'Remove any technology a role did not name in its original description. CURRENT SKILLS is not an overlay. Competing technologies are not a default pair. No hiring-company names in bullets or summary.'}
+PROJECT AND STACK MAP:
+${params.timeline || 'Write bullets around projects and products in each original description. Remove any technology a role did not name. CURRENT SKILLS is not an overlay. Competing technologies are not a default pair. No hiring-company names in bullets or summary.'}
 
 DRAFT RESUME JSON:
 ${params.draft}
 
 AUDIT:
 1. Keep companies, start/end dates, addresses, and the same number of roles.
-2. Remove any technology not NAMED in that job's original description. CURRENT SKILLS is not a reason to keep a technology in a past job.
-3. If two or more roles use the same 3+ technology list in a bullet, rewrite those bullets. Each role keeps only its original stack.
-4. Competing technologies (two backends, two clouds, two frontend frameworks, two databases) must not appear in the same role unless BOTH are in that role's original description.
-5. Delete laundry-list bullets of the form "Did X using A, B, C, and D to support Y". Name at most one or two tools per bullet, and only if they belong to that accomplishment.
-6. Delete JD-only tools from a role unless that role's original description mentioned them. Those belong in Skills when true.
-7. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
-8. Remove invented percentages and metrics that were not in the original description.
-9. Keep at least 6 bullets per role. Drop generic mentoring/agile/documentation filler only if a role already has more than 10 bullets.
-10. Skills: keep CURRENT SKILLS; add JD aliases the candidate already has; include genuine soft skills when true; this is where the candidate's full toolkit may appear together.
-11. Summary: 3-4 sentences, no version numbers, no hiring-company name. Summary may mention the overall stack once; experience must not copy that sentence into every job.
-12. Keep <b>...</b> around remaining tech tokens. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned".
+2. Each bullet must be a project, product, feature, system, or integration from that job's original description. Delete generic duties: collaborated, participated in agile, wrote documentation, performed testing, translated requirements, unless the sentence names a specific deliverable and outcome.
+3. Show ownership (owned / led / built / contributed — only as strong as the original supports), what shipped, and the result for users or the system. Do not invent percentages or metrics.
+4. Remove any technology not NAMED in that job's original description. CURRENT SKILLS is not a reason to keep a technology in a past job.
+5. If two or more roles use the same 3+ technology list in a bullet, rewrite those bullets around different projects.
+6. Competing technologies must not appear in the same role unless BOTH are in that role's original description.
+7. Delete laundry-list bullets of the form "Did X using A, B, C, and D to support Y".
+8. Delete JD-only tools from a role unless that role's original description mentioned them.
+9. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
+10. Prefer fewer strong project bullets over a long duty list. Typical 4-7 for recent or longer roles, 3-5 for earlier roles. Do not pad to hit a count.
+11. Skills: a focused core-strengths list for THIS job, not a dump. Lead with overlap that is already true. Drop generic items and tools that do not support the target role. About 8-14 hard skills and 2-4 distinctive soft skills. Do not add skills the candidate has never used.
+12. Summary: 2-4 sentences stating the specific value for this role, backed by real projects. No version numbers, no hiring-company name, no generic "experienced engineer with many technologies."
+13. Keep <b>...</b> around remaining tech tokens. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
 
 Respond with ONLY the corrected resume JSON in this shape:
 {
@@ -464,7 +500,7 @@ const createAIPrompt = (
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
 
   return `
-Create a professional resume for this job. Tailor keywords and emphasis. Do not rewrite the candidate into a different engineer.
+Create a resume a senior recruiter can scan in 20 seconds: specific projects, clear ownership, real outcomes, and a tight skills list. Do not rewrite the candidate into a different engineer.
 
 TODAY'S DATE: ${today}
 
@@ -475,7 +511,7 @@ CANDIDATE:
 Name: ${profile.first_name} ${profile.last_name}
 Current Summary: ${profile.summary || ''}
 
-WORK HISTORY (dates, companies, and original stacks are FACTS):
+WORK HISTORY (dates, companies, projects, and original stacks are FACTS):
 ${workHistory}
 
 EDUCATION:
@@ -486,51 +522,49 @@ ${education
   )
   .join('\n')}
 
-CURRENT SKILLS (skills SECTION only — do not paste this list into every job's bullets):
+CURRENT SKILLS (candidate inventory — select a focused subset for the skills section; do not paste into every job):
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
-VERSION / STACK MAP:
-${timeline || 'Name a technology in a job only if that job\'s original description already used it. Do not copy CURRENT SKILLS into every role. Competing technologies are not a default pair. Never invent a stack.'}
+PROJECT AND STACK MAP:
+${timeline || 'Name a technology in a job only if that job\'s original description already used it. Write experience around projects in the original description, not generic duties. Competing technologies are not a default pair. Never invent a stack.'}
 
 CRITICAL INSTRUCTIONS:
-1. ANALYZE the job description for title, required skills, and terminology. Put jobTitle and companyName in the JSON metadata. Never write the hiring company, product, or program names into the summary or into any employer's bullets.
+1. ANALYZE the job description for seniority, core technical strengths it cares about, and terminology. Put jobTitle and companyName in the JSON metadata. Never write the hiring company, product, or program names into the summary or into any employer's bullets.
 
-2. EXPERIENCE — freeze the per-job stack:
-   - The stack for a job is ONLY what that job's Original description names. CURRENT SKILLS is not an overlay.
-   - Keep tools the original text names. Do not add other languages, frameworks, clouds, or AI tools from the JD or CURRENT SKILLS unless they are in that original text.
-   - Competing technologies (two backends, two clouds, two frontend frameworks, two databases) belong in one job only if the original description used both.
-   - FORBIDDEN pattern (do not write this, or close variants, for every role): "Did X using A, B, C, and D to support Y."
-   - At most one or two technologies per bullet. Most bullets should describe the work and name a tool only when it is specific to that bullet.
-   - Do not repeat the same technology list across roles. Different companies should read like different jobs.
-   - If original description is thin, write concrete work from the title/company context without dumping the JD stack. Do not upgrade a narrower role into the JD's full stack.
-   - Tools that appear only in the JD go in Skills when they are already true of the candidate. Put them in a role only if that original description mentioned them.
-   - Rewrite to emphasize overlap with the JD only when that overlap is already true for that job.
-   - Do not add any JD-only language, framework, cloud, or product to a job that did not use it
-   - Do not use "scalability", "reliability", "robust", "passionate", "seasoned", "best practices", or "foster"
-   - Quantify only if the original description had numbers. Do not invent 20%/25%/40%
-   - Use action verbs. Prefer concrete delivery over mentoring/agile/code-review filler
+2. EXPERIENCE — projects during those company years, not a duty list:
+   - Read the original description as a source of projects: products, features, systems, integrations, migrations, and the candidate's part in them.
+   - Each bullet is one project or one distinct technical contribution inside a project: who owned it, what shipped, and what changed for users or the system.
+   - Lead each role with the work that best matches THIS job's core strengths, but only if that work is already in the original description.
+   - Make ownership obvious. Use the strongest verb the original supports. Do not inflate "contributed" into "led."
+   - Outcomes: use numbers only if they are in the original. Otherwise state a concrete qualitative result (what people or systems could do after). Do not invent 20%/25%/40%.
+   - The stack for a job is ONLY what that job's original description names. CURRENT SKILLS is not an overlay.
+   - Name at most one or two tools per bullet, and only when they belong to that project. Different companies must read like different jobs.
+   - Competing technologies belong in one job only if the original description used both.
+   - FORBIDDEN: generic duties (collaborated with teams, participated in agile, wrote documentation, performed testing, translated requirements) unless tied to a named deliverable. FORBIDDEN: "Did X using A, B, C, and D to support Y."
+   - If the original is thin, cluster what is there into the few real pieces of work. Do not fill space with responsibilities the original never described. Do not upgrade a narrower role into the JD's full stack.
+   - Do not add any JD-only language, framework, cloud, or product to a job that did not use it.
+   - Do not use "scalability", "reliability", "robust", "passionate", "seasoned", "best practices", or "foster".
 
 3. BULLET COUNT:
-   - Every role: at least 6 bullets. Typical range 6-10.
-   - Most recent or longer roles: 8-10
-   - Fill space with distinct accomplishments, not by repeating the same four technologies.
+   - Match the number of distinct projects/contributions in the original. Typical 4-7 for recent or longer roles, 3-5 for earlier roles.
+   - Prefer fewer strong project bullets over a long generic list. Do not pad.
 
-4. ATS KEYWORDS (skills and summary, not every bullet):
-   - Skills list: start from CURRENT SKILLS, keep them, add JD terms the candidate already has, including exact aliases (a vendor acronym and its full name if they already have that skill)
-   - This is where the candidate's full toolkit may appear together if those skills are real
-   - Include genuine soft skills (Leadership, Communication, Mentoring, Problem-solving) when true
-   - Versions may appear in the skills list for ATS even if bullets use the family name
-   - Do not add skills the candidate has never used
-   - Deduplicate aliases (a library and its .js name, a cloud vendor and its full name)
+4. SKILLS — core strengths, not a catalog:
+   - Select from CURRENT SKILLS. Lead with the overlap this JD actually needs and the candidate already has.
+   - About 8-14 hard skills. Drop generic items (debugging, version control, "full-stack development") and tools that do not support the target role.
+   - 2-4 distinctive soft skills only if they are true. Do not add skills the candidate has never used.
+   - Add JD aliases only when they name something already in CURRENT SKILLS. Deduplicate aliases.
+   - Versions may appear here even if bullets use the family name.
 
 5. SUMMARY:
-   - 3-4 sentences. Mirror JD language for true strengths. Family names only, no version numbers, no hiring-company name
-   - Mention the overall stack at most once here. Do not copy that sentence into experience.
+   - 2-4 sentences. Specific value for THIS role, backed by real projects and ownership — not a generic years-and-tech dump.
+   - Family names only, no version numbers, no hiring-company name.
+   - Mention at most two or three core strengths. Do not recap the entire skills list.
 
 6. JOB TITLES:
-   - Slight honest alignment only (Software Engineer → Senior Software Engineer if they were senior)
-   - Do not change a frontend or otherwise narrower role into an unrelated backend or JD title
-   - Keep company names and start/end dates exactly
+   - Slight honest alignment only if seniority is already true.
+   - Do not change a frontend or otherwise narrower role into an unrelated backend or JD title.
+   - Keep company names and start/end dates exactly.
 
 7. BOLD TECH IN BULLETS:
    - Wrap technical skills/tools/frameworks/languages with <b>...</b>
@@ -541,7 +575,7 @@ Respond with ONLY valid JSON. Same number of positions as original experience.
 {
   "jobTitle": "extracted or inferred job title from the job description",
   "companyName": "extracted or inferred company name from the job description",
-  "summary": "Professional summary tailored to this specific role...",
+  "summary": "Specific value for this role, backed by real projects...",
   "experience": [
     {
       "position": "Job title",
@@ -550,12 +584,12 @@ Respond with ONLY valid JSON. Same number of positions as original experience.
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Shipped a new feature using <b>Skill</b> so users could complete the workflow faster.",
-        "Built APIs with <b>Skill</b> for order capture and status updates."
+        "Owned the search work — shipped filters with <b>Skill</b> so users could find records without leaving the page.",
+        "Built a status API so operations could see failed requests the same day."
       ]
     }
   ],
-  "skills": ["skill1", "skill2", "skill3"]
+  "skills": ["core skill 1", "core skill 2", "core skill 3"]
 }
 `;
 };
