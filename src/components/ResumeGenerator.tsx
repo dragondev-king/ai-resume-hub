@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check, Search, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { generateResume, AIProvider } from '../utils/resumeGenerator';
+import { generateResume, AIProvider, ResumeApiVersion } from '../utils/resumeGenerator';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
 import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
 import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
@@ -10,6 +10,7 @@ import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileNa
 import { generateCoverLetter, generateAnswer } from '../utils/coverLetterGenerator';
 import { parseBoldMarkup } from '../utils/resumeLayout';
 import { pickRandomResumeTemplate, getResumeTemplate, listResumeTemplates } from '../resumeTemplates';
+import { buildJobApplicationMetadata } from '../utils/applicationMetadata';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
@@ -50,6 +51,9 @@ const ResumeGenerator: React.FC = () => {
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
+  const [resumeApiVersion, setResumeApiVersion] = useState<ResumeApiVersion>('v1');
+  const [usedAiProvider, setUsedAiProvider] = useState<AIProvider | null>(null);
+  const [usedResumeApiVersion, setUsedResumeApiVersion] = useState<ResumeApiVersion | null>(null);
   const [loading, setLoading] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generatedResume, setGeneratedResume] = useState<EditableResume | null>(null);
@@ -175,7 +179,7 @@ const ResumeGenerator: React.FC = () => {
     setIsEditing(false);
     try {
       // Generate AI resume with job title and company name extraction
-      const generated = await generateResume(profile, jobDescription, aiProvider);
+      const generated = await generateResume(profile, jobDescription, aiProvider, resumeApiVersion);
 
       console.log(generated, '=== generated')
 
@@ -209,6 +213,8 @@ const ResumeGenerator: React.FC = () => {
       setGeneratedResume(generated);
       setEditingResume(generated);
       setIsEditing(false);
+      setUsedAiProvider(aiProvider);
+      setUsedResumeApiVersion(resumeApiVersion);
       setTimeout(() => {
         document.getElementById('generated-resume')?.scrollIntoView({ behavior: 'smooth' });
       }, 300);
@@ -219,6 +225,8 @@ const ResumeGenerator: React.FC = () => {
       setGeneratedResume(null);
       setEditingResume(null);
       setGenerationError(message);
+      setUsedAiProvider(null);
+      setUsedResumeApiVersion(null);
       toast.error(message);
     } finally {
       setLoading(false);
@@ -373,7 +381,11 @@ const ResumeGenerator: React.FC = () => {
           p_generated_summary: generatedResume.summary,
           p_generated_experience: generatedResume.experience,
           p_generated_skills: generatedResume.skills,
-          p_metadata: { resumeTemplateId: template.id },
+          p_metadata: buildJobApplicationMetadata({
+            resumeTemplateId: template.id,
+            aiProvider: usedAiProvider ?? aiProvider,
+            resumeApiVersion: usedResumeApiVersion ?? resumeApiVersion,
+          }),
         });
 
         if (saveError) {
@@ -624,6 +636,8 @@ const ResumeGenerator: React.FC = () => {
     setEditingResume(null);
     setIsEditing(false);
     setGenerationError(null);
+    setUsedAiProvider(null);
+    setUsedResumeApiVersion(null);
     setNewSkill('');
     setGeneratedCoverLetter(null);
     setApplicationQuestions([]);
@@ -842,6 +856,40 @@ const ResumeGenerator: React.FC = () => {
             </div>
             <p className="text-sm text-gray-500 mt-1">
               Choose which AI model to use for resume generation. Compare outputs to see which works best.
+            </p>
+          </div>
+
+          {/* Resume API version */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Resume API version
+            </label>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="resumeApiVersion"
+                  value="v1"
+                  checked={resumeApiVersion === 'v1'}
+                  onChange={() => setResumeApiVersion('v1')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">v1 (original tailoring)</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="resumeApiVersion"
+                  value="v2"
+                  checked={resumeApiVersion === 'v2'}
+                  onChange={() => setResumeApiVersion('v2')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">v2 (ATS-safe)</span>
+              </label>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              v1 aggressively matches the job description. v2 keeps each job’s real stack and puts JD keywords in skills.
             </p>
           </div>
 
