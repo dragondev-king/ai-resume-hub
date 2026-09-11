@@ -101,7 +101,7 @@ export function buildResumeSkillSections(
   const currentKeys = new Set(current.map(normalizeSkillKey));
   const groupsMatchCurrent =
     groupedKeys.size === currentKeys.size &&
-    [...groupedKeys].every((key) => currentKeys.has(key));
+    Array.from(groupedKeys).every((key) => currentKeys.has(key));
 
   let hard: string[] = [];
   let soft: string[] = [];
