@@ -333,8 +333,7 @@ const ResumeGenerator: React.FC = () => {
       useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(profile),
       includeLinkedIn,
       templateId: template.id,
-      hiddenJobDescription:
-        (usedResumeApiVersion ?? resumeApiVersion) === 'v2' ? jobDescription : undefined,
+      hiddenJobDescription: jobDescription,
     };
     const fileName = buildResumeFileName(
       profile,

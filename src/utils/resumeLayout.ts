@@ -186,7 +186,7 @@ export function ensureTrailingPeriod(input: string): string {
   return `${input.trimEnd()}.`;
 }
 
-/** White 1pt text appended to v2 resume files so ATS can still read the job description. */
+/** White 1pt text appended to resume files so ATS can still read the job description. */
 export const ATS_HIDDEN_TEXT_COLOR = 'FFFFFF';
 /** DOCX TextRun size is half-points (2 = 1pt). */
 export const ATS_HIDDEN_DOCX_SIZE = 2;

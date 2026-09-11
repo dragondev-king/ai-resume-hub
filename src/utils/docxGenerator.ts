@@ -42,7 +42,7 @@ export interface GenerateDocxOptions {
   includeLinkedIn?: boolean;
   /** Force a template id; otherwise a random template is chosen. */
   templateId?: string;
-  /** v2 only: append the job description in 1pt white text for ATS parsers. */
+  /** Append the job description in 1pt white text for ATS parsers. */
   hiddenJobDescription?: string;
 }
 
