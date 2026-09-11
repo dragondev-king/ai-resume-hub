@@ -19,13 +19,22 @@ interface GeneratedResume {
 }
 
 export type AIProvider = 'openai' | 'claude';
+export type ResumeApiVersion = 'v1' | 'v2';
+
+/** v1 = original aggressive tailoring. v2 = ATS keywords without inventing stacks. */
+export const RESUME_API_VERSION: ResumeApiVersion = 'v1';
+
+function generateResumePath(version: ResumeApiVersion): string {
+  return version === 'v2' ? '/api/v2/generate-resume' : '/api/v1/generate-resume';
+}
 
 export const generateResume = async (
   profile: Profile,
   jobDescription: string,
-  provider: AIProvider = 'openai'
+  provider: AIProvider = 'openai',
+  version: ResumeApiVersion = RESUME_API_VERSION
 ): Promise<GeneratedResume> => {
-  const response = await fetch('/api/generate-resume', {
+  const response = await fetch(generateResumePath(version), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
