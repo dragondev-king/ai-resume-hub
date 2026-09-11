@@ -25,7 +25,7 @@ export type ResumeApiVersion = 'v1' | 'v2';
 export const RESUME_API_VERSION: ResumeApiVersion = 'v1';
 
 function generateResumePath(version: ResumeApiVersion): string {
-  return version === 'v2' ? '/api/v2/generate-resume' : '/api/v1/generate-resume';
+  return version === 'v2' ? '/api/v2/generate-resume' : '/api/generate-resume';
 }
 
 export const generateResume = async (
