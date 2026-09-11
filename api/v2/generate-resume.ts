@@ -97,11 +97,11 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Put ATS keywords in a short, focused skills list and a specific summary — not in every bullet. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in bullets with <b>...</b>. Extract jobTitle and companyName from the JD for metadata only.';
+  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Every company must have at least 5 bullets. Put ATS keywords in a short, focused skills list and a specific summary — not in every bullet. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in bullets with <b>...</b>. Extract jobTitle and companyName from the JD for metadata only.';
 
 const TIMELINE_SYSTEM_PROMPT = `You extract the real projects and allowed technologies for each job from the original work-history description. A JD technology belongs in a role only if THAT role's original description already names that family. CURRENT SKILLS must not be copied into mayUse. Competing technologies are not a default pair. Versions must not appear in a job that ended before they existed. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a credibility and signal editor. Delete generic duties, cloned JD stacks, fake metrics, and hiring-company leakage. Keep project-based bullets that show ownership, what shipped, and the outcome. Tighten the skills list to core strengths for this role. Do not add employers or change dates. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a credibility and signal editor. Delete generic duties, cloned JD stacks, fake metrics, and hiring-company leakage. Keep project-based bullets that show ownership, what shipped, and the outcome. Every role must keep at least 5 bullets — split real projects into distinct contributions if needed, do not pad with generic duties. Tighten the skills list to core strengths for this role. Do not add employers or change dates. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -345,7 +345,7 @@ INSTRUCTIONS:
 2. For each, estimate when it first became available (YYYY-MM). Distinguish family vs version.
 3. From each role's original description, extract the real work as projects: named products, features, systems, integrations, or migrations. If the text has no product name, cluster related work into a project (search, APIs, billing, automation) without inventing a client or product the original did not mention.
 4. For each role:
-   - projects: 2-6 items. name = short project/product/feature; shipped = what was delivered; stack = tools NAMED in that original description for this work; ownership = strongest level the original supports (owned, led, built, contributed — do not inflate).
+   - projects: at least 5 items (5-8). Split a large product into distinct contributions (feature, integration, data/state, API, UI, reliability) if the original only names one system. name = short project/product/feature; shipped = what was delivered; stack = tools NAMED in that original description for this work; ownership = strongest level the original supports (owned, led, built, contributed — do not inflate).
    - mayUse: families that both (a) existed during that role AND (b) are NAMED in that role's original description. Do not copy CURRENT SKILLS or the JD stack here.
    - mustUse: required JD versions ONLY if this is the most recent role, the role was still active after the version shipped, AND the original description already used that family. Otherwise empty.
    - mustNotUse: versions that did not exist yet; JD-only technologies this role never named; competing technologies this role did not name.
@@ -451,7 +451,7 @@ AUDIT:
 7. Delete laundry-list bullets of the form "Did X using A, B, C, and D to support Y".
 8. Delete JD-only tools from a role unless that role's original description mentioned them.
 9. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
-10. Prefer fewer strong project bullets over a long duty list. Typical 4-7 for recent or longer roles, 3-5 for earlier roles. Do not pad to hit a count.
+10. Every role must have at least 5 bullets. Typical 5-8 for recent or longer roles, 5-6 for earlier roles. If a role has fewer than 5, split real projects into distinct contributions. Do not drop below 5. Do not pad with generic duties.
 11. Skills: a focused core-strengths list for THIS job, not a dump. Lead with overlap that is already true. Drop generic items and tools that do not support the target role. About 8-14 hard skills and 2-4 distinctive soft skills. Do not add skills the candidate has never used.
 12. Summary: 2-4 sentences stating the specific value for this role, backed by real projects. No version numbers, no hiring-company name, no generic "experienced engineer with many technologies."
 13. Keep <b>...</b> around remaining tech tokens. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
@@ -546,8 +546,9 @@ CRITICAL INSTRUCTIONS:
    - Do not use "scalability", "reliability", "robust", "passionate", "seasoned", "best practices", or "foster".
 
 3. BULLET COUNT:
-   - Match the number of distinct projects/contributions in the original. Typical 4-7 for recent or longer roles, 3-5 for earlier roles.
-   - Prefer fewer strong project bullets over a long generic list. Do not pad.
+   - Every company: at least 5 bullets. Typical 5-8 for recent or longer roles, 5-6 for earlier roles.
+   - If the original names fewer than 5 projects, split those projects into distinct contributions (what shipped, how it was built, integration, data/state, reliability). Still tied to that company's real work.
+   - Do not pad with generic duties to hit the count.
 
 4. SKILLS — core strengths, not a catalog:
    - Select from CURRENT SKILLS. Lead with the overlap this JD actually needs and the candidate already has.
@@ -585,7 +586,10 @@ Respond with ONLY valid JSON. Same number of positions as original experience.
       "address": "Company Address",
       "descriptions": [
         "Owned the search work — shipped filters with <b>Skill</b> so users could find records without leaving the page.",
-        "Built a status API so operations could see failed requests the same day."
+        "Built a status API so operations could see failed requests the same day.",
+        "Integrated the new screens with existing services so the proof of concept could run without a rewrite.",
+        "Hardened state handling on the unfinished app so data survived navigation and refresh.",
+        "Closed production defects on the same product so the release stayed on schedule."
       ]
     }
   ],
