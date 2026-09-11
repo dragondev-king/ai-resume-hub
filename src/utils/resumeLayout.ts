@@ -72,7 +72,7 @@ function uniqueSkills(skills: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const skill of skills) {
-    const trimmed = skill.trim();
+    const trimmed = sanitizeSkillName(skill);
     if (!trimmed) continue;
     const key = normalizeSkillKey(trimmed);
     if (seen.has(key)) continue;
@@ -148,6 +148,15 @@ export function stripBoldMarkup(input: string): string {
   return parseBoldMarkup(input)
     .map((s) => s.text)
     .join('');
+}
+
+/** Skills are plain labels — never keep <b>, <br>, or other markup. */
+export function sanitizeSkillName(skill: string): string {
+  return stripBoldMarkup(String(skill ?? ''))
+    .replace(/<\/?br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Ensure a trailing period without disturbing markup near the end. */

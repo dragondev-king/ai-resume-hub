@@ -375,9 +375,7 @@ const createSkillsSection = (
   flatSkills: string[]
 ): Paragraph[] => {
   if (!categorized) {
-    const skills = flatSkills.length
-      ? Array.from(new Set(flatSkills))
-      : sections.flatMap((s) => s.skills);
+    const skills = sections.flatMap((s) => s.skills);
     if (!skills.length) return [];
     return [
       new Paragraph({

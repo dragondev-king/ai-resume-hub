@@ -97,7 +97,7 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Every company must have at least 5 bullets. Put ATS keywords in a short, focused skills list and a specific summary — not in every bullet. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in bullets with <b>...</b>. Extract jobTitle and companyName from the JD for metadata only.';
+  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Every company must have at least 5 bullets. Put ATS keywords in a short, focused skills list and a specific summary — not in every bullet. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in experience bullets and the summary with <b>...</b>. Never wrap skills with <b>, <br>, or any other HTML. Extract jobTitle and companyName from the JD for metadata only.';
 
 const TIMELINE_SYSTEM_PROMPT = `You extract the real projects and allowed technologies for each job from the original work-history description. A JD technology belongs in a role only if THAT role's original description already names that family. CURRENT SKILLS must not be copied into mayUse. Competing technologies are not a default pair. Versions must not appear in a job that ended before they existed. Respond with valid JSON only.`;
 
@@ -452,9 +452,9 @@ AUDIT:
 8. Delete JD-only tools from a role unless that role's original description mentioned them.
 9. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
 10. Every role must have at least 5 bullets. Typical 5-8 for recent or longer roles, 5-6 for earlier roles. If a role has fewer than 5, split real projects into distinct contributions. Do not drop below 5. Do not pad with generic duties.
-11. Skills: a focused core-strengths list for THIS job, not a dump. Lead with overlap that is already true. Drop generic items and tools that do not support the target role. About 8-14 hard skills and 2-4 distinctive soft skills. Do not add skills the candidate has never used.
+11. Skills: a focused core-strengths list for THIS job, not a dump. Plain strings only — strip any <b>, <br>, or HTML. Lead with overlap that is already true. Drop generic items and tools that do not support the target role. About 8-14 hard skills and 2-4 distinctive soft skills. Do not add skills the candidate has never used.
 12. Summary: 2-4 sentences stating the specific value for this role, backed by real projects. No version numbers, no hiring-company name, no generic "experienced engineer with many technologies."
-13. Keep <b>...</b> around remaining tech tokens. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
+13. Keep <b>...</b> around tech tokens in experience bullets and the summary. Skills must be plain text with no markup. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
 
 Respond with ONLY the corrected resume JSON in this shape:
 {
@@ -553,6 +553,7 @@ CRITICAL INSTRUCTIONS:
 4. SKILLS — core strengths, not a catalog:
    - Select from CURRENT SKILLS. Lead with the overlap this JD actually needs and the candidate already has.
    - About 8-14 hard skills. Drop generic items (debugging, version control, "full-stack development") and tools that do not support the target role.
+   - Plain strings only. Never wrap a skill with <b>, <br>, <bold>, markdown, or any other HTML.
    - 2-4 distinctive soft skills only if they are true. Do not add skills the candidate has never used.
    - Add JD aliases only when they name something already in CURRENT SKILLS. Deduplicate aliases.
    - Versions may appear here even if bullets use the family name.
@@ -567,9 +568,10 @@ CRITICAL INSTRUCTIONS:
    - Do not change a frontend or otherwise narrower role into an unrelated backend or JD title.
    - Keep company names and start/end dates exactly.
 
-7. BOLD TECH IN BULLETS:
-   - Wrap technical skills/tools/frameworks/languages with <b>...</b>
+7. BOLD TECH IN EXPERIENCE AND SUMMARY:
+   - Wrap technical skills/tools/frameworks/languages with <b>...</b> inside experience description strings and the summary
    - Only wrap the token. Keep tags inside JSON strings
+   - Do not wrap skills[] — those are plain labels with no HTML
 
 Respond with ONLY valid JSON. Same number of positions as original experience.
 

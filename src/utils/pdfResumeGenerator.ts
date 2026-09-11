@@ -299,9 +299,7 @@ export async function generateResumePdf(
   const renderSkills = () => {
     sectionHeader('Skills');
     if (!t.skills.categorized) {
-      const flat = Array.from(
-        new Set([...(generatedResume.skills ?? []), ...skillSections.flatMap((s) => s.skills)])
-      );
+      const flat = skillSections.flatMap((s) => s.skills);
       if (flat.length) {
         writeMixedWrapped([{ text: flat.join(', '), bold: false }], bodySize, margin, maxW, body, fontBody);
       }

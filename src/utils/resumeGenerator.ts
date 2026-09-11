@@ -1,4 +1,5 @@
 import { ProfileWithDetailsRPC } from '../lib/supabase';
+import { sanitizeSkillName } from './resumeLayout';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
 type Profile = ProfileWithDetailsRPC;
@@ -94,7 +95,7 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
         descriptions: exp.description ? [exp.description] : [],
         address: exp.address
       })),
-      skills: (parsed.skills as string[]) || originalProfile.skills,
+      skills: normalizeGeneratedSkills(parsed.skills, originalProfile.skills),
       jobTitle: (parsed.jobTitle as string) || '',
       companyName: (parsed.companyName as string) || ''
     };
@@ -128,3 +129,12 @@ const parseJsonResponse = (aiResponse: string): Record<string, unknown> => {
 
   return JSON.parse(jsonString);
 };
+
+function normalizeGeneratedSkills(skills: unknown, fallback: string[]): string[] {
+  const raw = Array.isArray(skills)
+    ? skills
+    : typeof skills === 'string'
+      ? skills.split(/,|<\/?br\s*\/?>|\n/i)
+      : fallback;
+  return raw.map((skill) => sanitizeSkillName(String(skill))).filter(Boolean);
+}
