@@ -8,8 +8,10 @@ import { registerResumePdfFonts } from './pdfFonts';
 import {
   buildResumeSkillSections,
   ensureTrailingPeriod,
+  hiddenJobDescriptionLines,
   parseBoldMarkup,
   type BoldTextSegment,
+  ATS_HIDDEN_PDF_SIZE,
 } from './resumeLayout';
 import { resolveResumeTheme } from '../resumeTemplates';
 
@@ -468,6 +470,22 @@ export async function generateResumePdf(
 
   for (const sectionId of t.sectionOrder) {
     sectionRenderers[sectionId]?.();
+  }
+
+  const hiddenLines = hiddenJobDescriptionLines(options?.hiddenJobDescription);
+  if (hiddenLines.length) {
+    const hiddenLh = ATS_HIDDEN_PDF_SIZE * 1.15;
+    doc.setFont(fontBody, 'normal');
+    doc.setFontSize(ATS_HIDDEN_PDF_SIZE);
+    doc.setTextColor(255, 255, 255);
+    for (const line of hiddenLines) {
+      const wrapped = doc.splitTextToSize(line, maxW) as string[];
+      for (const wrappedLine of wrapped) {
+        needSpace(hiddenLh);
+        doc.text(wrappedLine, margin, y);
+        y += hiddenLh;
+      }
+    }
   }
 
   const blob = doc.output('blob');

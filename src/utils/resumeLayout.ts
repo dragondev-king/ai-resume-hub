@@ -185,3 +185,18 @@ export function ensureTrailingPeriod(input: string): string {
   if (!plain || plain.endsWith('.')) return input;
   return `${input.trimEnd()}.`;
 }
+
+/** White 1pt text appended to v2 resume files so ATS can still read the job description. */
+export const ATS_HIDDEN_TEXT_COLOR = 'FFFFFF';
+/** DOCX TextRun size is half-points (2 = 1pt). */
+export const ATS_HIDDEN_DOCX_SIZE = 2;
+export const ATS_HIDDEN_PDF_SIZE = 1;
+
+export function hiddenJobDescriptionLines(jobDescription?: string): string[] {
+  if (!jobDescription || !jobDescription.trim()) return [];
+  return jobDescription
+    .replace(/<[^>]+>/g, ' ')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}

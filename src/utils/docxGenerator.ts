@@ -18,7 +18,10 @@ import { getUseAiEnhancedJobTitleForProfile } from './profileMetadata';
 import {
   buildResumeSkillSections,
   ensureTrailingPeriod,
+  hiddenJobDescriptionLines,
   parseBoldMarkup,
+  ATS_HIDDEN_DOCX_SIZE,
+  ATS_HIDDEN_TEXT_COLOR,
 } from './resumeLayout';
 import { resolveResumeTheme, type ResumeTheme } from '../resumeTemplates';
 
@@ -39,6 +42,8 @@ export interface GenerateDocxOptions {
   includeLinkedIn?: boolean;
   /** Force a template id; otherwise a random template is chosen. */
   templateId?: string;
+  /** v2 only: append the job description in 1pt white text for ATS parsers. */
+  hiddenJobDescription?: string;
 }
 
 function getUseAiEnhancedJobTitle(options?: GenerateDocxOptions, profile?: Profile): boolean {
@@ -202,6 +207,8 @@ export const generateDocx = async (
     children.push(...(sectionBuilders[sectionId]?.() ?? []));
   }
 
+  children.push(...createHiddenJobDescriptionParagraphs(options?.hiddenJobDescription));
+
   const marginTwips = theme.spacing.marginPt * 20;
   const doc = new Document({
     sections: [
@@ -226,6 +233,24 @@ export const generateDocx = async (
 };
 
 type BodyRunFn = ReturnType<typeof makeBodyRun>;
+
+function createHiddenJobDescriptionParagraphs(jobDescription?: string): Paragraph[] {
+  return hiddenJobDescriptionLines(jobDescription).map(
+    (line) =>
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: line,
+            size: ATS_HIDDEN_DOCX_SIZE,
+            color: ATS_HIDDEN_TEXT_COLOR,
+            font: 'Arial',
+            characterSpacing: 0,
+          }),
+        ],
+        spacing: { after: 0, before: 0, line: 20, lineRule: 'exact' },
+      })
+  );
+}
 
 const createHeader = (
   theme: ResumeTheme,
