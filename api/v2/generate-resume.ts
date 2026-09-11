@@ -97,11 +97,11 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Every company must have at least 5 bullets. The skills object MUST always include both hard and soft arrays — never omit either, never leave either empty. Put ATS keywords in that focused skills object and a specific summary — not in every bullet. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in experience bullets and the summary with <b>...</b>. Never wrap skill names with <b>, <br>, or any other HTML. Extract jobTitle and companyName from the JD for metadata only.';
+  'You are an expert resume writer for senior technical hiring. Recruiters reject generic duty lists and broad skill dumps. Write each role around the actual projects, products, and technical contributions in that job\'s original description. Show ownership, what shipped, and the outcome. Every company must have at least 5 bullets. The skills object MUST always include both hard and soft arrays — never omit either, never leave either empty. The summary is a professional profile, not a recap of jobs. Put ATS keywords in the skills object and, lightly, in the summary — not by narrating projects. Each role may name only technologies from THAT role\'s original description. Do not pair competing technologies unless both appear in that original text. Do not invent metrics, employers, or stacks. Wrap tech tokens in experience bullets and the summary with <b>...</b>. Never wrap skill names with <b>, <br>, or any other HTML. Extract jobTitle and companyName from the JD for metadata only.';
 
 const TIMELINE_SYSTEM_PROMPT = `You extract the real projects and allowed technologies for each job from the original work-history description. A JD technology belongs in a role only if THAT role's original description already names that family. CURRENT SKILLS must not be copied into mayUse. Competing technologies are not a default pair. Versions must not appear in a job that ended before they existed. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a credibility and signal editor. Delete generic duties, cloned JD stacks, fake metrics, and hiring-company leakage. Keep project-based bullets that show ownership, what shipped, and the outcome. Every role must keep at least 5 bullets — split real projects into distinct contributions if needed, do not pad with generic duties. Skills must always be {"hard":[...],"soft":[...]} with both arrays non-empty. Do not add employers or change dates. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a credibility and signal editor. Delete generic duties, cloned JD stacks, fake metrics, and hiring-company leakage. Keep project-based bullets that show ownership, what shipped, and the outcome. The summary must stay a professional profile — rewrite it if it reads like concatenated experience bullets. Every role must keep at least 5 bullets — split real projects into distinct contributions if needed, do not pad with generic duties. Skills must always be {"hard":[...],"soft":[...]} with both arrays non-empty. Do not add employers or change dates. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -464,7 +464,7 @@ AUDIT:
 9. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
 10. Every role must have at least 5 bullets. Typical 5-8 for recent or longer roles, 5-6 for earlier roles. If a role has fewer than 5, split real projects into distinct contributions. Do not drop below 5. Do not pad with generic duties.
 11. Skills: ALWAYS return {"hard":[...],"soft":[...]}. Both arrays required and non-empty. Hard: 8-14 core technical skills for THIS job. Soft: 3-5 true interpersonal skills. Plain strings only — no <b>, <br>, or HTML. Do not add skills the candidate has never used.
-12. Summary: 2-4 sentences stating the specific value for this role, backed by real projects. No version numbers, no hiring-company name, no generic "experienced engineer with many technologies."
+12. Summary: a professional profile of who they are and the value they bring to THIS role — seniority, focus, 2-3 core strengths. Not a recap of jobs. If it lists delivered/migrated/enhanced projects, rewrite it. No version numbers, no hiring-company name, no generic "experienced engineer with many technologies."
 13. Keep <b>...</b> around tech tokens in experience bullets and the summary. Skills must be plain text with no markup. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
 
 Respond with ONLY the corrected resume JSON in this shape:
@@ -570,10 +570,12 @@ CRITICAL INSTRUCTIONS:
    - Add JD aliases only when they name something already in CURRENT SKILLS. Deduplicate aliases.
    - Versions may appear here even if bullets use the family name.
 
-5. SUMMARY:
-   - 2-4 sentences. Specific value for THIS role, backed by real projects and ownership — not a generic years-and-tech dump.
+5. SUMMARY — professional profile, not experience:
+   - 2-4 sentences. Who they are, seniority, and the value they bring to THIS role.
+   - Name at most two or three core strengths or technology families. Do not recap the skills list.
+   - FORBIDDEN in the summary: narrating specific projects, employers, or deliverables (proof of concept, migration, dashboard, admin screens, mobile app). That belongs only in Professional Experience.
+   - FORBIDDEN openings that read like bullets: "Delivered…", "Enhanced…", "Migrated…", "Built X using Y, then did Z."
    - Family names only, no version numbers, no hiring-company name.
-   - Mention at most two or three core strengths. Do not recap the entire skills list.
 
 6. JOB TITLES:
    - Slight honest alignment only if seniority is already true.
@@ -590,7 +592,7 @@ Respond with ONLY valid JSON. Same number of positions as original experience.
 {
   "jobTitle": "extracted or inferred job title from the job description",
   "companyName": "extracted or inferred company name from the job description",
-  "summary": "Specific value for this role, backed by real projects...",
+  "summary": "Senior engineer focused on modern web platforms and cloud-backed services. Strong in frontend architecture and API integration, with a track record of owning delivery from prototype through production.",
   "experience": [
     {
       "position": "Job title",
