@@ -181,7 +181,7 @@ export const generateDocx = async (
     experience: () => {
       if (!profile?.experience?.length) return [];
       return [
-        createSectionHeader(theme, 'EXPERIENCE'),
+        createSectionHeader(theme, 'PROFESSIONAL EXPERIENCE'),
         ...createProfessionalExperienceSection(
           theme,
           bodyRun,
@@ -247,7 +247,7 @@ const createHeader = (
         }),
       ],
       alignment: align,
-      spacing: { after: title ? 60 : 200 },
+      spacing: { after: title ? 60 : 80 },
     }),
   ];
 
@@ -263,7 +263,7 @@ const createHeader = (
           }),
         ],
         alignment: align,
-        spacing: { after: 200 },
+        spacing: { after: 40 },
       })
     );
   }
@@ -278,6 +278,8 @@ const createHeader = (
   if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
   if (!contactParts.length) return paragraphs;
+
+  paragraphs.push(createSectionHeader(theme, 'CONTACT'));
 
   const contactBorder = t.header.underlineAfterContact
     ? {

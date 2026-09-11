@@ -253,6 +253,7 @@ export async function generateResumePdf(
     if (profile.portfolio) contactParts.push({ label: 'Portfolio', value: profile.portfolio });
 
     if (contactParts.length) {
+      sectionHeader('Contact');
       if (t.contact.layout === 'inline') {
         const tokens: StyledToken[] = [];
         contactParts.forEach((part, i) => {
@@ -379,7 +380,7 @@ export async function generateResumePdf(
     );
     if (!experienceEntries.length) return;
 
-    sectionHeader('Experience');
+    sectionHeader('Professional Experience');
     const twoColumn = t.experience.layout === 'twoColumn';
     const showAddress = t.experience.showAddress;
 
