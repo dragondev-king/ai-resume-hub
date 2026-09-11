@@ -97,11 +97,11 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer. Tailor the resume for ATS keyword match and a human recruiter without inventing a new career. Put job-description keywords in the skills list and, when they are already true, in the summary and current role. Do not paste the hiring company name, product names, or unique JD programs into other employers. Keep each job\'s real stack from the original description and CURRENT SKILLS. Rephrase and reorder to emphasize overlap. Do not add languages, frameworks, or cloud products the candidate did not use at that company. Current/most recent role: 5-8 bullets. Other roles: 3-5. Short or older roles: 2-4. No padding with mentoring/agile/documentation filler. No invented metrics. Wrap tech tokens in experience bullets with <b>...</b>. Never put a version in a job that ended before that version existed. Extract jobTitle and companyName from the job description for metadata only.';
+  'You are an expert resume writer. Tailor the resume for ATS keyword match and a human recruiter without inventing a new career. Put job-description keywords in the skills list and, when they are already true, in the summary and current role. Do not paste the hiring company name, product names, or unique JD programs into other employers. Keep each job\'s real stack from the original description and CURRENT SKILLS. Rephrase and reorder to emphasize overlap. Do not add languages, frameworks, or cloud products the candidate did not use at that company. Every work experience must have at least 6 bullets (6-10; 8-10 for the most recent or longer roles). No invented metrics. Wrap tech tokens in experience bullets with <b>...</b>. Never put a version in a job that ended before that version existed. Extract jobTitle and companyName from the job description for metadata only.';
 
 const TIMELINE_SYSTEM_PROMPT = `You map technologies onto a candidate's real work history. A version must not appear in a job that ended before it existed. JD technologies belong in a role only if that role's original description or CURRENT SKILLS already include that family. Do not put required JD versions in mustUse unless the original experience already used that family. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a credibility editor. Remove invented stacks, target-company leakage, and fake metrics. Do not add new employers or change dates. Prefer fewer honest bullets over padded ones. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a credibility editor. Remove invented stacks, target-company leakage, and fake metrics. Do not add new employers or change dates. Keep at least 6 bullets per role. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -410,7 +410,7 @@ AUDIT:
 2. Remove technologies, languages, and frameworks that are not in that job's original description and not in CURRENT SKILLS.
 3. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
 4. Remove invented percentages and metrics that were not in the original description.
-5. Drop padded filler bullets (generic mentoring, agile ceremonies, documentation) if a role is above 8 (current) or 5 (older).
+5. Keep at least 6 bullets per role. Drop generic mentoring/agile/documentation filler only if a role already has more than 10 bullets.
 6. Skills: keep the real CURRENT SKILLS list; add only JD aliases the candidate already has; deduplicate; do not replace the list with JD-only keywords.
 7. Summary: 3-4 sentences, no version numbers, no hiring-company name.
 8. Keep <b>...</b> around remaining tech tokens. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned".
@@ -499,10 +499,9 @@ CRITICAL INSTRUCTIONS:
    - Use action verbs. Prefer concrete delivery over mentoring/agile/code-review filler
 
 3. BULLET COUNT:
-   - Most recent role: 5-8 bullets
-   - Other roles: 3-5
-   - Short or older roles: 2-4
-   - Full accomplishments, not stubs, and not padded to a quota
+   - Every role: at least 6 bullets. Typical range 6-10.
+   - Most recent or longer roles: 8-10
+   - Full accomplishments, not stubs. Do not invent employers, stacks, or metrics to fill space.
 
 4. ATS KEYWORDS (this is how the resume still matches):
    - Skills list: start from CURRENT SKILLS, keep them, add JD terms the candidate already has, including exact aliases (AWS and Amazon Web Services if they have AWS)
