@@ -411,7 +411,7 @@ AUDIT:
 3. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
 4. Remove invented percentages and metrics that were not in the original description.
 5. Keep at least 6 bullets per role. Drop generic mentoring/agile/documentation filler only if a role already has more than 10 bullets.
-6. Skills: keep the real CURRENT SKILLS list; add only JD aliases the candidate already has; deduplicate; do not replace the list with JD-only keywords.
+6. Skills: keep the real CURRENT SKILLS list; add only JD aliases the candidate already has; include genuine soft skills when true; deduplicate; do not replace the list with JD-only keywords.
 7. Summary: 3-4 sentences, no version numbers, no hiring-company name.
 8. Keep <b>...</b> around remaining tech tokens. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned".
 
@@ -505,6 +505,7 @@ CRITICAL INSTRUCTIONS:
 
 4. ATS KEYWORDS (this is how the resume still matches):
    - Skills list: start from CURRENT SKILLS, keep them, add JD terms the candidate already has, including exact aliases (AWS and Amazon Web Services if they have AWS)
+   - Include both hard/technical skills and genuine soft skills (Leadership, Communication, Mentoring, Problem-solving, etc.) when they are true of the candidate
    - Versions may appear in the skills list for ATS (React 18) even if bullets use the family name
    - Do not add skills the candidate has never used
    - Deduplicate Vue/Vue.js, Angular/Angular.js, React/React.js

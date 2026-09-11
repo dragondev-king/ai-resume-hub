@@ -57,65 +57,21 @@ export const RESUME_SPACING = {
 
 export type CategorizedSkills = { label: string; skills: string[] }[];
 
-type SkillSectionDef = {
-  label: string;
-  /** Always included on every resume. */
-  base: string[];
-  /** Match job-requirement / AI skills into this section. */
-  pattern: RegExp;
-};
-
-/**
- * Static skill baseline for all resumes.
- * Job-specific skills are merged into these sections when they match.
- */
-const STATIC_SKILL_SECTIONS: SkillSectionDef[] = [
-  {
-    label: 'Programming Languages',
-    base: ['JavaScript', 'TypeScript', 'Python', 'HTML', 'Go', 'Ruby'],
-    pattern:
-      /^(javascript|typescript|python|html|go|golang|ruby|java|c\+\+|c#|csharp|swift|kotlin|php|rust|scala|css|sql)$/i,
-  },
-  {
-    label: 'Frameworks & Libraries',
-    base: [
-      'React',
-      'Next.js',
-      'Vue.js',
-      'Angular.js',
-      'Nuxt',
-      'Django',
-      'Flask',
-      'FastAPI',
-      'Ruby on Rails',
-      'Node.js',
-      'Express.js',
-    ],
-    pattern:
-      /(react|next\.?js|vue(\.js)?|angular(\.js)?|nuxt|django|flask|fastapi|rails|ruby on rails|node\.?js|express(\.js)?|svelte|nestjs|spring|laravel|tailwind|bootstrap)/i,
-  },
-  {
-    label: 'Databases',
-    base: ['PostgreSQL', 'MongoDB', 'MySQL', 'SQLite', 'Supabase', 'Firebase'],
-    pattern:
-      /(postgresql|postgres|mongodb|mysql|sqlite|supabase|firebase|firestore|redis|dynamodb|mariadb|oracle|sql server|mssql)/i,
-  },
-  {
-    label: 'Cloud & DevOps',
-    base: ['AWS', 'GCP', 'Azure', 'Jenkins', 'CI/CD', 'CircleCI', 'Docker'],
-    pattern:
-      /(aws|gcp|google cloud|azure|jenkins|ci\/?cd|circleci|docker|kubernetes|k8s|terraform|github actions|gitlab ci|ansible|helm)/i,
-  },
-];
+const SOFT_SKILL_PATTERN =
+  /\b(communication|leadership|teamwork|collaboration|collaborative|problem[- ]?solving|critical thinking|time management|adaptability|adaptable|mentoring|mentorship|coaching|presentation|public speaking|conflict resolution|emotional intelligence|creativity|creative|attention to detail|organization|organizational|self[- ]?motivated|self[- ]?starter|work ethic|interpersonal|stakeholder|client[- ]?facing|customer service|negotiation|empathy|initiative|ownership|accountability|reliability|flexible|flexibility|multitasking|prioritization|decision[- ]?making|analytical thinking)\b/i;
 
 function normalizeSkillKey(skill: string): string {
   return skill.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function mergeUnique(base: string[], extras: string[]): string[] {
-  const seen = new Set(base.map(normalizeSkillKey));
-  const result = [...base];
-  for (const skill of extras) {
+function isSoftSkill(skill: string): boolean {
+  return SOFT_SKILL_PATTERN.test(skill.trim());
+}
+
+function uniqueSkills(skills: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const skill of skills) {
     const trimmed = skill.trim();
     if (!trimmed) continue;
     const key = normalizeSkillKey(trimmed);
@@ -127,23 +83,23 @@ function mergeUnique(base: string[], extras: string[]): string[] {
 }
 
 /**
- * Build skill sections: static baseline for every resume, plus extras from
- * job-requirement / AI skills that fit each category.
+ * Split generated skills into Hard Skills and Soft Skills.
+ * Only the AI/profile skill list is used — no static baseline.
  */
 export function buildResumeSkillSections(jobSkills: string[] = []): CategorizedSkills {
-  const extras = jobSkills.map((s) => s.trim()).filter(Boolean);
-  const used = new Set<string>();
+  const unique = uniqueSkills(jobSkills);
+  const hard: string[] = [];
+  const soft: string[] = [];
 
-  return STATIC_SKILL_SECTIONS.map(({ label, base, pattern }) => {
-    const matchedExtras = extras.filter((skill) => {
-      const key = normalizeSkillKey(skill);
-      if (used.has(key)) return false;
-      if (!pattern.test(skill)) return false;
-      used.add(key);
-      return true;
-    });
-    return { label, skills: mergeUnique(base, matchedExtras) };
-  });
+  for (const skill of unique) {
+    if (isSoftSkill(skill)) soft.push(skill);
+    else hard.push(skill);
+  }
+
+  return [
+    { label: 'Hard Skills', skills: hard },
+    { label: 'Soft Skills', skills: soft },
+  ].filter((section) => section.skills.length > 0);
 }
 
 /** Flat list of all skills shown on the resume. */

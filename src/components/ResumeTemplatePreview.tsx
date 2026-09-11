@@ -30,10 +30,8 @@ export const MOCK_RESUME_PREVIEW = {
   summary:
     'Results-driven engineer with <b>8+ years</b> building scalable web platforms and APIs. Known for pairing strong product sense with clean architecture, mentoring teams, and shipping reliable features under tight deadlines.',
   skillsCategorized: [
-    { label: 'Programming Languages', skills: 'TypeScript, JavaScript, Python, Go, SQL' },
-    { label: 'Frameworks & Libraries', skills: 'React, Node.js, Next.js, Express, Django' },
-    { label: 'Cloud & DevOps', skills: 'AWS, Docker, Kubernetes, CI/CD, Terraform' },
-    { label: 'Databases', skills: 'PostgreSQL, Redis, MongoDB, Elasticsearch' },
+    { label: 'Hard Skills', skills: 'TypeScript, React, Node.js, AWS, PostgreSQL, Docker' },
+    { label: 'Soft Skills', skills: 'Leadership, Mentoring, Agile, Problem-solving' },
   ],
   skillsFlat: [
     'TypeScript',
