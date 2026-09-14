@@ -97,11 +97,11 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer. Tailor the resume for THIS job: the original history stays real, but required JD technologies must appear in skills, in the summary, and at least once in an appropriate experience role. Do not clone the JD stack into every employer. Place each must-have JD technology in the single best-fit company (same lane: UI work for a UI framework, backend work for a backend language). Other companies keep their original tools. The summary is a professional profile, not a recap of jobs. Every company must have at least 5 bullets. Skills must always include both hard and soft arrays, and hard must lead with the JD\'s must-have technologies. No hiring-company names in other employers. No invented metrics. Wrap tech tokens in experience bullets and the summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only.';
+  'You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, almost no repeated tool names. Required JD technical skills must appear in skills.hard, in the summary, and somewhere in the LATEST company — each distinctive skill ONCE per company, not in every bullet. Most bullets name zero tools and describe the work. Never write "using JavaScript and TypeScript" on line after line. Never laundry-list 4+ tools in one sentence. Keep the latest company\'s real products; attach JD frameworks to those projects once each. Optional in other appropriate companies. Do not clone the JD stack into every employer. Industry/domain terms stay in summary and skills. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only.';
 
-const TIMELINE_SYSTEM_PROMPT = `You map projects and technologies for a tailored resume. Required JD technologies must be assigned to exactly one appropriate role (mustUse), even if that role's original description did not name them. Other roles mustNotUse those JD-only tools. Competing technologies are not a default pair. Versions must not appear in a job that ended before they existed. Respond with valid JSON only.`;
+const TIMELINE_SYSTEM_PROMPT = `You map projects and technologies. Latest role mustUse lists required JD technical skills for coverage, but the writer may name each one only once in that role. Other same-lane roles may include them in mayUse. Unrelated roles mustNotUse JD-only tools. Respond with valid JSON only.`;
 
-const AUDIT_SYSTEM_PROMPT = `You are a credibility and tailoring editor. Keep project-based bullets. The resume MUST mention each JD must-have technology in skills, in the summary, and in exactly one appropriate experience role — add that placement if the draft omitted it. Strip the same JD tool if it was copied into every employer. The summary must stay a professional profile. Skills must be {"hard":[...],"soft":[...]} with JD must-haves first in hard. Do not add employers or change dates. Respond with valid JSON only.`;
+const AUDIT_SYSTEM_PROMPT = `You are a human-voice editor. Strip repeated tool names. In each company, a given technology may appear at most once. Delete JavaScript/TypeScript/HTML/CSS/Git from extra bullets in the same role. Split laundry-list bullets that name 4+ tools. Most bullets should have no tool names. Latest company as a whole must still contain each required distinctive JD skill (frameworks and languages the JD hinges on) exactly once. Do not copy those tools into every employer. Summary is a profile. Skills.hard leads with JD must-haves. No fake metrics. No hiring-company leakage. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -349,20 +349,22 @@ ${params.jobDescription}
 CANDIDATE WORK HISTORY (dates are facts):
 ${params.workHistory}
 
-Build a project-and-stack map for a tailored resume. Real projects stay real. Required JD technologies get exactly one appropriate home.
+Build a project-and-stack map for a tailored resume. Real projects stay real. Required JD technologies MUST appear in the latest company, and MAY appear in other same-lane companies.
 
 INSTRUCTIONS:
 1. Extract must-have technologies from THIS job description (title + required qualifications), plus versioned products.
 2. For each, estimate when it first became available (YYYY-MM). Distinguish family vs version.
 3. From each role's original description, extract the real work as projects: named products, features, systems, integrations, or migrations. If the text has no product name, cluster related work into a project without inventing a client or product the original did not mention.
-4. Pick ONE best-fit role for each JD must-have family: the most recent role in the same lane (UI/frontend for a UI framework, APIs/backend for a backend language, cloud for a cloud platform). That role gets the family in mustUse even if the original text did not name it. Prefer a role whose original work is compatible (already UI work for a UI tool). Avoid a role that already clearly used a competing tool in the same class if another plausible role exists.
-5. For each role:
+4. Latest role (most recent dates): mustUse = EVERY required JD technical skill (languages, frameworks, CSS libraries, git tools). Do this even if the original title is frontend and the JD wants backend, or the original used a competing library. Industry/domain terms (a specific industry) are NOT required in mustUse. Versions that did not exist yet stay out.
+5. Other roles in the same lane: those JD technical families may go in mayUse. Optional — not every such role.
+6. Roles in a clearly different lane: JD-only families go in mustNotUse. The latest role is never "different lane" for this purpose.
+7. For each role:
    - projects: at least 5 items (5-8). Split a large product into distinct contributions if the original only names one system.
-   - mayUse: families NAMED in that role's original description, plus mustUse for this role.
-   - mustUse: JD must-have families assigned to THIS role only (see 4). Empty for other roles.
-   - mustNotUse: versions that did not exist yet; JD must-haves assigned to a different role; competing technologies this role should not gain.
-   - eraStackGuidance: keep this job's original projects. If mustUse is non-empty, weave those tools into one or two existing projects — do not rewrite the whole job.
-6. Do not put the same JD-only technology in mustUse for more than one role.
+   - mayUse: families NAMED in that role's original description, plus optional same-lane JD families (see 5), plus mustUse for this role.
+   - mustUse: latest role always gets all required JD technical families. Other roles: empty unless the original already named that family.
+   - mustNotUse: versions that did not exist yet; JD must-haves that do not belong in this lane.
+   - eraStackGuidance: keep this job's original projects. If mustUse or optional JD families apply, weave them into one or two existing projects — do not rewrite the whole job.
+8. Do not put JD-only technologies in mustUse for every role. Latest company is required; additional same-lane companies are optional.
 
 Respond with ONLY JSON using the REAL company names, dates, and technologies.
 
@@ -373,7 +375,7 @@ Respond with ONLY JSON using the REAL company names, dates, and technologies.
       "kind": "versioned",
       "introduced": "YYYY-MM",
       "confidence": "high",
-      "notes": "Required by the JD. Assign to exactly one appropriate role in mustUse. Do not copy into every employer."
+      "notes": "Required technical skill. Latest role mustUse always. Optional mayUse on other same-lane roles. Never skip the latest role."
     }
   ],
   "roles": [
@@ -384,7 +386,7 @@ Respond with ONLY JSON using the REAL company names, dates, and technologies.
       "mayUse": ["<Family already used here>"],
       "mustUse": [],
       "mustNotUse": ["<JD-only tech>", "<Family> <Version>"],
-      "eraStackGuidance": "Keep this role's original projects. If mustUse is set, weave those JD tools into one or two of those projects only.",
+      "eraStackGuidance": "Latest role: keep real products. Name each required distinctive JD skill once, on separate bullets. Do not repeat baseline languages on every line.",
       "projects": [
         {
           "name": "<product, feature, or system from original description>",
@@ -447,7 +449,7 @@ CURRENT SKILLS:
 ${params.currentSkills}
 
 PROJECT AND STACK MAP:
-${params.timeline || 'Keep original projects per company. Each JD must-have technology belongs in skills, the summary, and exactly one appropriate experience role — not every employer. No hiring-company names.'}
+${params.timeline || 'Keep original projects per company. Each JD must-have technology belongs in skills, the summary, and the latest company. It may also appear in other same-lane companies. Not every employer. No hiring-company names.'}
 
 DRAFT RESUME JSON:
 ${params.draft}
@@ -456,17 +458,18 @@ AUDIT:
 1. Keep companies, start/end dates, addresses, and the same number of roles.
 2. Each bullet must be a project, product, feature, system, or integration from that job's original description. Delete generic duties: collaborated, participated in agile, wrote documentation, performed testing, translated requirements, unless the sentence names a specific deliverable and outcome.
 3. Show ownership (owned / led / built / contributed — only as strong as the original supports), what shipped, and the result for users or the system. Do not invent percentages or metrics.
-4. Most companies keep only technologies NAMED in that job's original description. Exception: each JD must-have technology MUST appear in exactly one appropriate role (see 14). Do not strip that single placement.
-5. If two or more roles use the same 3+ technology list in a bullet, rewrite those bullets around different projects.
-6. Competing technologies must not be dumped into the same role as a laundry list. The one JD-placement role may name the JD tool alongside the original project; other roles keep their original stack.
-7. Delete laundry-list bullets of the form "Did X using A, B, C, and D to support Y".
-8. Delete JD-only tools from a role unless it is the single assigned placement for that tool, or the original description already named it.
+4. The latest company as a WHOLE must name each distinctive required JD skill once. Do not strip those once-each placements. Do not leave them repeated on every bullet.
+5. If a technology appears more than once in the same company, keep the strongest mention and remove the rest.
+6. In the latest company, required distinctive frameworks may replace a competing original library on one bullet. Keep the real product. Never laundry-list 4+ tools in one sentence. Unrelated older roles keep their original stack and must not repeat baseline languages on every line.
+7. Delete laundry-list bullets of the form "Did X using A, B, C, and D to support Y". Rewrite as a project sentence with at most one tool.
+8. Delete JD-only tools from older unrelated roles. Never delete the single latest-company mention of a required distinctive skill.
 9. Delete any mention of the hiring company, its products, or unique JD program names from summary and bullets.
-10. Every role must have at least 5 bullets. Typical 5-8 for recent or longer roles, 5-6 for earlier roles. If a role has fewer than 5, split real projects into distinct contributions. Do not drop below 5. Do not pad with generic duties.
+10. Every role must have at least 5 bullets. Typical 5-8 for recent or longer roles, 5-6 for earlier roles. Most of those bullets describe work with no tool name.
 11. Skills: ALWAYS return {"hard":[...],"soft":[...]}. Hard MUST lead with the JD's must-have technologies, then other true supporting skills. Soft: 3-5 true interpersonal skills. Plain strings only — no <b>, <br>, or HTML.
-12. Summary: a professional profile of who they are for THIS role. It MUST name the primary JD technology family as a strength. Not a recap of jobs. If it lists delivered/migrated/enhanced projects, rewrite it. No version numbers, no hiring-company name.
-13. Keep <b>...</b> around tech tokens in experience bullets and the summary. Skills must be plain text with no markup. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
-14. JD coverage check: every must-have technology from the job description appears (a) in skills.hard, (b) in the summary, and (c) in at least one experience bullet at the best-fit company. If the draft missed (c), add one or two bullets in that company using a real project from its original description. Do not add it to every company.
+12. Summary: a professional profile. Name the primary JD stack once. Not a recap of jobs. No version numbers, no hiring-company name.
+13. Keep <b>...</b> around remaining tech tokens. Skills must be plain text. No "scalability"/"reliability"/"robust"/"passionate"/"seasoned"/"best practices"/"foster".
+14. Coverage: in the latest company, each distinctive required skill (the frameworks and languages the JD actually hinges on) appears exactly once across that role's bullets. Baseline skills that everyone lists (the common scripting language, markup, stylesheets, git) appear at most once in that company, and usually belong only in the skills section. Industry/domain words stay in summary/skills. Optional: other same-lane companies, still once per company.
+15. Human-voice fail: if most bullets in a role contain the same two language names, rewrite those bullets to drop the repeated names and talk about the product.
 
 Respond with ONLY the corrected resume JSON in this shape:
 {
@@ -512,7 +515,7 @@ const createAIPrompt = (
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
 
   return `
-Create a tailored resume for THIS job. Keep real companies, dates, and projects. Enhance wording and place required JD technologies where a recruiter and ATS will see them — skills, summary, and one appropriate experience role. Do not reprint the original CV unchanged, and do not rewrite the candidate into a different engineer at every company.
+Create a tailored resume a human recruiter would believe. Real companies, dates, and projects. Required JD skills show up in skills, summary, and once in the latest company — not stuffed into every bullet.
 
 TODAY'S DATE: ${today}
 
@@ -538,7 +541,7 @@ CURRENT SKILLS (inventory to draw from; still add JD must-haves to skills.hard):
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
 PROJECT AND STACK MAP:
-${timeline || 'Keep original projects per company. Place each JD must-have technology in skills, the summary, and exactly one appropriate experience role. Do not clone the JD stack into every employer.'}
+${timeline || 'Keep original projects per company. Place each JD must-have technology in skills, the summary, and the latest company. Other same-lane companies are optional. Do not clone the JD stack into every employer.'}
 
 CRITICAL INSTRUCTIONS:
 1. ANALYZE the job description for seniority, must-have technologies, and terminology. Put jobTitle and companyName in the JSON metadata. Never write the hiring company, product, or program names into the summary or into any employer's bullets.
@@ -546,15 +549,18 @@ CRITICAL INSTRUCTIONS:
 2. EXPERIENCE — real projects, tailored emphasis:
    - Read the original description as a source of projects: products, features, systems, integrations, migrations, and the candidate's part in them.
    - Each bullet is one project or one distinct technical contribution: who owned it, what shipped, and what changed for users or the system.
-   - JD KEYWORD PLACEMENT (required): Extract the JD's must-have technologies. Each one MUST appear in Professional Experience at least once. Put it in the single best-fit company — usually the most recent role in the same lane (UI/frontend work for a UI framework, backend/API work for a backend language, cloud work for a cloud platform). Weave it into a real project from that company's original description. One or two bullets is enough.
-   - Do NOT mention that JD-only technology at every employer. Other companies keep their original tools.
-   - If the original already names the JD tool, keep it there and count that as coverage.
-   - Prefer a compatible role. Do not force a UI framework into a clearly unrelated backend-only job if a frontend/UI role exists.
+   - JD KEYWORD PLACEMENT:
+     REQUIRED — latest company: each distinctive required skill (the frameworks and languages the JD actually hinges on) MUST appear by name somewhere in that company, even if the original title or stack differed. Keep real products (storefront, search, portal). Put each of those skills on a different bullet, once. Do not pile them into one sentence.
+     OPTIONAL — other similar web/app companies may name a distinctive JD skill once.
+     Do NOT put required tools on every employer. Do NOT force industry/domain terms into a company in a different industry.
+   - ONCE PER COMPANY: after a tool is named in a role, do not name it again in that role. Baseline skills (common scripting language, markup, stylesheets, git) belong in the skills section; if used in experience, at most once for the whole company, never on every line.
+   - HUMAN VOICE: lead with what shipped and who it helped. Most bullets have zero tool names. A good bullet: "Shipped product search so shoppers could filter inventory without leaving the page." A bad bullet: "Developed features using Skill, Skill, Skill, Skill, and Skill."
+   - If the original already names a JD tool, keep one mention and still ensure the latest company names each distinctive required skill once.
    - Lead each role with the work that best matches THIS job when that work is already in the original description.
    - Make ownership obvious. Use the strongest verb the original supports. Do not inflate "contributed" into "led."
    - Outcomes: use numbers only if they are in the original. Otherwise state a concrete qualitative result. Do not invent 20%/25%/40%.
-   - Name at most one or two tools per bullet. Different companies must read like different jobs.
-   - FORBIDDEN: generic duties (collaborated with teams, participated in agile, wrote documentation, performed testing, translated requirements) unless tied to a named deliverable. FORBIDDEN: "Did X using A, B, C, and D to support Y."
+   - Name at most one tool per bullet, and only on the bullet where it is distinctive. Different companies must read like different jobs.
+   - FORBIDDEN: generic duties unless tied to a named deliverable. FORBIDDEN: "Did X using A, B, C, and D". FORBIDDEN: repeating the same two language names in most bullets of a role.
    - If the original is thin, cluster what is there into the few real pieces of work. Do not fill space with responsibilities the original never described.
    - Do not use "scalability", "reliability", "robust", "passionate", "seasoned", "best practices", or "foster".
 
@@ -603,11 +609,11 @@ Respond with ONLY valid JSON. Same number of positions as original experience.
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Owned the search work — shipped filters with <b>Skill</b> so users could find records without leaving the page.",
-        "Built a status API so operations could see failed requests the same day.",
-        "Integrated the new screens with existing services so the proof of concept could run without a rewrite.",
-        "Hardened state handling on the unfinished app so data survived navigation and refresh.",
-        "Closed production defects on the same product so the release stayed on schedule."
+        "Shipped catalog updates on <b>Skill</b> so merchandisers could change products without a deploy.",
+        "Rebuilt storefront search in <b>Skill</b> so shoppers could filter without leaving the page.",
+        "Built a support chatbot so shoppers got answers without waiting on email.",
+        "Wired analytics on checkout so the team could see where carts dropped.",
+        "Kept the hybrid app in step with the same catalog so mobile shoppers saw current inventory."
       ]
     }
   ],
