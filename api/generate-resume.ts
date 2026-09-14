@@ -99,8 +99,6 @@ async function generateJsonText(params: {
 const SYSTEM_PROMPT =
   'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
 
-const TIMELINE_SYSTEM_PROMPT = `You map job-description technologies onto a candidate's real work history. A specific version must not appear in a job that ended before it existed. Required JD versions belong in mustUse for the MOST RECENT role only. Each version should be named once in that role's bullets, then family names only. All earlier roles: family name in mayUse, required version in mustNotUse. Respond with valid JSON only.`;
-
 const AUDIT_SYSTEM_PROMPT = `You are a light copy editor. Do not rewrite the resume. Do not shorten it. Do not drop bullets or skills. Keep the same dates, companies, bullet count, and skill list length. Only fix version-number placement. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
@@ -137,55 +135,6 @@ const RESUME_OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
-const TIMELINE_OUTPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    technologies: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          kind: { type: 'string' },
-          introduced: { type: 'string' },
-          confidence: { type: 'string' },
-          notes: { type: 'string' },
-        },
-        required: ['name', 'kind', 'introduced', 'confidence', 'notes'],
-        additionalProperties: false,
-      },
-    },
-    roles: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          company: { type: 'string' },
-          start_date: { type: 'string' },
-          end_date: { type: 'string' },
-          mayUse: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          mustUse: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          mustNotUse: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          eraStackGuidance: { type: 'string' },
-        },
-        required: ['company', 'start_date', 'end_date', 'mayUse', 'mustUse', 'mustNotUse', 'eraStackGuidance'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['technologies', 'roles'],
-  additionalProperties: false,
-};
-
 interface RequestBody {
   profile: any;
   jobDescription: string;
@@ -219,21 +168,11 @@ export default async function handler(
     const today = formatToday();
     const workHistory = formatWorkHistory(profile);
 
-    // Claude is slower; three sequential calls often exceed Vercel’s limit and
-    // surface as FUNCTION_INVOCATION_FAILED. Chronology rules stay in the main prompt.
-    const timeline =
-      provider === 'claude'
-        ? ''
-        : await analyzeTechnologyTimeline({
-            provider,
-            jobDescription,
-            workHistory,
-            today,
-          });
-
+    // Claude is slower; a second sequential call often exceeds Vercel’s limit and
+    // surfaces as FUNCTION_INVOCATION_FAILED. Version rules stay in the main prompt.
     const draft = await generateResumeDraft({
       provider,
-      prompt: createAIPrompt(profile, jobDescription, timeline, today, workHistory),
+      prompt: createAIPrompt(profile, jobDescription, today, workHistory),
     });
 
     const aiResponse =
@@ -242,7 +181,6 @@ export default async function handler(
         : await auditResumeChronology({
             provider,
             draft,
-            timeline,
             workHistory,
             jobDescription,
             today,
@@ -294,83 +232,6 @@ function formatWorkHistory(profile: any): string {
     .join('\n');
 }
 
-async function analyzeTechnologyTimeline(params: {
-  provider: AIProvider;
-  jobDescription: string;
-  workHistory: string;
-  today: string;
-}): Promise<string> {
-  const prompt = `TODAY'S DATE: ${params.today}
-
-JOB DESCRIPTION:
-${params.jobDescription}
-
-CANDIDATE WORK HISTORY (dates are facts):
-${params.workHistory}
-
-Build a chronology map. Required job-description versions may be named in the MOST RECENT role only.
-
-INSTRUCTIONS:
-1. Extract technologies and versioned products from THIS job description. Use whatever names and versions the JD actually lists.
-2. For each, estimate when it first became available (YYYY-MM).
-3. Distinguish family names from versions. "<Family>" is not "<Family> <Version>".
-4. Identify the most recent work-history role (latest end date, or Present).
-5. For each role, list:
-   - mayUse: family names that existed during that role — not version numbers, except as below
-   - mustUse: required JD versions for the MOST RECENT role only, and only if that role was still active after the version shipped. Empty for every earlier role.
-   - mustNotUse: required JD versions for every role except that one most-recent eligible role
-   - eraStackGuidance: most recent eligible role should name each required version once in the whole bullet list; remaining bullets and all other roles use the family name with no version number
-6. If the most recent role ended before the version existed, mustUse is empty everywhere. Do not assign the version to an older company.
-
-Respond with ONLY JSON using the REAL company names and dates from the work history above, and the REAL technologies from the job description. The following is the shape only — copy structure, not these placeholders:
-
-{
-  "technologies": [
-    {
-      "name": "<Family> <Version>",
-      "kind": "versioned",
-      "introduced": "YYYY-MM",
-      "confidence": "high",
-      "notes": "Required by the JD. Name it only in the most recent role if that role was still active after introduced."
-    }
-  ],
-  "roles": [
-    {
-      "company": "<most recent company from work history>",
-      "start_date": "YYYY-MM",
-      "end_date": "YYYY-MM",
-      "mayUse": ["<Family>", "<Family> <Version>"],
-      "mustUse": ["<Family> <Version>"],
-      "mustNotUse": [],
-      "eraStackGuidance": "Most recent role and dates allow the required version. This is the ONLY role that should name it."
-    },
-    {
-      "company": "<earlier company from work history>",
-      "start_date": "YYYY-MM",
-      "end_date": "YYYY-MM",
-      "mayUse": ["<Family>"],
-      "mustUse": [],
-      "mustNotUse": ["<Family> <Version>"],
-      "eraStackGuidance": "Write the family name only. No version numbers."
-    }
-  ]
-}`;
-
-  try {
-    return await generateJsonText({
-      provider: params.provider,
-      prompt,
-      system: TIMELINE_SYSTEM_PROMPT,
-      schema: TIMELINE_OUTPUT_SCHEMA,
-      temperature: 0.2,
-      maxTokens: 4000,
-    });
-  } catch (error) {
-    console.error('Technology timeline analysis failed; continuing with prompt-only chronology rules:', error);
-    return '';
-  }
-}
-
 async function generateResumeDraft(params: {
   provider: AIProvider;
   prompt: string;
@@ -388,7 +249,6 @@ async function generateResumeDraft(params: {
 async function auditResumeChronology(params: {
   provider: AIProvider;
   draft: string;
-  timeline: string;
   workHistory: string;
   jobDescription: string;
   today: string;
@@ -400,9 +260,6 @@ ${params.jobDescription}
 
 FACTUAL WORK HISTORY DATES:
 ${params.workHistory}
-
-TECHNOLOGY TIMELINE (follow this):
-${params.timeline || 'Required JD versions may be named in the most recent company only, and only if that role was still active after the version shipped. Summary: family names only, no versions. Earlier jobs: family names, no version numbers.'}
 
 DRAFT RESUME JSON:
 ${params.draft}
@@ -454,7 +311,6 @@ Respond with ONLY the corrected resume JSON in this shape:
 const createAIPrompt = (
   profile: any,
   jobDescription: string,
-  timeline: string,
   today: string,
   workHistory: string
 ): string => {
@@ -487,9 +343,6 @@ ${education
 CURRENT SKILLS (keep these; add JD skills; do not replace this list with only a few keywords):
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
 
-VERSION MAP (placement only — do not use this to shrink the resume):
-${timeline || 'Required JD versions: name them once in the most recent company if that role was still active after the version shipped. Summary and earlier jobs: family name only.'}
-
 CRITICAL INSTRUCTIONS FOR TAILORING:
 1. ANALYZE the job description for title, company, required skills, responsibilities, and terminology.
 
@@ -508,7 +361,7 @@ CRITICAL INSTRUCTIONS FOR TAILORING:
    - Each bullet should be a full accomplishment, not a three-word stub.
 
 4. CREATIVE TAILORING:
-   - Incorporate job-description technologies into relevant work, following the version map below
+   - Incorporate job-description technologies into relevant work, following the version rules below
    - Emphasize similar frameworks, methodologies, and problem-solving
    - Highlight leadership, collaboration, and delivery
    - Show the ability to learn and adapt without sounding like keyword stuffing

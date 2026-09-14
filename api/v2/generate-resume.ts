@@ -99,8 +99,6 @@ async function generateJsonText(params: {
 const SYSTEM_PROMPT =
   'You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, almost no repeated tool names. Required JD technical skills must appear in skills.hard, in the summary, and somewhere in the LATEST company — each distinctive skill ONCE per company, not in every bullet. Most bullets name zero tools and describe the work. Never write "using JavaScript and TypeScript" on line after line. Never laundry-list 4+ tools in one sentence. Keep the latest company\'s real products; attach JD frameworks to those projects once each. Optional in other appropriate companies. Do not clone the JD stack into every employer. Industry/domain terms stay in summary and skills. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only.';
 
-const TIMELINE_SYSTEM_PROMPT = `You map projects and technologies. Latest role mustUse lists required JD technical skills for coverage, but the writer may name each one only once in that role. Other same-lane roles may include them in mayUse. Unrelated roles mustNotUse JD-only tools. Respond with valid JSON only.`;
-
 const AUDIT_SYSTEM_PROMPT = `You are a human-voice editor. Strip repeated tool names. In each company, a given technology may appear at most once. Delete JavaScript/TypeScript/HTML/CSS/Git from extra bullets in the same role. Split laundry-list bullets that name 4+ tools. Most bullets should have no tool names. Latest company as a whole must still contain each required distinctive JD skill (frameworks and languages the JD hinges on) exactly once. Do not copy those tools into every employer. Summary is a profile. Skills.hard leads with JD must-haves. No fake metrics. No hiring-company leakage. Respond with valid JSON only.`;
 
 const RESUME_OUTPUT_SCHEMA = {
@@ -148,81 +146,6 @@ const RESUME_OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
-const TIMELINE_OUTPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    technologies: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          kind: { type: 'string' },
-          introduced: { type: 'string' },
-          confidence: { type: 'string' },
-          notes: { type: 'string' },
-        },
-        required: ['name', 'kind', 'introduced', 'confidence', 'notes'],
-        additionalProperties: false,
-      },
-    },
-    roles: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          company: { type: 'string' },
-          start_date: { type: 'string' },
-          end_date: { type: 'string' },
-          mayUse: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          mustUse: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          mustNotUse: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          eraStackGuidance: { type: 'string' },
-          projects: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                shipped: { type: 'string' },
-                stack: {
-                  type: 'array',
-                  items: { type: 'string' },
-                },
-                ownership: { type: 'string' },
-              },
-              required: ['name', 'shipped', 'stack', 'ownership'],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: [
-          'company',
-          'start_date',
-          'end_date',
-          'mayUse',
-          'mustUse',
-          'mustNotUse',
-          'eraStackGuidance',
-          'projects',
-        ],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['technologies', 'roles'],
-  additionalProperties: false,
-};
-
 interface RequestBody {
   profile: any;
   jobDescription: string;
@@ -256,21 +179,11 @@ export default async function handler(
     const today = formatToday();
     const workHistory = formatWorkHistory(profile);
 
-    // Claude is slower; three sequential calls often exceed Vercel’s limit and
-    // surface as FUNCTION_INVOCATION_FAILED. Chronology rules stay in the main prompt.
-    const timeline =
-      provider === 'claude'
-        ? ''
-        : await analyzeTechnologyTimeline({
-            provider,
-            jobDescription,
-            workHistory,
-            today,
-          });
-
+    // Claude is slower; a second sequential call often exceeds Vercel’s limit and
+    // surfaces as FUNCTION_INVOCATION_FAILED. Placement rules stay in the main prompt.
     const draft = await generateResumeDraft({
       provider,
-      prompt: createAIPrompt(profile, jobDescription, timeline, today, workHistory),
+      prompt: createAIPrompt(profile, jobDescription, today, workHistory),
     });
 
     const aiResponse =
@@ -279,7 +192,6 @@ export default async function handler(
         : await auditResumeChronology({
             provider,
             draft,
-            timeline,
             workHistory,
             jobDescription,
             today,
@@ -335,85 +247,6 @@ function formatWorkHistory(profile: any): string {
     .join('\n');
 }
 
-async function analyzeTechnologyTimeline(params: {
-  provider: AIProvider;
-  jobDescription: string;
-  workHistory: string;
-  today: string;
-}): Promise<string> {
-  const prompt = `TODAY'S DATE: ${params.today}
-
-JOB DESCRIPTION:
-${params.jobDescription}
-
-CANDIDATE WORK HISTORY (dates are facts):
-${params.workHistory}
-
-Build a project-and-stack map for a tailored resume. Real projects stay real. Required JD technologies MUST appear in the latest company, and MAY appear in other same-lane companies.
-
-INSTRUCTIONS:
-1. Extract must-have technologies from THIS job description (title + required qualifications), plus versioned products.
-2. For each, estimate when it first became available (YYYY-MM). Distinguish family vs version.
-3. From each role's original description, extract the real work as projects: named products, features, systems, integrations, or migrations. If the text has no product name, cluster related work into a project without inventing a client or product the original did not mention.
-4. Latest role (most recent dates): mustUse = EVERY required JD technical skill (languages, frameworks, CSS libraries, git tools). Do this even if the original title is frontend and the JD wants backend, or the original used a competing library. Industry/domain terms (a specific industry) are NOT required in mustUse. Versions that did not exist yet stay out.
-5. Other roles in the same lane: those JD technical families may go in mayUse. Optional — not every such role.
-6. Roles in a clearly different lane: JD-only families go in mustNotUse. The latest role is never "different lane" for this purpose.
-7. For each role:
-   - projects: at least 5 items (5-8). Split a large product into distinct contributions if the original only names one system.
-   - mayUse: families NAMED in that role's original description, plus optional same-lane JD families (see 5), plus mustUse for this role.
-   - mustUse: latest role always gets all required JD technical families. Other roles: empty unless the original already named that family.
-   - mustNotUse: versions that did not exist yet; JD must-haves that do not belong in this lane.
-   - eraStackGuidance: keep this job's original projects. If mustUse or optional JD families apply, weave them into one or two existing projects — do not rewrite the whole job.
-8. Do not put JD-only technologies in mustUse for every role. Latest company is required; additional same-lane companies are optional.
-
-Respond with ONLY JSON using the REAL company names, dates, and technologies.
-
-{
-  "technologies": [
-    {
-      "name": "<Family> <Version>",
-      "kind": "versioned",
-      "introduced": "YYYY-MM",
-      "confidence": "high",
-      "notes": "Required technical skill. Latest role mustUse always. Optional mayUse on other same-lane roles. Never skip the latest role."
-    }
-  ],
-  "roles": [
-    {
-      "company": "<company from work history>",
-      "start_date": "YYYY-MM",
-      "end_date": "YYYY-MM",
-      "mayUse": ["<Family already used here>"],
-      "mustUse": [],
-      "mustNotUse": ["<JD-only tech>", "<Family> <Version>"],
-      "eraStackGuidance": "Latest role: keep real products. Name each required distinctive JD skill once, on separate bullets. Do not repeat baseline languages on every line.",
-      "projects": [
-        {
-          "name": "<product, feature, or system from original description>",
-          "shipped": "<what was delivered>",
-          "stack": ["<tool named in original>"],
-          "ownership": "<owned | led | built | contributed>"
-        }
-      ]
-    }
-  ]
-}`;
-
-  try {
-    return await generateJsonText({
-      provider: params.provider,
-      prompt,
-      system: TIMELINE_SYSTEM_PROMPT,
-      schema: TIMELINE_OUTPUT_SCHEMA,
-      temperature: 0.2,
-      maxTokens: 4000,
-    });
-  } catch (error) {
-    console.error('Technology timeline analysis failed; continuing with prompt-only chronology rules:', error);
-    return '';
-  }
-}
-
 async function generateResumeDraft(params: {
   provider: AIProvider;
   prompt: string;
@@ -431,7 +264,6 @@ async function generateResumeDraft(params: {
 async function auditResumeChronology(params: {
   provider: AIProvider;
   draft: string;
-  timeline: string;
   workHistory: string;
   jobDescription: string;
   today: string;
@@ -447,9 +279,6 @@ ${params.workHistory}
 
 CURRENT SKILLS:
 ${params.currentSkills}
-
-PROJECT AND STACK MAP:
-${params.timeline || 'Keep original projects per company. Each JD must-have technology belongs in skills, the summary, and the latest company. It may also appear in other same-lane companies. Not every employer. No hiring-company names.'}
 
 DRAFT RESUME JSON:
 ${params.draft}
@@ -507,7 +336,6 @@ Respond with ONLY the corrected resume JSON in this shape:
 const createAIPrompt = (
   profile: any,
   jobDescription: string,
-  timeline: string,
   today: string,
   workHistory: string
 ): string => {
@@ -539,9 +367,6 @@ ${education
 
 CURRENT SKILLS (inventory to draw from; still add JD must-haves to skills.hard):
 ${skills.filter((skill: string) => skill.trim()).join(', ')}
-
-PROJECT AND STACK MAP:
-${timeline || 'Keep original projects per company. Place each JD must-have technology in skills, the summary, and the latest company. Other same-lane companies are optional. Do not clone the JD stack into every employer.'}
 
 CRITICAL INSTRUCTIONS:
 1. ANALYZE the job description for seniority, must-have technologies, and terminology. Put jobTitle and companyName in the JSON metadata. Never write the hiring company, product, or program names into the summary or into any employer's bullets.
