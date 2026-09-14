@@ -51,7 +51,7 @@ const ResumeGenerator: React.FC = () => {
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionLink, setJobDescriptionLink] = useState('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
-  const [resumeApiVersion, setResumeApiVersion] = useState<ResumeApiVersion>('v1');
+  const [resumeApiVersion, setResumeApiVersion] = useState<ResumeApiVersion>('v2');
   const [usedAiProvider, setUsedAiProvider] = useState<AIProvider | null>(null);
   const [usedResumeApiVersion, setUsedResumeApiVersion] = useState<ResumeApiVersion | null>(null);
   const [loading, setLoading] = useState(false);
