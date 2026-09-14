@@ -99,8 +99,6 @@ async function generateJsonText(params: {
 const SYSTEM_PROMPT =
   'You are an expert resume writer specializing in career transitions and role-specific tailoring. Transform the candidate\'s experience so they look like a strong fit for the target job. Write rich, specific, human bullets a recruiter would believe. Generate 7-12 bullet points per work experience (10-12 for longer or senior roles). Never write thin 4-5 bullet roles. Extract the job title and company name from the job description. Aggressively tailor job titles and descriptions while keeping company names and employment dates unchanged. In experience bullet points, wrap each technical skill/tool/framework/language with <b>...</b>. Version rule: required job-description versions belong in the most recent company only, once per version; earlier companies and the summary use family names with no version number. Never put a version in a job that ended before that version existed.';
 
-const AUDIT_SYSTEM_PROMPT = `You are a light copy editor. Do not rewrite the resume. Do not shorten it. Do not drop bullets or skills. Keep the same dates, companies, bullet count, and skill list length. Only fix version-number placement. Respond with valid JSON only.`;
-
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -168,23 +166,10 @@ export default async function handler(
     const today = formatToday();
     const workHistory = formatWorkHistory(profile);
 
-    // Claude is slower; a second sequential call often exceeds Vercel’s limit and
-    // surfaces as FUNCTION_INVOCATION_FAILED. Version rules stay in the main prompt.
-    const draft = await generateResumeDraft({
+    const aiResponse = await generateResumeDraft({
       provider,
       prompt: createAIPrompt(profile, jobDescription, today, workHistory),
     });
-
-    const aiResponse =
-      provider === 'claude'
-        ? draft
-        : await auditResumeChronology({
-            provider,
-            draft,
-            workHistory,
-            jobDescription,
-            today,
-          });
 
     return res.status(200).json({
       success: true,
@@ -244,68 +229,6 @@ async function generateResumeDraft(params: {
     temperature: 0.7,
     maxTokens: params.provider === 'claude' ? 5000 : 8000,
   });
-}
-
-async function auditResumeChronology(params: {
-  provider: AIProvider;
-  draft: string;
-  workHistory: string;
-  jobDescription: string;
-  today: string;
-}): Promise<string> {
-  const prompt = `TODAY'S DATE: ${params.today}
-
-JOB DESCRIPTION (for tailoring context, not for copying into old jobs):
-${params.jobDescription}
-
-FACTUAL WORK HISTORY DATES:
-${params.workHistory}
-
-DRAFT RESUME JSON:
-${params.draft}
-
-AUDIT AND REWRITE:
-This is a surgical edit, not a rewrite. Quality of the draft must stay the same or improve.
-
-1. Keep the same companies, start/end dates, addresses, positions, number of roles, and JSON shape.
-2. Keep EVERY bullet. Do not delete bullets. Do not merge bullets. If a role has 8 bullets, it still has 8. Prefer 7-12 per role; if a role is already under 7, leave the count as-is unless you can add substance without inventing new employers.
-3. Keep the full skills list. Add missing job-description skills if needed. Never shrink a long list down to only a few JD keywords.
-4. Professional summary: keep length and strength. Remove version numbers only (Family Version → Family). Do not make the summary shorter or generic.
-5. Experience versions: a required version from THIS job description may appear only in the most recent company, once per version. Other bullets at that company use the family name. Earlier companies: family name, no version number. Do not strip other technologies, tools, or details.
-6. Do not change employment dates.
-7. Keep <b>...</b> around tech tokens. Sound human. No "scalability"/"reliability"/"robust".
-
-Respond with ONLY the corrected resume JSON in this shape:
-{
-  "jobTitle": "...",
-  "companyName": "...",
-  "summary": "...",
-  "experience": [
-    {
-      "position": "...",
-      "company": "...",
-      "start_date": "YYYY-MM",
-      "end_date": "YYYY-MM",
-      "address": "...",
-      "descriptions": ["..."]
-    }
-  ],
-  "skills": ["..."]
-}`;
-
-  try {
-    return await generateJsonText({
-      provider: params.provider,
-      prompt,
-      system: AUDIT_SYSTEM_PROMPT,
-      schema: RESUME_OUTPUT_SCHEMA,
-      temperature: 0.2,
-      maxTokens: 8000,
-    });
-  } catch (error) {
-    console.error('Chronology audit failed; returning draft resume:', error);
-    return params.draft;
-  }
 }
 
 const createAIPrompt = (
