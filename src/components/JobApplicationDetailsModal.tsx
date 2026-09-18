@@ -44,6 +44,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedDescription, setCopiedDescription] = useState(false);
+  const [copiedPageLink, setCopiedPageLink] = useState(false);
   /** Keeps template stable after backfill within this modal session. */
   const [sessionTemplateId, setSessionTemplateId] = useState<string | undefined>();
 
@@ -80,6 +81,10 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
       copyToClipboard(application.job_description, setCopiedDescription);
     }
   }, [application?.job_description, copyToClipboard]);
+
+  const handleCopyApplicationLink = useCallback(() => {
+    copyToClipboard(window.location.href, setCopiedPageLink);
+  }, [copyToClipboard]);
 
   const handleDownloadResume = useCallback(
     async (format: ResumeDownloadFormat) => {
@@ -251,6 +256,14 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                   {isRejecting ? 'Rejecting...' : 'Reject Application'}
                 </button>
               )}
+              <button
+                onClick={handleCopyApplicationLink}
+                className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 transition-colors"
+                title="Copy application link"
+              >
+                {copiedPageLink ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                {copiedPageLink ? 'Copied' : 'Copy link'}
+              </button>
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-gray-600 transition-colors"

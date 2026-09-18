@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Calendar, Filter, Eye, ChevronLeft, ChevronRight, Trash2, Search } from 'lucide-react';
 import { JobApplicationWithDetails, Bidder } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
@@ -8,7 +8,25 @@ import JobApplicationDetailsModal from './JobApplicationDetailsModal';
 import ConfirmationModal from './ConfirmationModal';
 import { formatDate } from '../utils/helpers';
 import toast from 'react-hot-toast';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+
+const APPLICATION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isApplicationId(value: string): boolean {
+  return APPLICATION_ID_RE.test(value);
+}
+
+function applicationDetailsPath(searchParams: URLSearchParams, applicationId: string) {
+  const params = new URLSearchParams(searchParams);
+  params.set('applicationId', applicationId);
+  return `/applications?${params.toString()}`;
+}
+
+function firstRpcRow<T>(data: T | T[] | null | undefined): T | null {
+  if (!data) return null;
+  return Array.isArray(data) ? data[0] ?? null : data;
+}
 
 const JobApplications: React.FC = () => {
   const { user, role } = useUser();
@@ -47,23 +65,28 @@ const JobApplications: React.FC = () => {
 
   // Function to update URL parameters
   const updateURLParams = useCallback((newFilters: any, newPage: number = 1, newPageSize: number = pageSize) => {
-    const params = new URLSearchParams();
+    setSearchParams((prev) => {
+      const params = new URLSearchParams();
 
-    // Add filter params (only if they have values)
-    if (newFilters.profileId) params.set('profileId', newFilters.profileId);
-    if (newFilters.bidderId) params.set('bidderId', newFilters.bidderId);
-    if (newFilters.dateFrom) params.set('dateFrom', newFilters.dateFrom);
-    if (newFilters.dateTo) params.set('dateTo', newFilters.dateTo);
-    if (newFilters.dateRange && newFilters.dateRange !== 'today') params.set('dateRange', newFilters.dateRange);
-    if (newFilters.status) params.set('status', newFilters.status);
-    if (newFilters.companyName) params.set('companyName', newFilters.companyName);
-    if (newFilters.jobTitle) params.set('jobTitle', newFilters.jobTitle);
+      // Add filter params (only if they have values)
+      if (newFilters.profileId) params.set('profileId', newFilters.profileId);
+      if (newFilters.bidderId) params.set('bidderId', newFilters.bidderId);
+      if (newFilters.dateFrom) params.set('dateFrom', newFilters.dateFrom);
+      if (newFilters.dateTo) params.set('dateTo', newFilters.dateTo);
+      if (newFilters.dateRange && newFilters.dateRange !== 'today') params.set('dateRange', newFilters.dateRange);
+      if (newFilters.status) params.set('status', newFilters.status);
+      if (newFilters.companyName) params.set('companyName', newFilters.companyName);
+      if (newFilters.jobTitle) params.set('jobTitle', newFilters.jobTitle);
 
-    // Add pagination params
-    if (newPage > 1) params.set('page', newPage.toString());
-    if (newPageSize !== 25) params.set('pageSize', newPageSize.toString());
+      // Add pagination params
+      if (newPage > 1) params.set('page', newPage.toString());
+      if (newPageSize !== 25) params.set('pageSize', newPageSize.toString());
 
-    setSearchParams(params, { replace: true });
+      const applicationId = prev.get('applicationId');
+      if (applicationId) params.set('applicationId', applicationId);
+
+      return params;
+    }, { replace: true });
   }, [setSearchParams, pageSize]);
 
   // Custom setFilters function that also updates URL
@@ -72,10 +95,13 @@ const JobApplications: React.FC = () => {
     updateURLParams(newFilters, 1); // Reset to page 1 when filters change
   }, [updateURLParams]);
 
-  // Modal state
+  // Modal state — driven by ?applicationId= in the URL
+  const applicationIdFromUrl = searchParams.get('applicationId');
   const [selectedApplication, setSelectedApplication] = useState<JobApplicationWithDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const loadedDetailsIdRef = useRef<string | null>(null);
 
   // Confirmation modal state
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -177,6 +203,88 @@ const JobApplications: React.FC = () => {
     }
   }, [user, filters, loadApplications, role, loadBidders]);
 
+  useEffect(() => {
+    if (!applicationIdFromUrl) {
+      loadedDetailsIdRef.current = null;
+      setSelectedApplication(null);
+      setIsModalOpen(false);
+      setDetailsLoading(false);
+      return;
+    }
+
+    if (!isApplicationId(applicationIdFromUrl)) {
+      toast.error('Invalid application link');
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('applicationId');
+        return next;
+      }, { replace: true });
+      return;
+    }
+
+    const fromList = applications.find((application) => application.id === applicationIdFromUrl);
+    if (fromList) {
+      loadedDetailsIdRef.current = fromList.id;
+      setSelectedApplication(fromList);
+      setIsModalOpen(true);
+      setDetailsLoading(false);
+      return;
+    }
+
+    if (loadedDetailsIdRef.current === applicationIdFromUrl) {
+      setIsModalOpen(true);
+      return;
+    }
+
+    if (!user) {
+      setDetailsLoading(true);
+      return;
+    }
+
+    let cancelled = false;
+    setDetailsLoading(true);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_job_application_by_id', {
+          p_application_id: applicationIdFromUrl,
+          p_user_id: user.id,
+          p_user_role: role,
+        });
+        if (cancelled) return;
+
+        const row = firstRpcRow<JobApplicationWithDetails>(data);
+        if (error || !row) {
+          console.error('Error loading application:', error);
+          toast.error('Application not found or you do not have access.');
+          loadedDetailsIdRef.current = null;
+          setSelectedApplication(null);
+          setIsModalOpen(false);
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('applicationId');
+            return next;
+          }, { replace: true });
+          return;
+        }
+
+        loadedDetailsIdRef.current = row.id;
+        setSelectedApplication(row);
+        setIsModalOpen(true);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Error loading application:', error);
+        toast.error('Failed to load application details');
+      } finally {
+        if (!cancelled) setDetailsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationIdFromUrl, applications, user, role, setSearchParams]);
+
   const handleCompanySearch = () => {
     setActiveCompanyName(companyNameInput);
     setFiltersAndUpdateURL({ ...filters, companyName: companyNameInput });
@@ -234,15 +342,16 @@ const JobApplications: React.FC = () => {
     updateURLParams(filters, 1, newPageSize);
   };
 
-  const handleViewClick = (e: React.MouseEvent, application: JobApplicationWithDetails) => {
-    e.stopPropagation(); // Prevent row click
-    setSelectedApplication(application);
-    setIsModalOpen(true);
-  };
-
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedApplication(null);
+    loadedDetailsIdRef.current = null;
+    setSearchParams((prev) => {
+      if (!prev.get('applicationId')) return prev;
+      const next = new URLSearchParams(prev);
+      next.delete('applicationId');
+      return next;
+    }, { replace: true });
   };
 
   const handleDeleteApplication = async (applicationId: string) => {
@@ -294,16 +403,14 @@ const JobApplications: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>
+      ) : (
+        <>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -655,13 +762,14 @@ const JobApplications: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                          <button
-                            onClick={(e) => handleViewClick(e, application)}
+                          <Link
+                            to={applicationDetailsPath(searchParams, application.id)}
+                            onClick={(e) => e.stopPropagation()}
                             className="flex items-center space-x-1 text-primary-600 hover:text-primary-700"
                           >
                             <Eye className="w-4 h-4" />
                             <span className="text-sm">View</span>
-                          </button>
+                          </Link>
                           {(role === 'admin' || role === 'manager') && (
                             <button
                               onClick={(e) => {
@@ -740,6 +848,15 @@ const JobApplications: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+        </>
+      )}
+
+      {detailsLoading && !selectedApplication && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
         </div>
       )}
 
