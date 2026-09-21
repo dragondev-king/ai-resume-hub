@@ -14,7 +14,7 @@ import { buildJobApplicationMetadata } from '../utils/applicationMetadata';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
-import { isNonRemoteRole, nonRemoteRoleMessage } from '../utils/remoteRole';
+import { findNonRemoteMatches, isNonRemoteRole, nonRemoteRoleMessage } from '../utils/remoteRole';
 import ResumeTemplatePreview from './ResumeTemplatePreview';
 import { Link } from 'react-router-dom';
 
@@ -32,6 +32,20 @@ function parseCanApplyToCompany(data: unknown): {
     return { canApply: false, existingApplicationId: null };
   }
   return { canApply: true, existingApplicationId: null };
+}
+
+function highlightMatchedSnippet(snippet: string, matchedText: string) {
+  const highlightIndex = snippet.toLowerCase().indexOf(matchedText.toLowerCase());
+  if (highlightIndex === -1) return snippet;
+  return (
+    <>
+      {snippet.slice(0, highlightIndex)}
+      <strong className="font-semibold">
+        {snippet.slice(highlightIndex, highlightIndex + matchedText.length)}
+      </strong>
+      {snippet.slice(highlightIndex + matchedText.length)}
+    </>
+  );
 }
 
 function BoldMarkupText({ text }: { text: string }) {
@@ -92,6 +106,7 @@ const ResumeGenerator: React.FC = () => {
 
   // Application Eligibility State
   const [isApplicationEligible, setIsApplicationEligible] = useState(true);
+  const [ignoreNonRemote, setIgnoreNonRemote] = useState(false);
 
   // Pre-generate company duplicate check (only when profile has duplicate checking enabled)
   const [companyDuplicateInput, setCompanyDuplicateInput] = useState('');
@@ -133,6 +148,10 @@ const ResumeGenerator: React.FC = () => {
     setCompanyDuplicateInput('');
     setDuplicateCheckResult(null);
   }, [selectedProfile]);
+
+  useEffect(() => {
+    setIgnoreNonRemote(false);
+  }, [jobDescription]);
 
   const selectedProfileData = selectedProfile
     ? profiles.find((p) => p.id === selectedProfile)
@@ -192,7 +211,7 @@ const ResumeGenerator: React.FC = () => {
       return;
     }
 
-    if (isNonRemoteRole(jobDescription)) {
+    if (isNonRemoteRole(jobDescription) && !ignoreNonRemote) {
       toast.error(nonRemoteRoleMessage(jobDescription));
       return;
     }
@@ -204,7 +223,7 @@ const ResumeGenerator: React.FC = () => {
     setIsEditing(false);
     try {
       // Generate AI resume with job title and company name extraction
-      const generated = await generateResume(profile, jobDescription, aiProvider, resumeApiVersion);
+      const generated = await generateResume(profile, jobDescription, aiProvider, resumeApiVersion, ignoreNonRemote);
 
       console.log(generated, '=== generated')
 
@@ -684,6 +703,7 @@ const ResumeGenerator: React.FC = () => {
     setIncludeLinkedIn(true);
     setCompanyDuplicateInput('');
     setDuplicateCheckResult(null);
+    setIgnoreNonRemote(false);
     toast.success('Form reset successfully! You can now generate a new resume.');
   };
 
@@ -693,6 +713,7 @@ const ResumeGenerator: React.FC = () => {
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
   const jobIsNonRemote = isNonRemoteRole(jobDescription);
   const nonRemoteMessage = jobIsNonRemote ? nonRemoteRoleMessage(jobDescription) : null;
+  const nonRemoteMatches = jobIsNonRemote ? findNonRemoteMatches(jobDescription) : [];
 
   if (profilesLoading) {
     return (
@@ -875,9 +896,35 @@ const ResumeGenerator: React.FC = () => {
             {nonRemoteMessage && (
               <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 flex items-start space-x-3">
                 <Building2 className="w-5 h-5 text-amber-700 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-900">Not a remote role</h3>
-                  <p className="text-sm text-amber-800 mt-1">{nonRemoteMessage}</p>
+                <div className="min-w-0 space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-900">Not a remote role</h3>
+                    <p className="text-sm text-amber-800 mt-1">{nonRemoteMessage}</p>
+                  </div>
+                  {nonRemoteMatches.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-amber-900">Matched text</p>
+                      <ul className="space-y-1">
+                        {nonRemoteMatches.map((match, index) => (
+                          <li
+                            key={`${match.snippet}-${index}`}
+                            className="rounded bg-white/70 px-2 py-1.5 text-xs leading-snug text-amber-950"
+                          >
+                            {highlightMatchedSnippet(match.snippet, match.matchedText)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <label className="flex items-start gap-2 cursor-pointer text-sm text-amber-950">
+                    <input
+                      type="checkbox"
+                      checked={ignoreNonRemote}
+                      onChange={(event) => setIgnoreNonRemote(event.target.checked)}
+                      className="mt-0.5 rounded border-amber-400 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span>Ignore</span>
+                  </label>
                 </div>
               </div>
             )}
@@ -955,7 +1002,7 @@ const ResumeGenerator: React.FC = () => {
           <div className="flex justify-center space-x-4">
             <button
               onClick={handleGenerate}
-              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible || jobIsNonRemote}
+              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible || (jobIsNonRemote && !ignoreNonRemote)}
               className="flex items-center space-x-2 px-8 py-3 text-lg font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

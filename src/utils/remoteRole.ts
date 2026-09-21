@@ -1,16 +1,48 @@
-const NON_REMOTE_PATTERN = /\b(hybrid|on[\s-]*site)\b/i;
+const NON_REMOTE_SOURCE = String.raw`\b(hybrid|on[\s-]*site)\b`;
+const SNIPPET_RADIUS = 56;
 
 export const NON_REMOTE_ROLE_MESSAGE =
   'This is not a remote role. Resume generation is only allowed for remote positions.';
 
+export type NonRemoteMatch = {
+  workType: string;
+  matchedText: string;
+  snippet: string;
+};
+
+export function findNonRemoteMatches(text: string): NonRemoteMatch[] {
+  if (!text) return [];
+
+  const matches: NonRemoteMatch[] = [];
+  const seen = new Set<string>();
+  const pattern = new RegExp(NON_REMOTE_SOURCE, 'gi');
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    const start = Math.max(0, match.index - SNIPPET_RADIUS);
+    const end = Math.min(text.length, match.index + match[0].length + SNIPPET_RADIUS);
+    const prefix = start > 0 ? '…' : '';
+    const suffix = end < text.length ? '…' : '';
+    const snippet = `${prefix}${text.slice(start, end).replace(/\s+/g, ' ').trim()}${suffix}`;
+    const key = snippet.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push({
+      workType: match[1].replace(/\s+/g, ' ').toLowerCase(),
+      matchedText: match[0],
+      snippet,
+    });
+  }
+
+  return matches;
+}
+
 export function findNonRemoteWorkType(text: string): string | null {
-  const match = text.match(NON_REMOTE_PATTERN);
-  if (!match) return null;
-  return match[1].replace(/\s+/g, ' ').toLowerCase();
+  return findNonRemoteMatches(text)[0]?.workType ?? null;
 }
 
 export function isNonRemoteRole(text: string): boolean {
-  return NON_REMOTE_PATTERN.test(text);
+  return findNonRemoteMatches(text).length > 0;
 }
 
 export function nonRemoteRoleMessage(text?: string): string {
@@ -26,7 +58,8 @@ export class NonRemoteRoleError extends Error {
   }
 }
 
-export function assertRemoteJobDescription(jobDescription: string): void {
+export function assertRemoteJobDescription(jobDescription: string, ignore = false): void {
+  if (ignore) return;
   if (isNonRemoteRole(jobDescription)) {
     throw new NonRemoteRoleError(nonRemoteRoleMessage(jobDescription));
   }
