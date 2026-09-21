@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check, Search, AlertCircle } from 'lucide-react';
+import { Download, Loader2, Sparkles, Edit, Save, X, FileText, MessageSquare, Trash2, RefreshCw, Copy, Check, Search, AlertCircle, Building2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { generateResume, AIProvider, ResumeApiVersion } from '../utils/resumeGenerator';
@@ -14,6 +14,7 @@ import { buildJobApplicationMetadata } from '../utils/applicationMetadata';
 import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
+import { isNonRemoteRole, nonRemoteRoleMessage } from '../utils/remoteRole';
 import ResumeTemplatePreview from './ResumeTemplatePreview';
 import { Link } from 'react-router-dom';
 
@@ -191,6 +192,11 @@ const ResumeGenerator: React.FC = () => {
       return;
     }
 
+    if (isNonRemoteRole(jobDescription)) {
+      toast.error(nonRemoteRoleMessage(jobDescription));
+      return;
+    }
+
     setLoading(true);
     setGenerationError(null);
     setGeneratedResume(null);
@@ -249,10 +255,14 @@ const ResumeGenerator: React.FC = () => {
       const message = error?.message || 'Failed to generate resume';
       setGeneratedResume(null);
       setEditingResume(null);
-      setGenerationError(message);
       setUsedAiProvider(null);
       setUsedResumeApiVersion(null);
-      toast.error(message);
+      if (error?.name === 'NonRemoteRoleError') {
+        toast.error(message);
+      } else {
+        setGenerationError(message);
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -681,6 +691,8 @@ const ResumeGenerator: React.FC = () => {
   console.log(currentResume, '=== currentResume')
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
+  const jobIsNonRemote = isNonRemoteRole(jobDescription);
+  const nonRemoteMessage = jobIsNonRemote ? nonRemoteRoleMessage(jobDescription) : null;
 
   if (profilesLoading) {
     return (
@@ -860,6 +872,15 @@ const ResumeGenerator: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Paste the job description here. The AI will extract the job title and company name, then tailor the resume accordingly..."
             />
+            {nonRemoteMessage && (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 flex items-start space-x-3">
+                <Building2 className="w-5 h-5 text-amber-700 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900">Not a remote role</h3>
+                  <p className="text-sm text-amber-800 mt-1">{nonRemoteMessage}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* AI Provider Selection */}
@@ -934,7 +955,7 @@ const ResumeGenerator: React.FC = () => {
           <div className="flex justify-center space-x-4">
             <button
               onClick={handleGenerate}
-              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible}
+              disabled={loading || !selectedProfile || !jobDescription || !isApplicationEligible || jobIsNonRemote}
               className="flex items-center space-x-2 px-8 py-3 text-lg font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
