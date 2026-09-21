@@ -16,6 +16,23 @@ import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
 import { isNonRemoteRole, nonRemoteRoleMessage } from '../utils/remoteRole';
 import ResumeTemplatePreview from './ResumeTemplatePreview';
+import { Link } from 'react-router-dom';
+
+function parseCanApplyToCompany(data: unknown): {
+  canApply: boolean;
+  existingApplicationId: string | null;
+} {
+  if (typeof data === 'string' && data) {
+    return { canApply: false, existingApplicationId: data };
+  }
+  if (Array.isArray(data)) {
+    return parseCanApplyToCompany(data[0]);
+  }
+  if (data === false) {
+    return { canApply: false, existingApplicationId: null };
+  }
+  return { canApply: true, existingApplicationId: null };
+}
 
 function BoldMarkupText({ text }: { text: string }) {
   return (
@@ -82,6 +99,7 @@ const ResumeGenerator: React.FC = () => {
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<{
     companyName: string;
     canApply: boolean;
+    existingApplicationId: string | null;
   } | null>(null);
 
   // Per-application download options (local only; not persisted)
@@ -136,7 +154,7 @@ const ResumeGenerator: React.FC = () => {
     setIsCheckingDuplicate(true);
     setDuplicateCheckResult(null);
     try {
-      const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
+      const { data, error: checkError } = await supabase.rpc('can_apply_to_company', {
         p_profile_id: selectedProfile,
         p_company_name: companyName,
       });
@@ -147,7 +165,8 @@ const ResumeGenerator: React.FC = () => {
         return;
       }
 
-      setDuplicateCheckResult({ companyName, canApply: Boolean(canApply) });
+      const { canApply, existingApplicationId } = parseCanApplyToCompany(data);
+      setDuplicateCheckResult({ companyName, canApply, existingApplicationId });
       if (canApply) {
         toast.success(`No active application to ${companyName}. You can generate a resume for this company.`);
       } else {
@@ -192,7 +211,7 @@ const ResumeGenerator: React.FC = () => {
       // Check if this profile can apply to this company before showing the resume
       // Only check if the profile has duplicate checking enabled (defaults to true)
       if (generated.companyName && Boolean(profile.check_duplicate_applications) !== false) {
-        const { data: canApply, error: checkError } = await supabase.rpc('can_apply_to_company', {
+        const { data, error: checkError } = await supabase.rpc('can_apply_to_company', {
           p_profile_id: selectedProfile,
           p_company_name: generated.companyName
         });
@@ -204,8 +223,14 @@ const ResumeGenerator: React.FC = () => {
           return;
         }
 
+        const { canApply, existingApplicationId } = parseCanApplyToCompany(data);
         if (!canApply) {
           setIsApplicationEligible(false);
+          setDuplicateCheckResult({
+            companyName: generated.companyName,
+            canApply: false,
+            existingApplicationId,
+          });
           toast.error(`This profile already has an active application to ${generated.companyName}. You cannot submit multiple applications to the same company.`);
           setLoading(false);
           return;
@@ -803,6 +828,17 @@ const ResumeGenerator: React.FC = () => {
                   ) : (
                     <>
                       Cannot generate for <strong>{duplicateCheckResult.companyName}</strong> — this profile already has an active application to that company.
+                      {duplicateCheckResult.existingApplicationId ? (
+                        <>
+                          {' '}
+                          <Link
+                            to={`/applications?applicationId=${duplicateCheckResult.existingApplicationId}`}
+                            className="font-medium underline"
+                          >
+                            View existing application
+                          </Link>
+                        </>
+                      ) : null}
                     </>
                   )}
                 </div>
