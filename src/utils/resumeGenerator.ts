@@ -1,5 +1,6 @@
 import { ProfileWithDetailsRPC } from '../lib/supabase';
 import { isSoftSkillLabel, sanitizeSkillName } from './resumeLayout';
+import { assertRemoteJobDescription } from './remoteRole';
 
 // Using ProfileWithDetailsRPC type from supabase.ts
 type Profile = ProfileWithDetailsRPC;
@@ -37,6 +38,8 @@ export const generateResume = async (
   provider: AIProvider = 'openai',
   version: ResumeApiVersion = RESUME_API_VERSION
 ): Promise<GeneratedResume> => {
+  assertRemoteJobDescription(jobDescription);
+
   const response = await fetch(generateResumePath(version), {
     method: 'POST',
     headers: {
