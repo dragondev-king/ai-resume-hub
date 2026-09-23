@@ -336,7 +336,7 @@ CRITICAL INSTRUCTIONS:
    - Family names only, no version numbers, no hiring-company name.
 
 6. JOB TITLE STRATEGY:
-   - Replace every position. Do not keep the original title.
+   - Replace every position with the target job title. Do not keep the original title. It is fine for the new title to be a different profession.
    - Only the earliest role is Junior {title}. The latest role is Senior {title}. Every role between those two is {title} or Senior {title}.
    - Do not label more than one role Junior. The top level is always Senior. Do not use Lead, Staff, or Principal.
    - If the job title is Senior Full-Stack Developer: the earliest employer is Junior Full-Stack Developer, middle employers are Full-Stack Developer and then Senior Full-Stack Developer, and the latest employer is Senior Full-Stack Developer.
