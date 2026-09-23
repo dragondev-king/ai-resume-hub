@@ -334,8 +334,7 @@ CRITICAL INSTRUCTIONS:
    - Family names only, no version numbers, no hiring-company name.
 
 6. JOB TITLES:
-   - Slight honest alignment only if seniority is already true.
-   - Do not change a narrower original title into the JD title if that would be dishonest. You MAY still name required JD technologies in that role's bullets. Title stays; required tools still get placed.
+   - Show career progress in the generated roles. If the job title is FE developer, show the progress: Junior FE developer -> FE developer -> Senior FE developer.
    - Keep company names and start/end dates exactly.
 
 7. BOLD TECH IN EXPERIENCE AND SUMMARY:
