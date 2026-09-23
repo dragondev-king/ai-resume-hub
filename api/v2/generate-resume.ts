@@ -97,7 +97,7 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  `You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, no repeated tool names. First list the required technical skills from THIS job description in jdMustHaveTech. Latest company: every jdMustHaveTech name MUST appear once, on a different real-project bullet. Other companies: each should name 1-3 of those required skills (a different subset per company), once each, on real work from that job. Do not copy the full latest-company list into every employer. Do not skip a required skill from the latest company because the original title or stack is different. Skills.hard and the summary are not a substitute. Never laundry-list 4+ tools in one sentence. Industry/domain terms stay in summary and skills. The latest company is the richest role: more bullets, longer and more specific, written like a senior professional. Earlier companies stay shorter and plainer. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only. Aggressively tailor job titles while keeping company names and employment dates unchanged. Do not add or drop an employer. Only the earliest role is Junior. The latest role is Senior. Roles between them are the title itself or Senior.`;
+  `You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, no repeated tool names. First list the required technical skills from THIS job description in jdMustHaveTech. Latest company: every jdMustHaveTech name MUST appear once, on a different real-project bullet. Other companies: each should name 1-3 of those required skills (a different subset per company), once each, on real work from that job. Do not copy the full latest-company list into every employer. Do not skip a required skill from the latest company because the original title or stack is different. Skills.hard and the summary are not a substitute. Never laundry-list 4+ tools in one sentence. Industry/domain terms stay in summary and skills. The latest company is the richest role: more bullets, longer and more specific, written like a senior professional. Earlier companies stay shorter and plainer. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only. Aggressively tailor job titles to show progression toward the target role while keeping company names and employment dates unchanged. Do not repeat the same title on every job. Do not add or drop an employer.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -336,11 +336,11 @@ CRITICAL INSTRUCTIONS:
    - Family names only, no version numbers, no hiring-company name.
 
 6. JOB TITLE STRATEGY:
-   - Replace every position with the target job title. Do not keep the original title. It is fine for the new title to be a different profession.
-   - Only the earliest role is Junior {title}. The latest role is Senior {title}. Every role between those two is {title} or Senior {title}.
-   - Do not label more than one role Junior. The top level is always Senior. Do not use Lead, Staff, or Principal.
-   - If the job title is Senior Full-Stack Developer: the earliest employer is Junior Full-Stack Developer, middle employers are Full-Stack Developer and then Senior Full-Stack Developer, and the latest employer is Senior Full-Stack Developer.
-   - Keep company names, addresses, and start/end dates exactly. Same number of positions as WORK HISTORY.
+   - Adjust every job title so the history progresses toward the target role. Do not keep an unrelated original title.
+   - Most recent position: closely match the target title, or sit one step below it.
+   - Earlier positions: different titles that still lead toward that role. Vary the wording. Do not put the same title, or Junior and Senior copies of that one title, on every employer.
+   - A recruiter should read a real career. For a Full-Stack Developer target, titles might move from Web Developer, to Software Engineer, to Full-Stack Developer, to Senior Full-Stack Developer.
+   - Keep company names, addresses, and start/end dates exactly. Same number of positions as WORK HISTORY. Do not add the hiring company as an employer.
 
 7. BOLD TECH IN EXPERIENCE AND SUMMARY:
    - Wrap technical skills/tools/frameworks/languages with <b>...</b> inside experience description strings and the summary
