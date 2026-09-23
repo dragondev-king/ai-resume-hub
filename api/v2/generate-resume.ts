@@ -97,7 +97,7 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  'You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, no repeated tool names. First list the required technical skills from THIS job description in jdMustHaveTech. Latest company: every jdMustHaveTech name MUST appear once, on a different real-project bullet. Other companies: each should name 1-3 of those required skills (a different subset per company), once each, on real work from that job. Do not copy the full latest-company list into every employer. Do not skip a required skill from the latest company because the original title or stack is different. Skills.hard and the summary are not a substitute. Never laundry-list 4+ tools in one sentence. Industry/domain terms stay in summary and skills. The latest company is the richest role: more bullets, longer and more specific, written like a senior professional. Earlier companies stay shorter and plainer. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only.';
+  `You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, no repeated tool names. First list the required technical skills from THIS job description in jdMustHaveTech. Latest company: every jdMustHaveTech name MUST appear once, on a different real-project bullet. Other companies: each should name 1-3 of those required skills (a different subset per company), once each, on real work from that job. Do not copy the full latest-company list into every employer. Do not skip a required skill from the latest company because the original title or stack is different. Skills.hard and the summary are not a substitute. Never laundry-list 4+ tools in one sentence. Industry/domain terms stay in summary and skills. The latest company is the richest role: more bullets, longer and more specific, written like a senior professional. Earlier companies stay shorter and plainer. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only. Aggressively tailor job titles while keeping company names and employment dates unchanged. Do not add or drop an employer. Only the earliest role is Junior. The latest role is Senior. Roles between them are the title itself or Senior.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -335,9 +335,12 @@ CRITICAL INSTRUCTIONS:
    - FORBIDDEN openings that read like bullets: "Delivered…", "Enhanced…", "Migrated…", "Built X using Y, then did Z."
    - Family names only, no version numbers, no hiring-company name.
 
-6. JOB TITLES:
-   - Show career progress in the generated roles. i.e., If the job title is FE developer, show the progress: Junior FE developer -> FE developer -> Senior FE developer. The top level is always Senior. Do not use Lead, Staff, or Principal.
-   - Keep company names and start/end dates exactly.
+6. JOB TITLE STRATEGY:
+   - Replace every position. Do not keep the original title.
+   - Only the earliest role is Junior {title}. The latest role is Senior {title}. Every role between those two is {title} or Senior {title}.
+   - Do not label more than one role Junior. The top level is always Senior. Do not use Lead, Staff, or Principal.
+   - If the job title is Senior Full-Stack Developer: the earliest employer is Junior Full-Stack Developer, middle employers are Full-Stack Developer and then Senior Full-Stack Developer, and the latest employer is Senior Full-Stack Developer.
+   - Keep company names, addresses, and start/end dates exactly. Same number of positions as WORK HISTORY.
 
 7. BOLD TECH IN EXPERIENCE AND SUMMARY:
    - Wrap technical skills/tools/frameworks/languages with <b>...</b> inside experience description strings and the summary
