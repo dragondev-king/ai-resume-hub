@@ -78,7 +78,7 @@ function findMatchingAiExperience(
   return aiExperience.find(
     (ai) =>
       companiesMatch(ai.company, originalExp.company) &&
-      normalizeDateForMatch(ai.start_date) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
+      normalizeDateForMatch(ai.start_date?.slice(0, 7)) === normalizeDateForMatch(originalExp.start_date?.slice(0, 7))
   );
 }
 
