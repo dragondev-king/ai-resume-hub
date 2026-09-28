@@ -97,7 +97,7 @@ async function generateJsonText(params: {
 }
 
 const SYSTEM_PROMPT =
-  `You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, no repeated tool names. First list the required technical skills from THIS job description in jdMustHaveTech. Latest company: every jdMustHaveTech name MUST appear once, on a different real-project bullet. Other companies: each should name 1-3 of those required skills (a different subset per company), once each, on real work from that job. Do not copy the full latest-company list into every employer. Do not skip a required skill from the latest company because the original title or stack is different. Skills.hard and the summary are not a substitute. Never laundry-list 4+ tools in one sentence. Industry/domain terms stay in summary and skills. The latest company is the richest role: more bullets, longer and more specific, written like a senior professional. Earlier companies stay shorter and plainer. At least 5 bullets per company. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only. Adjust every job title toward the target role without erasing what the original role was. Blend the target with the original title so each job still reads as that person's real work. Do not replace every title with the same target title. Do not leave an unrelated title unchanged. Keep company names and employment dates unchanged. Do not add or drop an employer.`;
+  `You are an expert resume writer. Write like a human recruiter would believe: specific projects, natural sentences, no repeated tool names. First list the required technical skills from THIS job description in jdMustHaveTech. Latest company: every jdMustHaveTech name MUST appear once, on a different real-project bullet. Other companies: each should name 1-3 of those required skills (a different subset per company), once each, on real work from that job. Do not copy the full latest-company list into every employer. Do not skip a required skill from the latest company because the original title or stack is different. Skills.hard and the summary are not a substitute. Never laundry-list 4+ tools in one sentence. Industry/domain terms stay in summary and skills. The latest company is the only rich role: 10-12 long bullets written in the job description's language. Earlier companies stay at 5 shorter bullets. Wrap an occasional tech token in experience/summary with <b>...</b>. Never wrap skill names with HTML. Extract jobTitle and companyName from the JD for metadata only. Adjust every job title toward the target role without erasing what the original role was. Blend the target with the original title so each job still reads as that person's real work. Do not replace every title with the same target title. Do not leave an unrelated title unchanged. Keep company names and employment dates unchanged. Do not add or drop an employer.`;
 
 const RESUME_OUTPUT_SCHEMA = {
   type: 'object',
@@ -234,7 +234,7 @@ async function generateResumeDraft(params: {
     system: SYSTEM_PROMPT,
     schema: RESUME_OUTPUT_SCHEMA,
     temperature: 0.7,
-    maxTokens: params.provider === 'claude' ? 5000 : 8000,
+    maxTokens: 8000,
   });
 }
 
@@ -273,7 +273,7 @@ ${skills.filter((skill: string) => skill.trim()).join(', ')}
 SKILL PLACEMENT (required — not optional):
 1. Fill jdMustHaveTech with every required technical skill named in THIS job description (languages, frameworks, libraries, platforms, tools). Do not omit a required skill because the latest job title or original stack is different.
 2. Exclude only soft/interpersonal skills and industry/domain phrases. Do not exclude a required technical skill just because it is common.
-3. LATEST company: every jdMustHaveTech name MUST appear once, on a different real project. Skills.hard and the summary are not a substitute. If there are more required skills than bullets, add bullets (up to 8) rather than stacking tools in one sentence.
+3. LATEST company: every jdMustHaveTech name MUST appear once, on a different real project. Skills.hard and the summary are not a substitute. If there are more required skills than bullets, add bullets rather than stacking tools in one sentence. That company still ends at 10-12 bullets.
 4. OTHER companies: do not leave them as tool-free generic work. Each other company should name 1-3 jdMustHaveTech skills (not the full list), once each, attached to real work from that job. Rotate which skills appear so companies do not read as copies of each other.
 5. Do not clone the entire JD stack into every employer. Do not force industry/domain terms into a company in a different industry.
 
@@ -297,13 +297,13 @@ CRITICAL INSTRUCTIONS:
    - Outcomes: use numbers only if they are in the original. Otherwise state a concrete qualitative result. Do not invent 20%/25%/40%.
    - Name at most one tool per bullet, and only on the bullet where it is distinctive. Different companies must read like different jobs.
    - FORBIDDEN: generic duties unless tied to a named deliverable. FORBIDDEN: "Did X using A, B, C, and D". FORBIDDEN: repeating the same two language names in most bullets of a role.
-   - If the original is thin, cluster what is there into the few real pieces of work. Do not fill space with responsibilities the original never described.
+   - Earlier companies: if the original is thin, cluster what is there. Do not invent a new employer. The latest company may expand that company's real work into the responsibilities this job description asks for.
    - Do not use "scalability", "reliability", "robust", "passionate", "seasoned", "best practices", or "foster".
-   - DEPTH: the latest company is the only rich role. Each of its bullets is a full professional sentence: the project, the candidate's part, how it was built, and what changed for users or the team. Earlier companies get shorter bullets, one plain contribution each, with less scope and less detail.
+   - DEPTH: the latest company carries the job description. Each of its bullets is two clauses: the real work at that company, then the matching responsibility or term from THIS job description, then what changed for users or the team. Use the job description's own wording there. Earlier companies stay one short sentence each.
 
 3. BULLET COUNT:
-   - Latest company: 7-8 bullets. These are the longest and most specific bullets in the resume.
-   - Every earlier company: 5+ bullets, clearly shorter than the latest company.
+   - Latest company: 10-12 bullets. These are the longest bullets in the resume. Fewer than 10 is a failure.
+   - Every earlier company: 5 bullets, clearly shorter than the latest company.
    - If the original names fewer projects than the count, split those projects into distinct contributions (what shipped, how it was built, integration, data/state). Still tied to that company's real work.
    - Do not pad with generic duties to hit the count.
 
@@ -349,13 +349,16 @@ Respond with ONLY valid JSON. Same number of positions as original experience.
       "end_date": "YYYY-MM",
       "address": "Company Address",
       "descriptions": [
-        "Owned a customer-facing product feature on <b>Skill</b>, from the first working version through release, so users could finish the task without a workaround.",
-        "Rebuilt a daily workflow in <b>Skill</b> with the team that ran it, so later changes no longer needed a full rewrite.",
+        "Owned a customer-facing product feature on <b>Skill</b> from the first working version through release, matching the job's hands-on delivery, so users could finish the task without a workaround.",
+        "Rebuilt a daily workflow in <b>Skill</b> with the team that ran it, in the way this role asks for collaboration with product and engineering, so later changes no longer needed a full rewrite.",
         "Connected <b>Skill</b> to the system already in production and checked the new path against real user traffic before it went live.",
         "Traced a failing production path with the on-call team, fixed the break, and confirmed users were no longer blocked.",
         "Split a tangled module into smaller pieces and handed the boundaries to the next engineers so later work stayed isolated.",
         "Reviewed incoming changes on the main product and caught risky updates before they reached users.",
-        "Wrote the release notes and walkthrough for a shipped feature so support and the product team could explain it without the engineer in the room."
+        "Wrote the release notes and walkthrough for a shipped feature so support and the product team could explain it without the engineer in the room.",
+        "Paired with designers and product owners on the main workflow, the kind of cross-team delivery this job describes, and shipped the agreed version.",
+        "Broke a large change into reviewable pieces so the team could deliver it on the timeline the stakeholders expected.",
+        "Walked a technical choice through with the people who would live with it, and implemented the option they accepted."
       ]
     },
     {
