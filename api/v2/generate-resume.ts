@@ -178,12 +178,11 @@ export default async function handler(
       return res.status(500).json(configError);
     }
 
-    const today = formatToday();
     const workHistory = formatWorkHistory(profile);
 
     const aiResponse = await generateResumeDraft({
       provider,
-      prompt: createAIPrompt(profile, jobDescription, today, workHistory),
+      prompt: createAIPrompt(profile, jobDescription, workHistory),
     });
 
     return res.status(200).json({
@@ -203,14 +202,6 @@ export default async function handler(
         : details,
     });
   }
-}
-
-function formatToday(): string {
-  return new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 }
 
 function formatRoleEnd(exp: any): string {
@@ -250,16 +241,13 @@ async function generateResumeDraft(params: {
 const createAIPrompt = (
   profile: any,
   jobDescription: string,
-  today: string,
   workHistory: string
 ): string => {
   const education = Array.isArray(profile.education) ? profile.education : [];
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
 
   return `
-Create a tailored resume a human recruiter would believe. Real companies, dates, and projects. Required technical skills from THIS job description belong in skills.hard, in the summary, in the latest company, AND in a few other companies — not only the most recent job, and not stuffed into every bullet.
-
-TODAY'S DATE: ${today}
+Create a tailored resume a human recruiter would believe. Required technical skills from THIS job description belong in skills.hard, in the summary, in the latest company, AND in a few other companies — not only the most recent job, and not stuffed into every bullet.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -290,7 +278,7 @@ SKILL PLACEMENT (required — not optional):
 5. Do not clone the entire JD stack into every employer. Do not force industry/domain terms into a company in a different industry.
 
 CRITICAL INSTRUCTIONS:
-1. ANALYZE the job description for seniority, must-have technologies, and terminology. Put jobTitle and companyName in the JSON metadata. Never write the hiring company, product, or program names into the summary or into any employer's bullets.
+1. ANALYZE the job description for seniority, must-have technologies, and terminology. Put jobTitle and companyName in the JSON metadata only. companyName is the hiring company. It is never one of the candidate's employers. Copy each experience company, start_date, end_date, and address from WORK HISTORY. Write the new bullets into those existing jobs. Do not replace an employer with the hiring company, and do not change a start or end date.
 
 2. EXPERIENCE — real projects, tailored emphasis:
    - Read the original description as a source of projects: products, features, systems, integrations, migrations, and the candidate's part in them.
@@ -340,7 +328,7 @@ CRITICAL INSTRUCTIONS:
    - Most recent position: closest to the target title, still honest about the work that was actually done there.
    - Earlier positions: a blend. If the target is Full-Stack Developer and the original role is Data Scientist, a title like Full-Stack Engineer, Data Science is the right kind of change. Vary the blend per job so the page does not repeat one title.
    - The history should read as one career moving toward the target, not as the target title copied onto every employer.
-   - Keep company names, addresses, and start/end dates exactly. Same number of positions as WORK HISTORY. Do not add the hiring company as an employer.
+   - Copy company, start_date, end_date, and address from WORK HISTORY. Same jobs, same order, same periods. The write-up is the only part that changes.
 
 7. BOLD TECH IN EXPERIENCE AND SUMMARY:
    - Wrap technical skills/tools/frameworks/languages with <b>...</b> inside experience description strings and the summary
