@@ -15,6 +15,7 @@ import { useUser } from '../contexts/UserContext';
 import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
 import { findNonRemoteMatches, isNonRemoteRole, nonRemoteRoleMessage } from '../utils/remoteRole';
+import { validateGeneratedResume } from '../utils/resumeValidation';
 import ResumeTemplatePreview from './ResumeTemplatePreview';
 import { Link } from 'react-router-dom';
 
@@ -296,6 +297,18 @@ const ResumeGenerator: React.FC = () => {
 
   const handleSaveEdits = () => {
     if (editingResume) {
+      const activeProfile = profiles.find((p) => p.id === selectedProfile);
+      const validationError = activeProfile
+        ? validateGeneratedResume({
+            originalExperience: activeProfile.experience ?? [],
+            generatedExperience: editingResume.experience,
+            displayedExperience: editingResume.experience,
+          })
+        : null;
+      if (validationError) {
+        toast.error(validationError);
+        return;
+      }
       setGeneratedResume(editingResume);
       setIsEditing(false);
       toast.success('Changes saved successfully!');
@@ -403,6 +416,21 @@ const ResumeGenerator: React.FC = () => {
     return template;
   };
 
+  const generatedResumeError = () => {
+    if (!generatedResume) return null;
+    const activeProfile = profiles.find((p) => p.id === selectedProfile);
+    if (!activeProfile) return null;
+    return validateGeneratedResume({
+      originalExperience: activeProfile.experience ?? [],
+      generatedExperience: generatedResume.experience,
+      displayedExperience: resolveResumeExperience(
+        activeProfile.experience ?? [],
+        generatedResume.experience,
+        getUseAiEnhancedJobTitleForProfile(activeProfile)
+      ),
+    });
+  };
+
   const handleDownload = async (format: ResumeDownloadFormat) => {
     if (!generatedResume) {
       toast.error('No resume to download');
@@ -412,6 +440,12 @@ const ResumeGenerator: React.FC = () => {
     const profile = profiles.find(p => p.id === selectedProfile);
     if (!profile) {
       toast.error('Profile not found');
+      return;
+    }
+
+    const validationError = generatedResumeError();
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -467,6 +501,12 @@ const ResumeGenerator: React.FC = () => {
     const profile = profiles.find(p => p.id === selectedProfile);
     if (!profile) {
       toast.error('Profile not found');
+      return;
+    }
+
+    const validationError = generatedResumeError();
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -711,6 +751,18 @@ const ResumeGenerator: React.FC = () => {
   console.log(currentResume, '=== currentResume')
   const profile = selectedProfile ? profiles.find((p) => p.id === selectedProfile) : undefined;
   const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(profile);
+  const displayedExperience = currentResume
+    ? (isEditing
+      ? currentResume.experience
+      : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle))
+    : [];
+  const resumeValidationError = currentResume && profile
+    ? validateGeneratedResume({
+        originalExperience: profile.experience ?? [],
+        generatedExperience: currentResume.experience,
+        displayedExperience,
+      })
+    : null;
   const jobIsNonRemote = isNonRemoteRole(jobDescription);
   const nonRemoteMessage = jobIsNonRemote ? nonRemoteRoleMessage(jobDescription) : null;
   const nonRemoteMatches = jobIsNonRemote ? findNonRemoteMatches(jobDescription) : [];
@@ -1060,7 +1112,8 @@ const ResumeGenerator: React.FC = () => {
                 <>
                   <button
                     onClick={handleSaveEdits}
-                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    disabled={Boolean(resumeValidationError)}
+                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save className="w-4 h-4" />
                     <span>Save Changes</span>
@@ -1127,6 +1180,15 @@ const ResumeGenerator: React.FC = () => {
                 ))}
               </div>
             </fieldset>
+            {resumeValidationError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-semibold text-red-800">Generated resume needs another try</h3>
+                  <p className="text-sm text-red-700 mt-1">{resumeValidationError}</p>
+                </div>
+              </div>
+            )}
             <div className="flex flex-col items-stretch gap-3 sm:items-end">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input
@@ -1141,7 +1203,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={Boolean(resumeValidationError)}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Save & Download Word (.docx)</span>
@@ -1149,7 +1212,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownload('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={Boolean(resumeValidationError)}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Save & Download PDF (.pdf)</span>
@@ -1159,7 +1223,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('docx')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  disabled={Boolean(resumeValidationError)}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Download Word (.docx) only</span>
@@ -1167,7 +1232,8 @@ const ResumeGenerator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleDownloadOnly('pdf')}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  disabled={Boolean(resumeValidationError)}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download PDF (.pdf) only</span>
@@ -1291,7 +1357,7 @@ const ResumeGenerator: React.FC = () => {
               <div className="space-y-3">
                 {(isEditing
                   ? currentResume.experience
-                  : resolveResumeExperience(profile?.experience ?? [], currentResume.experience, useAiEnhancedJobTitle)
+                  : displayedExperience
                 ).map((exp, index) => (
                   <div key={index} className="bg-gray-50 p-3 rounded-md">
                     {isEditing ? (
