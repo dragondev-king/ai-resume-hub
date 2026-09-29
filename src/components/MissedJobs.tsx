@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, Filter, ChevronLeft, ChevronRight, Copy, ExternalLink, Check } from 'lucide-react';
 import { MissedJobApplicationRPC } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,11 @@ import { useProfiles } from '../contexts/ProfilesContext';
 import { formatDate } from '../utils/helpers';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
+
+const disabledProfilesStorageKey = (userId: string) => `available-jobs-disabled-profiles:${userId}`;
+
+const jobApplicantName = (job: MissedJobApplicationRPC) =>
+  `${job.profile_first_name || ''} ${job.profile_last_name || ''}`.trim();
 
 const MissedJobs: React.FC = () => {
   const { user, role } = useUser();
@@ -17,6 +22,7 @@ const MissedJobs: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [disabledProfileNames, setDisabledProfileNames] = useState<string[]>([]);
 
   const getInitialFilters = () => ({
     profileId: searchParams.get('profileId') || '',
@@ -48,6 +54,28 @@ const MissedJobs: React.FC = () => {
     setCurrentPage(1);
     updateURLParams(newFilters, 1);
   }, [updateURLParams]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setDisabledProfileNames([]);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(disabledProfilesStorageKey(user.id));
+      const parsed = raw ? JSON.parse(raw) : [];
+      setDisabledProfileNames(
+        Array.isArray(parsed) ? parsed.filter((name) => typeof name === 'string') : []
+      );
+    } catch {
+      setDisabledProfileNames([]);
+    }
+  }, [user?.id]);
+
+  const persistDisabledProfileNames = useCallback((next: string[]) => {
+    setDisabledProfileNames(next);
+    if (!user?.id) return;
+    localStorage.setItem(disabledProfilesStorageKey(user.id), JSON.stringify(next));
+  }, [user?.id]);
 
   useEffect(() => {
     if (profilesLoading || profiles.length === 0) return;
@@ -108,6 +136,38 @@ const MissedJobs: React.FC = () => {
   useEffect(() => {
     loadMissedJobs();
   }, [loadMissedJobs]);
+
+  const uniqueApplicantNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const job of jobs) {
+      const name = jobApplicantName(job);
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+    return names.sort((a, b) => a.localeCompare(b));
+  }, [jobs]);
+
+  const disabledNameSet = useMemo(
+    () => new Set(disabledProfileNames.map((name) => name.toLowerCase())),
+    [disabledProfileNames]
+  );
+
+  const isJobDisabled = (job: MissedJobApplicationRPC) => {
+    const name = jobApplicantName(job);
+    return Boolean(name) && disabledNameSet.has(name.toLowerCase());
+  };
+
+  const toggleDisabledProfile = (name: string) => {
+    const key = name.toLowerCase();
+    const next = disabledNameSet.has(key)
+      ? disabledProfileNames.filter((item) => item.toLowerCase() !== key)
+      : [...disabledProfileNames, name];
+    persistDisabledProfileNames(next);
+  };
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
@@ -200,6 +260,29 @@ const MissedJobs: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {uniqueApplicantNames.length > 0 ? (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <p className="text-sm font-medium text-gray-700 mb-3">
+              Disable applications from
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {uniqueApplicantNames.map((name) => {
+                const checked = disabledNameSet.has(name.toLowerCase());
+                return (
+                  <label key={name.toLowerCase()} className="inline-flex items-center gap-2 text-sm text-gray-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleDisabledProfile(name)}
+                    />
+                    <span className={checked ? 'opacity-50' : undefined}>{name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {filterLoading ? (
@@ -278,71 +361,77 @@ const MissedJobs: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {jobs.map((job, index) => (
-                    <tr key={job.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {startIndex + index + 1}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 break-words">{job.company_name}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {job.profile_first_name && job.profile_last_name
-                            ? `${job.profile_first_name} ${job.profile_last_name}`
-                            : '-'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 break-words max-w-xs">
-                          {job.job_title || '-'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <a
-                          href={job.job_description_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={job.job_description_link}
-                          className="text-sm text-primary-600 hover:text-primary-800 break-all line-clamp-3 max-w-md"
-                        >
-                          {job.job_description_link}
-                        </a>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatDate(job.created_at, true, true)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => copyLink(job)}
-                            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-md"
-                            title="Copy job link"
-                          >
-                            {copiedLinkId === job.id ? (
-                              <Check className="w-4 h-4 text-green-600" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </button>
+                  {jobs.map((job, index) => {
+                    const disabled = isJobDisabled(job);
+                    return (
+                      <tr
+                        key={job.id}
+                        className={`hover:bg-gray-50 ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            {startIndex + index + 1}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900 break-words">{job.company_name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {job.profile_first_name && job.profile_last_name
+                              ? `${job.profile_first_name} ${job.profile_last_name}`
+                              : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900 break-words max-w-xs">
+                            {job.job_title || '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
                           <a
                             href={job.job_description_link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-md"
-                            title="Open job link"
+                            title={job.job_description_link}
+                            className="text-sm text-primary-600 hover:text-primary-800 break-all line-clamp-3 max-w-md"
                           >
-                            <ExternalLink className="w-4 h-4" />
+                            {job.job_description_link}
                           </a>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {formatDate(job.created_at, true, true)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => copyLink(job)}
+                              className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-md"
+                              title="Copy job link"
+                            >
+                              {copiedLinkId === job.id ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                            <a
+                              href={job.job_description_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-md"
+                              title="Open job link"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
