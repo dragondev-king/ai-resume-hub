@@ -261,6 +261,9 @@ const MissedJobs: React.FC = () => {
                       Company
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Profile
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Job Title
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -285,6 +288,13 @@ const MissedJobs: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900 break-words">{job.company_name}</div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {job.profile_first_name && job.profile_last_name
+                            ? `${job.profile_first_name} ${job.profile_last_name}`
+                            : '-'}
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900 break-words max-w-xs">
                           {job.job_title || '-'}
@@ -295,7 +305,8 @@ const MissedJobs: React.FC = () => {
                           href={job.job_description_link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm text-primary-600 hover:text-primary-800 break-all max-w-md inline-block"
+                          title={job.job_description_link}
+                          className="text-sm text-primary-600 hover:text-primary-800 break-all line-clamp-3 max-w-md"
                         >
                           {job.job_description_link}
                         </a>

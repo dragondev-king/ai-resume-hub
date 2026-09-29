@@ -261,4 +261,6 @@ export interface MissedJobApplicationRPC {
   job_title: string;
   job_description_link: string;
   created_at: string;
+  profile_first_name?: string;
+  profile_last_name?: string;
 } 

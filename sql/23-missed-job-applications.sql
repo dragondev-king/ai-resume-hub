@@ -26,7 +26,9 @@ RETURNS TABLE (
   company_name TEXT,
   job_title TEXT,
   job_description_link TEXT,
-  created_at TIMESTAMP WITH TIME ZONE
+  created_at TIMESTAMP WITH TIME ZONE,
+  profile_first_name TEXT,
+  profile_last_name TEXT
 ) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_allowed BOOLEAN := FALSE;
@@ -67,15 +69,20 @@ BEGIN
       src.out_company_name,
       src.out_job_title,
       src.out_job_link,
-      src.out_created_at
+      src.out_created_at,
+      src.out_profile_first_name,
+      src.out_profile_last_name
     FROM (
       SELECT DISTINCT ON (o.company_name)
         o.id AS application_id,
         o.company_name AS out_company_name,
         o.job_title AS out_job_title,
         o.job_description_link AS out_job_link,
-        o.created_at AS out_created_at
+        o.created_at AS out_created_at,
+        pr.first_name AS out_profile_first_name,
+        pr.last_name AS out_profile_last_name
       FROM job_applications AS o
+      LEFT JOIN profiles AS pr ON pr.id = o.profile_id
       WHERE o.profile_id <> $1
         AND o.company_name IS NOT NULL
         AND btrim(o.company_name) <> ''
