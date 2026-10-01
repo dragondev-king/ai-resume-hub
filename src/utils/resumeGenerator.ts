@@ -91,12 +91,13 @@ function coreRoleTitle(title: string): string {
   return value || title.trim();
 }
 
-function stripLatestCompanyQualifier(
+function stripRoleQualifiers(
   experience: GeneratedResume['experience']
 ): GeneratedResume['experience'] {
-  if (experience.length === 0) return experience;
-  const [latest, ...rest] = experience;
-  return [{ ...latest, position: coreRoleTitle(latest.position || '') }, ...rest];
+  return experience.map((exp) => ({
+    ...exp,
+    position: coreRoleTitle(exp.position || ''),
+  }));
 }
 
 function dropUnknownEmployers(
@@ -123,7 +124,7 @@ const parseAIResponse = (originalProfile: Profile, aiResponse: string | Record<s
 
     const skillGroups = parseSkillPayload(parsed.skills, originalProfile.skills);
     const generatedExperience = Array.isArray(parsed.experience)
-      ? stripLatestCompanyQualifier(
+      ? stripRoleQualifiers(
           dropUnknownEmployers(parsed.experience as GeneratedResume['experience'], originalProfile.experience)
         )
       : undefined;
