@@ -5,8 +5,7 @@ import { useProfiles } from '../contexts/ProfilesContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
 import { generateResumePdf } from '../utils/pdfResumeGenerator';
-import { generateDocx, resolveResumeExperience } from '../utils/docxGenerator';
-import { getUseAiEnhancedJobTitleForProfile } from '../utils/profileMetadata';
+import { generateDocx } from '../utils/docxGenerator';
 import { buildResumeFileName, ResumeDownloadFormat } from '../utils/resumeFileName';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/helpers';
@@ -52,7 +51,6 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
   const { role } = useUser();
 
   const applicationProfile = profiles.find(p => p.id === application?.profile_id);
-  const useAiEnhancedJobTitle = getUseAiEnhancedJobTitleForProfile(applicationProfile);
 
   useEffect(() => {
     setSessionTemplateId(getResumeTemplateIdForApplication(application ?? undefined));
@@ -123,7 +121,8 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
         }
 
         const opts = {
-          useAiEnhancedJobTitle: getUseAiEnhancedJobTitleForProfile(applicationProfile),
+          // Saved experience is already final. Skip merging it with the live profile.
+          useAiEnhancedJobTitle: true,
           templateId: template.id,
         };
         if (format === 'docx') {
@@ -478,11 +477,7 @@ const JobApplicationDetailsModal: React.FC<JobApplicationDetailsModalProps> = ({
                     AI Generated Experience
                   </h3>
                   <div className="space-y-4">
-                    {resolveResumeExperience(
-                      applicationProfile?.experience ?? [],
-                      application.generated_experience,
-                      useAiEnhancedJobTitle
-                    ).map((exp: any, index: number) => (
+                    {application.generated_experience.map((exp, index) => (
                       <div key={index} className="border-l-4 border-primary-500 pl-4">
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-semibold text-gray-900">{exp.position}</h4>
